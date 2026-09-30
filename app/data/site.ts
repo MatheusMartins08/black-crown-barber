@@ -64,49 +64,49 @@ export const services = [
 export const galleryItems = [
   {
     src: "/gallery-corte-01.jpg",
-    alt: "Barbeiro fazendo o acabamento de um corte masculino",
+    alt: "Barbeiro refinando um corte masculino com tesoura e pente",
     label: "Acabamento",
     layout: "gallery-item--large",
   },
   {
     src: "/gallery-barba-01.jpg",
-    alt: "Perfil de cliente com barba aparada e bem definida",
+    alt: "Barbeiro aparando o cabelo e a barba de um cliente com navalha",
     label: "Barba",
     layout: "gallery-item--portrait",
   },
   {
     src: "/gallery-corte-02.jpg",
-    alt: "Detalhe de corte masculino sendo finalizado na cadeira",
+    alt: "Barbeiro trabalhando o corte de um cliente na cadeira com tesoura",
     label: "Corte",
     layout: "",
   },
   {
     src: "/gallery-interior-01.jpg",
-    alt: "Interior de barbearia com cadeiras e acabamento em madeira",
+    alt: "Barbearia com cadeiras de barbeiro e quadros nas paredes",
     label: "Ambiente",
     layout: "gallery-item--wide",
   },
   {
     src: "/gallery-corte-03.jpg",
-    alt: "Corte masculino curto com laterais bem alinhadas",
+    alt: "Barbeiro finalizando o penteado de um cliente com secador",
     label: "Estilo",
     layout: "",
   },
   {
     src: "/gallery-corte-04.jpg",
-    alt: "Trabalho de corte masculino com transição suave nas laterais",
+    alt: "Barbeiro aparando o cabelo de um cliente com máquina",
     label: "Precisão",
     layout: "",
   },
   {
     src: "/gallery-interior-02.jpg",
-    alt: "Espaço interno de barbearia em composição vertical",
+    alt: "Interior de barbearia com clientes sendo atendidos nas cadeiras",
     label: "Barbearia",
     layout: "gallery-item--portrait",
   },
   {
     src: "/gallery-corte-05.jpg",
-    alt: "Corte masculino finalizado com contorno definido",
+    alt: "Barbeiros atendendo clientes em uma barbearia contemporânea",
     label: "Finalização",
     layout: "",
   },
@@ -114,22 +114,25 @@ export const galleryItems = [
 
 export const barbers = [
   {
-    name: "Lucas Andrade",
+    name: "Júlia Andrade",
     specialty: "Fades e cortes modernos",
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
-    image: "/gallery-corte-03.jpg",
+    image: "/barber-julia.jpg",
+    imageAlt: "Retrato demonstrativo da barbeira Júlia Andrade",
   },
   {
     name: "Rafael Martins",
     specialty: "Barba e acabamento clássico",
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
-    image: "/gallery-barba-01.jpg",
+    image: "/barber-rafael.jpg",
+    imageAlt: "Retrato demonstrativo do barbeiro Rafael Martins",
   },
   {
     name: "João Almeida",
     specialty: "Cortes tradicionais e tesoura",
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
-    image: "/gallery-corte-05.jpg",
+    image: "/barber-joao.jpg",
+    imageAlt: "Retrato demonstrativo do barbeiro João Almeida",
   },
 ] as const;
 

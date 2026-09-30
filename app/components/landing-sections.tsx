@@ -14,6 +14,7 @@ import {
   Star,
   UserRound,
 } from "lucide-react";
+import Reveal from "./reveal";
 import {
   barbers,
   galleryItems,
@@ -35,11 +36,11 @@ function SectionHeading({
   id: string;
 }) {
   return (
-    <div className="section-heading">
+    <Reveal as="div" className="section-heading">
       <p className="section-heading__eyebrow">{eyebrow}</p>
       <h2 id={id}>{title}</h2>
       {description ? <p className="section-heading__description">{description}</p> : null}
-    </div>
+    </Reveal>
   );
 }
 
@@ -61,14 +62,14 @@ export function QuickInfo() {
   return (
     <section aria-label="Informações rápidas" className="quick-info">
       <div className="quick-info__grid">
-        {details.map(({ icon: Icon, label, value }) => (
-          <div className="quick-info__item" key={label}>
+        {details.map(({ icon: Icon, label, value }, index) => (
+          <Reveal className="quick-info__item" delay={1 + (index % 3)} key={label}>
             <Icon aria-hidden="true" className="quick-info__icon" size={18} strokeWidth={1.6} />
             <div>
               <p>{label}</p>
               <span>{value}</span>
             </div>
-          </div>
+          </Reveal>
         ))}
       </div>
       <p className="demo-ribbon">Informações demonstrativas · substitua pelos dados confirmados da barbearia</p>
@@ -89,12 +90,14 @@ export function ServicesSection() {
         <p className="section-note">Valores e durações demonstrativos.</p>
 
         <div className="services__grid">
-          {services.map((service) => {
+          {services.map((service, index) => {
             const Icon = serviceIcons[service.icon];
 
             return (
-              <article
+              <Reveal
+                as="article"
                 className={`service-card${"popular" in service && service.popular ? " service-card--popular" : ""}`}
+                delay={1 + (index % 3)}
                 key={service.name}
               >
                 <div className="service-card__topline">
@@ -111,7 +114,7 @@ export function ServicesSection() {
                   <span>{service.duration}</span>
                   <strong>{service.price}</strong>
                 </div>
-              </article>
+              </Reveal>
             );
           })}
         </div>
@@ -142,7 +145,7 @@ export function GallerySection() {
 
         <div className="gallery__grid">
           {galleryItems.map((item, index) => (
-            <figure className={`gallery-item ${item.layout}`} key={item.src}>
+            <Reveal as="figure" className={`gallery-item ${item.layout}`} delay={1 + (index % 3)} key={item.src}>
               <Image
                 alt={item.alt}
                 className="gallery-item__image"
@@ -154,7 +157,7 @@ export function GallerySection() {
                 <span>{item.label}</span>
                 <span className="gallery-item__number">0{index + 1}</span>
               </figcaption>
-            </figure>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -168,7 +171,7 @@ export function AboutSection() {
   return (
     <section aria-labelledby="about-title" className="section about" id="sobre">
       <div className="section__inner about__layout">
-        <div className="about__copy">
+        <Reveal className="about__copy" from="left">
           <SectionHeading
             eyebrow="A barbearia"
             id="about-title"
@@ -185,17 +188,17 @@ export function AboutSection() {
               <li key={value}><Check aria-hidden="true" size={15} />{value}</li>
             ))}
           </ul>
-        </div>
-        <figure className="about__image-wrap">
+        </Reveal>
+        <Reveal as="figure" className="about__image-wrap" from="right">
           <Image
-            alt="Interior demonstrativo de barbearia com cadeiras e estações de atendimento"
+            alt="Interior de barbearia com cadeiras de barbeiro e quadros nas paredes"
             className="about__image"
             fill
             sizes="(max-width: 800px) 100vw, 50vw"
             src="/gallery-interior-01.jpg"
           />
           <figcaption>Ambiente ilustrativo · substitua por fotografia do estabelecimento</figcaption>
-        </figure>
+        </Reveal>
       </div>
     </section>
   );
@@ -213,10 +216,10 @@ export function TeamSection() {
         />
         <div className="team__grid">
           {barbers.map((barber, index) => (
-            <article className="barber-card" key={barber.name}>
+            <Reveal as="article" className="barber-card" delay={1 + (index % 3)} key={barber.name}>
               <div className="barber-card__image-wrap">
                 <Image
-                  alt={`Imagem ilustrativa de atendimento para o perfil demonstrativo de ${barber.name}`}
+                  alt={barber.imageAlt}
                   className="barber-card__image"
                   fill
                   sizes="(max-width: 600px) 85vw, (max-width: 900px) 45vw, 30vw"
@@ -234,7 +237,7 @@ export function TeamSection() {
                   Agendar com {barber.name.split(" ")[0]} <ArrowUpRight aria-hidden="true" size={15} />
                 </Link>
               </div>
-            </article>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -253,8 +256,8 @@ export function TestimonialsSection() {
           title="Quem passa por aqui, volta."
         />
         <div className="testimonials__grid">
-          {testimonials.map((testimonial) => (
-            <article className="testimonial-card" key={testimonial.name}>
+          {testimonials.map((testimonial, index) => (
+            <Reveal as="article" className="testimonial-card" delay={1 + (index % 3)} key={testimonial.name}>
               <div aria-label="5 de 5 estrelas, exemplo fictício" className="testimonial-card__stars">
                 {Array.from({ length: 5 }, (_, index) => (
                   <Star aria-hidden="true" fill="currentColor" key={index} size={15} strokeWidth={1.5} />
@@ -265,7 +268,7 @@ export function TestimonialsSection() {
                 <strong>{testimonial.name}</strong>
                 <span>{testimonial.context}</span>
               </div>
-            </article>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -285,7 +288,7 @@ export function BookingSection() {
           src="/gallery-interior-02.jpg"
         />
       </div>
-      <div className="booking__content">
+      <Reveal className="booking__content" from="left">
         <p className="section-heading__eyebrow">Seu próximo horário</p>
         <h2 id="booking-title">Seu próximo corte começa aqui.</h2>
         <p>
@@ -300,7 +303,7 @@ export function BookingSection() {
           </Link>
         </div>
         <span className="booking__note">Links demonstrativos · configurar agenda e WhatsApp antes de publicar</span>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -315,7 +318,7 @@ export function LocationSection() {
           id="location-title"
           title="Estamos esperando por você."
         />
-        <div className="location__layout">
+        <Reveal className="location__layout">
           <div className="location__details">
             <div className="location__contact" id="contato">
               <div className="location__contact-block">
@@ -362,7 +365,7 @@ export function LocationSection() {
               Configurar rota no Maps <ArrowUpRight aria-hidden="true" size={15} />
             </Link>
           </aside>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -371,14 +374,14 @@ export function LocationSection() {
 export function FinalCallToAction() {
   return (
     <section aria-labelledby="final-cta-title" className="final-cta">
-      <div className="final-cta__inner">
+      <Reveal className="final-cta__inner">
         <p className="section-heading__eyebrow">Black Crown Barber</p>
         <h2 id="final-cta-title">Pronto para renovar o visual?</h2>
         <p>Agende seu horário e venha conhecer a experiência demonstrativa Black Crown Barber.</p>
         <Link className="button" href={siteConfig.bookingUrl}>
           Agendar horário <ArrowDownRight aria-hidden="true" size={17} />
         </Link>
-      </div>
+      </Reveal>
     </section>
   );
 }

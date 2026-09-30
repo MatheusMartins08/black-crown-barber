@@ -8,7 +8,7 @@ export default function Hero() {
     <section aria-labelledby="hero-title" className="hero" id="inicio">
       <div className="hero__media">
         <Image
-          alt="Retrato demonstrativo de cliente com barba aparada"
+          alt="Barbeiro aparando a barba de um cliente com acabamento preciso"
           className="hero__image"
           fill
           loading="eager"
