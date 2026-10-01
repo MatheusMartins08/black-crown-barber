@@ -15,8 +15,11 @@ import {
   UserRound,
 } from "lucide-react";
 import Reveal from "./reveal";
+import ImageComparison from "./image-comparison";
 import {
   barbers,
+  galleryComparison,
+  galleryFeature,
   galleryItems,
   openingHours,
   services,
@@ -37,7 +40,7 @@ function SectionHeading({
 }) {
   return (
     <Reveal as="div" className="section-heading">
-      <p className="section-heading__eyebrow">{eyebrow}</p>
+      <p className="section-heading__eyebrow" data-anchor-start>{eyebrow}</p>
       <h2 id={id}>{title}</h2>
       {description ? <p className="section-heading__description">{description}</p> : null}
     </Reveal>
@@ -143,6 +146,14 @@ export function GallerySection() {
           <p className="gallery__aside">Imagens ilustrativas<br />substitua por trabalhos autorizados</p>
         </div>
 
+        <div className="gallery__feature">
+          <ImageComparison {...galleryComparison} />
+          <div className="gallery__feature-copy">
+            <h3>{galleryFeature.headline}</h3>
+            <p>{galleryFeature.description}</p>
+          </div>
+        </div>
+
         <div className="gallery__grid">
           {galleryItems.map((item, index) => (
             <Reveal as="figure" className={`gallery-item ${item.layout}`} delay={1 + (index % 3)} key={item.src}>
@@ -224,6 +235,7 @@ export function TeamSection() {
                   fill
                   sizes="(max-width: 600px) 85vw, (max-width: 900px) 45vw, 30vw"
                   src={barber.image}
+                  style={{ objectPosition: barber.imagePosition }}
                 />
                 <span className="barber-card__index">0{index + 1}</span>
               </div>
@@ -289,7 +301,7 @@ export function BookingSection() {
         />
       </div>
       <Reveal className="booking__content" from="left">
-        <p className="section-heading__eyebrow">Seu próximo horário</p>
+        <p className="section-heading__eyebrow" data-anchor-start>Seu próximo horário</p>
         <h2 id="booking-title">Seu próximo corte começa aqui.</h2>
         <p>
           Escolha o serviço, encontre um horário e venha conhecer a experiência demonstrativa da {siteConfig.name}.

@@ -1,3 +1,6 @@
+import juliaPhoto from "../../public/barber-julia.jpg";
+import rafaelPhoto from "../../public/barber-rafael.jpg";
+
 export const siteConfig = {
   name: "Black Crown Barber",
   description:
@@ -17,9 +20,9 @@ export const siteConfig = {
 export const navigationItems = [
   { label: "Início", href: "#inicio" },
   { label: "Serviços", href: "#servicos" },
+  { label: "Galeria", href: "#galeria" },
   { label: "A barbearia", href: "#sobre" },
   { label: "Barbeiros", href: "#equipe" },
-  { label: "Galeria", href: "#galeria" },
   { label: "Avaliações", href: "#avaliacoes" },
   { label: "Localização", href: "#localizacao" },
 ];
@@ -60,6 +63,28 @@ export const services = [
     icon: "detail",
   },
 ] as const;
+
+export const galleryComparison = {
+  title: "Cabelo e barba",
+  before: {
+    src: "/gallery-combined-before.png",
+    alt: "Homem sentado na cadeira de barbearia, em três quartos lateral, com cabelo moderadamente crescido e barba sem acabamento, imagem ilustrativa gerada por IA",
+    label: "Antes",
+  },
+  after: {
+    src: "/gallery-combined-after.png",
+    alt: "Mesmo homem sentado na cadeira com corte degradê, topo finalizado e barba aparada com contornos definidos, imagem ilustrativa gerada por IA",
+    label: "Depois",
+  },
+  instruction: "Arraste para comparar · ou use as setas do teclado",
+  caption: "Comparação ilustrativa gerada por IA",
+  controlLabel: "Comparar antes e depois do corte de cabelo e acabamento da barba",
+} as const;
+
+export const galleryFeature = {
+  headline: "Seu melhor visual. Sua melhor versão.",
+  description: "Um corte preciso. Uma barba alinhada. Uma nova presença.",
+} as const;
 
 export const galleryItems = [
   {
@@ -117,15 +142,17 @@ export const barbers = [
     name: "Júlia Andrade",
     specialty: "Fades e cortes modernos",
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
-    image: "/barber-julia.jpg",
-    imageAlt: "Retrato demonstrativo da barbeira Júlia Andrade",
+    image: juliaPhoto,
+    imageAlt: "Retrato ilustrativo de uma profissional com avental em um salão, representando o perfil demonstrativo de Júlia Andrade",
+    imagePosition: "50% 43%",
   },
   {
     name: "Rafael Martins",
     specialty: "Barba e acabamento clássico",
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
-    image: "/barber-rafael.jpg",
-    imageAlt: "Retrato demonstrativo do barbeiro Rafael Martins",
+    image: rafaelPhoto,
+    imageAlt: "Fotografia ilustrativa de um barbeiro segurando máquina e pente em uma barbearia, representando o perfil demonstrativo de Rafael Martins",
+    imagePosition: "50% 32%",
   },
   {
     name: "João Almeida",
@@ -133,6 +160,7 @@ export const barbers = [
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
     image: "/barber-joao.jpg",
     imageAlt: "Retrato demonstrativo do barbeiro João Almeida",
+    imagePosition: "50% 36%",
   },
 ] as const;
 

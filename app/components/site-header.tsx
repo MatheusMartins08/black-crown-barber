@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Crown, Menu, X } from "lucide-react";
 import { navigationItems, siteConfig } from "../data/site";
+import useAnchorNavigation from "./use-anchor-navigation";
 
 export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hasScrolled, setHasScrolled] = useState(false);
+
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useAnchorNavigation(closeMenu);
 
   useEffect(() => {
     const updateScrollState = () => setHasScrolled(window.scrollY > 12);
@@ -17,10 +21,6 @@ export default function SiteHeader() {
 
     return () => window.removeEventListener("scroll", updateScrollState);
   }, []);
-
-  function closeMenu() {
-    setMenuOpen(false);
-  }
 
   return (
     <header className={`site-header${hasScrolled ? " is-scrolled" : ""}`}>
