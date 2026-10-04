@@ -8,14 +8,11 @@ import {
   Clock3,
   MapPin,
   MessageCircle,
-  Scissors,
-  Shield,
-  Sparkles,
   Star,
-  UserRound,
 } from "lucide-react";
 import Reveal from "./reveal";
 import ImageComparison from "./image-comparison";
+import { serviceIcons } from "./service-icons";
 import {
   barbers,
   galleryComparison,
@@ -46,13 +43,6 @@ function SectionHeading({
     </Reveal>
   );
 }
-
-const serviceIcons = {
-  scissors: Scissors,
-  razor: Shield,
-  combo: Sparkles,
-  detail: UserRound,
-};
 
 export function QuickInfo() {
   const details = [
@@ -245,7 +235,7 @@ export function TeamSection() {
                   <h3>{barber.name}</h3>
                 </div>
                 <p>{barber.description}</p>
-                <Link href={siteConfig.bookingUrl}>
+                <Link href={`${siteConfig.bookingUrl}?profissional=${barber.id}`}>
                   Agendar com {barber.name.split(" ")[0]} <ArrowUpRight aria-hidden="true" size={15} />
                 </Link>
               </div>

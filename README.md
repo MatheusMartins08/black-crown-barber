@@ -13,6 +13,7 @@ A responsive, single-page barbershop website template built with Next.js. It is 
 - Customer testimonials
 - Booking and contact calls to action
 - Location, opening hours, frequently asked questions, and footer
+- Step-by-step booking flow at `/agendamento` (service, professional, date and time, contact details, review)
 
 ## Tech stack
 
@@ -45,8 +46,10 @@ Open [http://localhost:3000](http://localhost:3000) to view the site. The develo
 
 ```text
 app/
+	agendamento/      Booking page: flow components, styles, and the scheduling adapter (lib/)
 	components/       Page sections and shared UI components
 	data/site.ts      Business details and content used across the site
+	data/booking.ts   Booking rules: service durations and prices, booking window, validation
 	globals.css       Global styles, theme, and responsive presentation
 	layout.tsx        Root layout, fonts, and page metadata
 	page.tsx          Landing page structure and section order
@@ -65,7 +68,8 @@ public/             Photos and other static assets
 
 - Replace all demonstration business details, prices, hours, staff descriptions, testimonials, and FAQ answers with confirmed information.
 - Use photos the business has permission to publish and provide accurate alt text.
-- Set real booking, WhatsApp, social media, and map destinations. The current booking and WhatsApp URLs are placeholder in-page anchors; no booking, messaging, or map service is integrated.
+- Set real booking, WhatsApp, social media, and map destinations. The WhatsApp URL is a placeholder in-page anchor, and the booking page runs on simulated availability; no booking, messaging, or map service is integrated.
+- Connect the booking flow to a real schedule. Availability and reservations are simulated in `app/agendamento/lib/booking-api.ts`; replace those functions with API calls, and enable the post-booking actions (WhatsApp, calendar, reschedule, cancel) in `app/agendamento/lib/booking-integrations.ts`.
 - Review metadata and search indexing settings in `app/layout.tsx`. The current metadata sets `noindex` and `nofollow`, so search engines are asked not to index or follow links on the site.
 - If using the optional LocalBusiness structured data, add and verify the business details in `app/data/site.ts`; it is currently disabled (`null`).
 - Run `npm run lint` and `npm run build` before deployment.

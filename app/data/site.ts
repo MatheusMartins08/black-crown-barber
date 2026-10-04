@@ -10,7 +10,7 @@ export const siteConfig = {
   phone: "(31) 99999-9999",
   whatsapp: "(31) 99999-9999",
   instagram: "@blackcrownbarber",
-  bookingUrl: "#agendamento",
+  bookingUrl: "/agendamento",
   whatsappUrl: "#contato",
   servicesUrl: "#servicos",
   heroImage: "/gallery-barba-01.jpg",
@@ -34,6 +34,7 @@ export const footerNavigationItems = [
 
 export const services = [
   {
+    id: "corte",
     name: "Corte masculino",
     description: "Corte personalizado, acabamento e finalização.",
     duration: "30 min",
@@ -41,6 +42,7 @@ export const services = [
     icon: "scissors",
   },
   {
+    id: "barba",
     name: "Barba",
     description: "Modelagem, toalha quente e acabamento preciso.",
     duration: "30 min",
@@ -48,6 +50,7 @@ export const services = [
     icon: "razor",
   },
   {
+    id: "corte-barba",
     name: "Corte + barba",
     description: "Cuidado completo para cabelo e barba.",
     duration: "50 min",
@@ -56,6 +59,7 @@ export const services = [
     popular: true,
   },
   {
+    id: "sobrancelha",
     name: "Sobrancelha",
     description: "Design e limpeza para um acabamento natural.",
     duration: "15 min",
@@ -139,6 +143,7 @@ export const galleryItems = [
 
 export const barbers = [
   {
+    id: "julia",
     name: "Júlia Andrade",
     specialty: "Fades e cortes modernos",
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
@@ -147,6 +152,7 @@ export const barbers = [
     imagePosition: "50% 43%",
   },
   {
+    id: "rafael",
     name: "Rafael Martins",
     specialty: "Barba e acabamento clássico",
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
@@ -155,6 +161,7 @@ export const barbers = [
     imagePosition: "50% 32%",
   },
   {
+    id: "joao",
     name: "João Almeida",
     specialty: "Cortes tradicionais e tesoura",
     description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
