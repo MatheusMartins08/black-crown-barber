@@ -47,6 +47,7 @@ export default function ReviewStep({ draft, onEdit, error }: ReviewStepProps) {
           {draft.customer.name.trim()}
           <small>{draft.customer.phone}</small>
           {draft.customer.email.trim() ? <small>{draft.customer.email.trim()}</small> : null}
+          {draft.customer.whatsappOptIn ? <small>Lembretes pelo WhatsApp</small> : null}
         </span>
       ),
       step: 3,

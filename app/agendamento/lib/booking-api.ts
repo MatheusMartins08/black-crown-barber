@@ -187,6 +187,7 @@ export async function createReservation(draft: BookingDraft): Promise<Reservatio
       phone: draft.customer.phone,
       email: draft.customer.email.trim(),
       notes: draft.customer.notes.trim(),
+      whatsappOptIn: draft.customer.whatsappOptIn,
     },
   };
 }

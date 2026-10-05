@@ -86,6 +86,8 @@ export type CustomerDetails = {
   phone: string;
   email: string;
   notes: string;
+  /** Consentimento (LGPD) para receber confirmação e lembretes no WhatsApp. Desmarcado por padrão. */
+  whatsappOptIn: boolean;
 };
 
 export type BookingDraft = {
@@ -123,7 +125,7 @@ export type Reservation = {
   customer: CustomerDetails;
 };
 
-export const emptyCustomer: CustomerDetails = { name: "", phone: "", email: "", notes: "" };
+export const emptyCustomer: CustomerDetails = { name: "", phone: "", email: "", notes: "", whatsappOptIn: false };
 
 export const emptyDraft: BookingDraft = {
   serviceId: null,
@@ -246,7 +248,9 @@ export function formatPhone(value: string) {
   return `(${area}) ${rest.slice(0, splitAt)}-${rest.slice(splitAt)}`;
 }
 
-export type CustomerErrors = Partial<Record<keyof CustomerDetails, string>>;
+export type CustomerTextField = Exclude<keyof CustomerDetails, "whatsappOptIn">;
+
+export type CustomerErrors = Partial<Record<CustomerTextField, string>>;
 
 export function validateCustomer(customer: CustomerDetails): CustomerErrors {
   const errors: CustomerErrors = {};

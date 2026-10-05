@@ -1137,6 +1137,31 @@ textarea.booking-input {
   font-variant-numeric: tabular-nums;
 }
 
+.booking-consent {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.booking-consent input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.booking-page .booking-consent input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .booking-form__privacy {
   display: flex;
   grid-column: 1 / -1;

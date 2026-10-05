@@ -308,6 +308,42 @@
   border-color: rgb(var(--foreground-rgb) / 42%);
 }
 
+.admin-field input {
+  min-height: 36px;
+  border: 1px solid rgb(var(--foreground-rgb) / 20%);
+  border-radius: 0;
+  background: var(--admin-panel);
+  color: var(--foreground);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 160ms ease;
+}
+
+.admin-field input::placeholder {
+  color: rgb(var(--foreground-rgb) / 40%);
+}
+
+.admin-field input:hover {
+  border-color: rgb(var(--foreground-rgb) / 42%);
+}
+
+.admin-clients__search {
+  flex: 1 1 200px;
+  max-width: 280px;
+}
+
+.admin-clients__search input {
+  width: 100%;
+}
+
+.admin-segmented__count {
+  margin-left: 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
 /* Tabelas */
 
 .admin-table-wrap {
@@ -436,6 +472,39 @@
   border-color: rgb(176 138 62 / 45%);
   background: rgb(176 138 62 / 9%);
   color: #7a5c22;
+}
+
+/* Situação do assinante: pendente (ainda cobre), atrasado (bloqueado), ex-assinante. */
+.admin-tag--pending {
+  border-color: rgb(154 90 28 / 40%);
+  background: rgb(154 90 28 / 7%);
+  color: var(--admin-warning);
+}
+
+.admin-tag--overdue {
+  border-color: var(--admin-warning);
+  background: var(--admin-warning);
+  color: var(--admin-panel);
+}
+
+.admin-tag--former {
+  border-color: rgb(var(--foreground-rgb) / 22%);
+  background: transparent;
+  color: var(--muted);
+}
+
+.admin-link {
+  color: var(--foreground);
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: rgb(var(--foreground-rgb) / 25%);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 160ms ease;
+}
+
+.admin-link:hover {
+  text-decoration-color: currentColor;
 }
 
 .admin-person {
@@ -892,6 +961,20 @@
 
   .admin-filters select {
     width: 100%;
+  }
+
+  .admin-clients__segmented {
+    grid-column: 1 / -1;
+    overflow-x: auto;
+  }
+
+  .admin-clients__segmented button {
+    flex: 0 0 auto;
+  }
+
+  .admin-clients__search {
+    grid-column: 1 / -1;
+    max-width: none;
   }
 
   .admin-bars__row {
