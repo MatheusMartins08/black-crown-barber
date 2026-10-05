@@ -1,8 +1,14 @@
+import { clients, referenceDate, subscriptionSeeds, subscriptions, type Client, type Subscription } from "./customers";
+import { subscriptionPlans as planCatalog, type PlanBenefit, type PlanId } from "./plans";
 import { barbers, services } from "./site";
 
 // Dados ilustrativos do painel. Tudo é gerado de forma determinística (mesma
 // semente no servidor e no navegador) até o painel ler o Supabase. As regras de
-// assinatura e mensalidade espelham supabase/migrations/…120800_memberships.sql.
+// assinatura e mensalidade espelham supabase/migrations/…120800_memberships.sql e
+// …121000_subscriber_accounts.sql (planos com limite semanal e plano congelado).
+
+export { clients, referenceDate, subscriptions };
+export type { Client, Subscription };
 
 export type BarberName = (typeof barbers)[number]["name"];
 export type ServiceName = (typeof services)[number]["name"];
@@ -10,27 +16,11 @@ export type AppointmentStatus = "agendado" | "concluido" | "faltou" | "cancelado
 export type Period = "dia" | "semana" | "mes";
 
 export type SubscriptionPlan = {
-  id: string;
+  id: PlanId;
   name: string;
   monthlyPrice: number;
   covers: readonly ServiceName[];
-};
-
-/** O telefone do cliente é o WhatsApp. */
-export type Client = {
-  id: string;
-  name: string;
-  phone: string;
-  whatsappOptIn: boolean;
-};
-
-export type Subscription = {
-  id: string;
-  clientId: string;
-  planId: string;
-  startedAt: string;
-  /** Último dia coberto. `null` enquanto ativa. */
-  endedAt: string | null;
+  benefits: readonly PlanBenefit[];
 };
 
 export type PaymentMethod = "pix" | "cartao" | "dinheiro";
@@ -52,10 +42,11 @@ export type PlanPayment = {
  * - ativo: assinatura vigente e nenhuma mensalidade vencida em aberto;
  * - pendente: mensalidade vencida em aberto, ainda dentro da tolerância (o plano cobre);
  * - atrasado: em aberto há mais dias que a tolerância (o plano deixa de cobrir);
- * - ex_assinante: sem assinatura vigente, mas já assinou;
+ * - congelado: plano congelado pela barbearia (não cobre e não gera mensalidade);
+ * - ex_assinante: sem assinatura vigente, mas já assinou (assinante inativo);
  * - avulso: nunca assinou.
  */
-export type MembershipStatus = "ativo" | "pendente" | "atrasado" | "ex_assinante" | "avulso";
+export type MembershipStatus = "ativo" | "pendente" | "atrasado" | "congelado" | "ex_assinante" | "avulso";
 
 export type Appointment = {
   id: string;
@@ -68,7 +59,6 @@ export type Appointment = {
   status: AppointmentStatus;
 };
 
-export const referenceDate = "2026-10-03";
 const referenceTime = "14:00";
 const dataStart = "2026-09-01";
 const dataEnd = "2026-10-10";
@@ -92,16 +82,18 @@ const serviceSlots: Record<ServiceName, number> = {
   Sobrancelha: 1,
 };
 
-export const subscriptionPlans: SubscriptionPlan[] = [
-  { id: "plano-corte", name: "Plano Corte", monthlyPrice: 99, covers: ["Corte masculino"] },
-  { id: "plano-barba", name: "Plano Barba", monthlyPrice: 89, covers: ["Barba"] },
-  {
-    id: "plano-coroa",
-    name: "Plano Coroa",
-    monthlyPrice: 169,
-    covers: ["Corte masculino", "Barba", "Corte + barba"],
-  },
-];
+const serviceNameById = Object.fromEntries(services.map((service) => [service.id, service.name])) as Record<
+  (typeof services)[number]["id"],
+  ServiceName
+>;
+
+export const subscriptionPlans: SubscriptionPlan[] = planCatalog.map((plan) => ({
+  id: plan.id,
+  name: plan.name,
+  monthlyPrice: plan.monthlyPrice,
+  benefits: plan.benefits,
+  covers: plan.benefits.map((benefit) => serviceNameById[benefit.serviceId]),
+}));
 
 // Regras de repasse ilustrativas: ajuste aqui quando a barbearia definir os valores reais.
 export const commissionRules = {
@@ -114,24 +106,8 @@ export const commissionRules = {
   } satisfies Record<ServiceName, number>,
 };
 
-const clientNames = [
-  "André Souza", "Bruno Lacerda", "Caio Ferreira", "Daniel Rocha", "Eduardo Pires",
-  "Felipe Moura", "Gabriel Antunes", "Henrique Dias", "Igor Matos", "Jorge Teixeira",
-  "Kauã Ribeiro", "Leonardo Prado", "Marcos Vieira", "Nathan Coelho", "Otávio Lima",
-  "Paulo Henrique Brandão", "Rafael Quintão", "Samuel Arantes", "Thiago Moreira", "Ulisses Faria",
-  "Vinícius Castro", "Wagner Nogueira", "Yuri Campos", "Lucas Gontijo", "Mateus Drummond",
-  "Pedro Bicalho", "Ricardo Lanna", "Gustavo Rezende",
-];
-
-export const clients: Client[] = clientNames.map((name, index) => ({
-  id: `cli-${String(index + 1).padStart(2, "0")}`,
-  name,
-  phone: `(31) 9${String(8100 + index * 37).padStart(4, "0")}-${String(1000 + index * 263).slice(-4)}`,
-  whatsappOptIn: index % 3 !== 2,
-}));
-
 const clientsById = new Map(clients.map((client) => [client.id, client]));
-const plansById = new Map(subscriptionPlans.map((plan) => [plan.id, plan]));
+const plansById = new Map<string, SubscriptionPlan>(subscriptionPlans.map((plan) => [plan.id, plan]));
 
 export function getClient(clientId: string) {
   return clientsById.get(clientId)!;
@@ -146,46 +122,6 @@ export function getPlan(planId: string | null) {
 /** Dias depois do vencimento em que o plano ainda cobre (shop_settings.subscription_grace_days). */
 export const billingRules = { graceDays: 5 };
 
-// Base ilustrativa (índice em clientNames). `paidThrough`: mensalidades com vencimento
-// até essa data estão pagas; as seguintes ficam em aberto. Padrão: tudo pago até hoje.
-const subscriptionSeeds: {
-  client: number;
-  planId: string;
-  startedAt: string;
-  endedAt?: string;
-  paidThrough?: string;
-}[] = [
-  { client: 0, planId: "plano-coroa", startedAt: "2026-02-14" },
-  { client: 2, planId: "plano-corte", startedAt: "2026-05-08" },
-  { client: 4, planId: "plano-barba", startedAt: "2026-07-22" },
-  // Vencida há 3 dias: pagamento pendente, ainda dentro da tolerância.
-  { client: 5, planId: "plano-coroa", startedAt: "2026-04-30", paidThrough: "2026-09-29" },
-  { client: 8, planId: "plano-corte", startedAt: "2026-06-03" },
-  { client: 10, planId: "plano-coroa", startedAt: "2025-12-18" },
-  // Vencida em 20/09: passou da tolerância, o plano deixa de cobrir a partir de 26/09.
-  { client: 13, planId: "plano-barba", startedAt: "2026-06-20", paidThrough: "2026-09-19" },
-  { client: 15, planId: "plano-corte", startedAt: "2026-08-11" },
-  { client: 18, planId: "plano-coroa", startedAt: "2026-03-27" },
-  // Vencida em 01/10: pendente.
-  { client: 20, planId: "plano-corte", startedAt: "2026-03-01", paidThrough: "2026-09-30" },
-  { client: 23, planId: "plano-barba", startedAt: "2026-01-09" },
-  { client: 25, planId: "plano-coroa", startedAt: "2026-08-25" },
-  // Ex-assinantes.
-  { client: 1, planId: "plano-coroa", startedAt: "2026-01-10", endedAt: "2026-07-09" },
-  { client: 6, planId: "plano-corte", startedAt: "2026-03-15", endedAt: "2026-08-14" },
-  { client: 11, planId: "plano-barba", startedAt: "2025-11-05", endedAt: "2026-05-04" },
-  // Cancelou em setembro deixando a última mensalidade em aberto.
-  { client: 16, planId: "plano-coroa", startedAt: "2026-05-12", endedAt: "2026-09-11", paidThrough: "2026-08-11" },
-];
-
-export const subscriptions: Subscription[] = subscriptionSeeds.map((seed, index) => ({
-  id: `ass-${String(index + 1).padStart(2, "0")}`,
-  clientId: clients[seed.client].id,
-  planId: seed.planId,
-  startedAt: seed.startedAt,
-  endedAt: seed.endedAt ?? null,
-}));
-
 const paymentMethods: PaymentMethod[] = ["pix", "pix", "cartao", "dinheiro"];
 
 /** Gera as mensalidades até o fim dos dados, como private.generate_subscription_payments. */
@@ -194,6 +130,8 @@ function generatePayments() {
 
   subscriptionSeeds.forEach((seed, index) => {
     const subscription = subscriptions[index];
+    // Período congelado ou anulado não gera mensalidade.
+    if (subscription.status !== "ativa") return;
     const plan = getPlan(subscription.planId)!;
     const lastStart = subscription.endedAt && subscription.endedAt < dataEnd ? subscription.endedAt : dataEnd;
     const paidThrough = seed.paidThrough ?? referenceDate;
@@ -221,12 +159,13 @@ function generatePayments() {
 
 export const initialPayments = generatePayments();
 
-/** Assinatura vigente do cliente na data. */
+/** Período de assinatura vigente do cliente na data (ativo ou congelado). */
 export function getSubscriptionOn(clientId: string, date: string) {
   return (
     subscriptions.find(
       (subscription) =>
         subscription.clientId === clientId &&
+        subscription.status !== "cancelada" &&
         subscription.startedAt <= date &&
         (subscription.endedAt === null || subscription.endedAt >= date),
     ) ?? null
@@ -254,6 +193,7 @@ export function getMembership(clientId: string, date: string, payments: PlanPaym
   const current = getSubscriptionOn(clientId, date);
 
   if (current) {
+    if (current.status === "suspensa") return "congelado";
     if (!isInGoodStanding(current.id, date, payments)) return "atrasado";
     return getOpenPayments([current.id], date, payments).length ? "pendente" : "ativo";
   }
@@ -264,10 +204,14 @@ export function getMembership(clientId: string, date: string, payments: PlanPaym
   return hasSubscribed ? "ex_assinante" : "avulso";
 }
 
-/** Plano que cobre o serviço na data: vigente, inclui o serviço e em dia (dentro da tolerância). */
+/**
+ * Plano que cobre o serviço na data: vigente e não congelado, inclui o serviço e em dia
+ * (dentro da tolerância). O limite semanal de cada benefício é garantido pela agenda
+ * ilustrativa (generateAppointments); no Supabase, por private.plan_coverage.
+ */
 export function getCoveringPlan(clientId: string, serviceName: ServiceName, date: string, payments: PlanPayment[]) {
   const current = getSubscriptionOn(clientId, date);
-  if (!current || !isInGoodStanding(current.id, date, payments)) return null;
+  if (!current || current.status !== "ativa" || !isInGoodStanding(current.id, date, payments)) return null;
   const plan = getPlan(current.planId);
   return plan?.covers.includes(serviceName) ? plan : null;
 }
@@ -449,9 +393,22 @@ function getStatus(date: string, time: string, random: () => number): Appointmen
   return "concluido";
 }
 
+/** Benefício semanal do plano ativo do cliente para o serviço na data (chave de uso e limite). */
+function getWeeklyBenefit(clientId: string, serviceName: ServiceName, date: string) {
+  const current = getSubscriptionOn(clientId, date);
+  if (current?.status !== "ativa") return null;
+  const benefit = getPlan(current.planId)?.benefits.find(
+    (item) => serviceNameById[item.serviceId] === serviceName,
+  );
+  if (!benefit) return null;
+  return { key: `${clientId}|${serviceName}|${getPeriodRange(date, "semana").start}`, limit: benefit.perWeek };
+}
+
 function generateAppointments() {
   const random = createRandom(20261003);
   const generated: Appointment[] = [];
+  // Usos de benefício por cliente, serviço e semana: a agenda nunca passa do limite do plano.
+  const weeklyUsage = new Map<string, number>();
   const occupancyByBarber: Record<string, number> = {
     "Júlia Andrade": 0.72,
     "Rafael Martins": 0.62,
@@ -473,7 +430,19 @@ function generateAppointments() {
 
         const serviceName = pickService(random);
         const time = toTime(minutes);
-        const client = clients[Math.floor(random() * clients.length)];
+        const firstPick = Math.floor(random() * clients.length);
+        let client = clients[firstPick];
+        let benefit = getWeeklyBenefit(client.id, serviceName, date);
+        // Quem já usou o benefício da semana dá lugar ao próximo cliente da lista.
+        for (
+          let offset = 1;
+          offset < clients.length && benefit && (weeklyUsage.get(benefit.key) ?? 0) >= benefit.limit;
+          offset++
+        ) {
+          client = clients[(firstPick + offset) % clients.length];
+          benefit = getWeeklyBenefit(client.id, serviceName, date);
+        }
+        if (benefit) weeklyUsage.set(benefit.key, (weeklyUsage.get(benefit.key) ?? 0) + 1);
         const reassigned = random() < 0.06;
         const performedBy = reassigned
           ? barberNames[(barberNames.indexOf(barberName) + 1) % barberNames.length]

@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft } from "lucide-react";
+import useAsyncData from "../../components/use-async-data";
 import {
   ANY_PROFESSIONAL,
   getProfessional,
   getService,
+  getTodayIso,
   hasErrors,
   validateCustomer,
   type ProfessionalChoice,
@@ -13,22 +15,29 @@ import {
   type ServiceId,
   type TimeSlot,
 } from "../../data/booking";
-import { BookingApiError, createReservation } from "../lib/booking-api";
+import { getPlan } from "../../data/plans";
+import { evaluateCoverage, type SubscriberSession } from "../../data/subscribers";
+import { fetchPlanCoverage } from "../../lib/subscribers-api";
+import { BookingApiError, createReservation, createSubscriberReservation } from "../lib/booking-api";
 import BookingProgress from "./booking-progress";
 import BookingSuccess from "./booking-success";
 import { BookingSummaryBar, BookingSummaryPanel } from "./booking-summary";
 import PrimaryActionButton, { type PrimaryAction } from "./primary-action-button";
 import DetailsStep, { getFieldId } from "./steps/details-step";
 import ProfessionalStep from "./steps/professional-step";
+import ProfileStep from "./steps/profile-step";
 import ReviewStep from "./steps/review-step";
 import ScheduleStep from "./steps/schedule-step";
 import ServiceStep from "./steps/service-step";
+import SubscriberLoginDialog from "./subscriber-login-dialog";
 import useBookingDraft, {
-  bookingSteps,
+  getBookingSteps,
   getMaxReachableStep,
   hasStoredDraft,
-  type StepIndex,
+  stepLabels,
+  type StepId,
 } from "./use-booking-draft";
+import useSubscriberSession from "./use-subscriber-session";
 
 type BookingFlowProps = {
   initialServiceId: ServiceId | null;
@@ -59,28 +68,44 @@ export default function BookingFlow(props: BookingFlowProps) {
   );
 }
 
-function getStepCopy(step: StepIndex, serviceName: string | undefined, professionalName: string | undefined) {
+type CopyContext = {
+  serviceName?: string;
+  professionalName?: string;
+  session: SubscriberSession | null;
+};
+
+function getStepCopy(step: StepId, { serviceName, professionalName, session }: CopyContext) {
   switch (step) {
-    case 0:
+    case "perfil":
+      return {
+        title: "Você é assinante de algum plano?",
+        description: "Assinantes entram com o telefone cadastrado na barbearia e usam os benefícios do plano.",
+      };
+    case "servico": {
+      const planName = getPlan(session?.planId ?? null)?.name;
       return {
         title: "Qual serviço você quer fazer?",
-        description: "Escolha um serviço. Dá para alterar a escolha a qualquer momento.",
+        description:
+          planName && !session?.blockedReason
+            ? `Os serviços do ${planName} aparecem primeiro. Dá para alterar a escolha a qualquer momento.`
+            : "Escolha um serviço. Dá para alterar a escolha a qualquer momento.",
       };
-    case 1:
+    }
+    case "profissional":
       return {
         title: "Com quem você quer agendar?",
         description: "Escolha um profissional ou deixe que a gente encontre o primeiro horário livre.",
       };
-    case 2:
+    case "horario":
       return {
         title: "Escolha o dia e o horário",
         description: `Apenas horários disponíveis para ${serviceName?.toLowerCase() ?? "o serviço"}${
           professionalName ? ` com ${professionalName}` : " com qualquer profissional"
         }.`,
       };
-    case 3:
+    case "dados":
       return { title: "Seus dados", description: "Só o necessário para confirmar o seu horário." };
-    case 4:
+    case "confirmacao":
       return {
         title: "Revise e confirme",
         description: "Confira os detalhes. Use “Alterar” para ajustar qualquer escolha.",
@@ -88,10 +113,11 @@ function getStepCopy(step: StepIndex, serviceName: string | undefined, professio
   }
 }
 
-const stepHints: Partial<Record<StepIndex, string>> = {
-  0: "Escolha um serviço para continuar.",
-  1: "Escolha um profissional para continuar.",
-  2: "Escolha um horário para continuar.",
+const stepHints: Partial<Record<StepId, string>> = {
+  perfil: "Responda para continuar.",
+  servico: "Escolha um serviço para continuar.",
+  profissional: "Escolha um profissional para continuar.",
+  horario: "Escolha um horário para continuar.",
 };
 
 type SubmissionError = { message: string; canPickAnotherTime: boolean };
@@ -107,23 +133,64 @@ function BookingFlowContent({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<SubmissionError | null>(null);
   const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginKey, setLoginKey] = useState(0);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 
   const flowRef = useRef<HTMLDivElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const successHeadingRef = useRef<HTMLHeadingElement>(null);
   const advanceTimer = useRef<number | undefined>(undefined);
   const previousView = useRef<string>(`step-${step}`);
+  const customerTypeRef = useRef(draft.customerType);
 
+  useEffect(() => {
+    customerTypeRef.current = draft.customerType;
+  });
+
+  // Rascunho de assinante sem sessão válida (saiu em outra aba, conta removida): volta ao Perfil.
+  const subscriber = useSubscriberSession(() => {
+    if (customerTypeRef.current !== "assinante") return;
+    dispatch({ type: "setCustomerType", customerType: null });
+    setSessionNotice("Sua sessão de assinante terminou. Entre de novo para usar os benefícios do plano.");
+  });
+  const session = draft.customerType === "assinante" ? subscriber.session : null;
+  const sessionPending = draft.customerType === "assinante" && subscriber.status === "loading";
+
+  const steps = getBookingSteps(draft.customerType);
+  const stepIndex = steps.indexOf(step);
   const maxReachable = getMaxReachableStep(draft);
+  const maxIndex = steps.indexOf(maxReachable);
   const service = getService(draft.serviceId);
   const professionalName =
     draft.professionalId && draft.professionalId !== ANY_PROFESSIONAL
       ? getProfessional(draft.professionalId)?.name
       : undefined;
-  const copy = getStepCopy(step, service?.name, professionalName);
+  const copy = getStepCopy(step, { serviceName: service?.name, professionalName, session });
+
+  // Cobertura do plano: confirmada no adaptador quando há data (limite semanal); antes
+  // disso, uma prévia pelo catálogo do plano.
+  const coverageLoader = useMemo(
+    () =>
+      session && draft.serviceId && draft.date
+        ? () => fetchPlanCoverage({ serviceId: draft.serviceId!, date: draft.date! })
+        : null,
+    // A situação e o plano entram na chave para reconsultar quando a conta muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session?.subscriberId, session?.planId, session?.status, draft.serviceId, draft.date],
+  );
+  const coverageResult = useAsyncData(coverageLoader);
+  const coverage =
+    coverageResult.status === "success"
+      ? coverageResult.data
+      : session && draft.serviceId
+        ? evaluateCoverage(session, draft.serviceId, draft.date ?? getTodayIso(), 0)
+        : null;
+  const checkingCoverage = coverageLoader !== null && coverageResult.status === "loading";
+  const planInfo = { session, coverage };
 
   const goTo = useCallback(
-    (target: StepIndex) => {
+    (target: StepId) => {
       window.clearTimeout(advanceTimer.current);
       setSubmissionError(null);
       dispatch({ type: "goTo", step: target });
@@ -132,7 +199,7 @@ function BookingFlowContent({
   );
 
   const advanceAfterSelection = useCallback(
-    (target: StepIndex) => {
+    (target: StepId) => {
       window.clearTimeout(advanceTimer.current);
       advanceTimer.current = window.setTimeout(() => dispatch({ type: "goTo", step: target }), autoAdvanceDelay);
     },
@@ -166,11 +233,43 @@ function BookingFlowContent({
     [dispatch],
   );
 
+  function chooseGuest() {
+    setSessionNotice(null);
+    if (subscriber.session) void subscriber.signOut();
+    dispatch({ type: "setCustomerType", customerType: "avulso" });
+    advanceAfterSelection("servico");
+  }
+
+  function chooseSubscriber() {
+    setSessionNotice(null);
+    if (subscriber.session) {
+      dispatch({ type: "setCustomerType", customerType: "assinante" });
+      advanceAfterSelection("servico");
+      return;
+    }
+    setLoginKey((key) => key + 1);
+    setLoginOpen(true);
+  }
+
+  // Login concluído (com ou sem benefícios): segue como assinante, sem pedir dados.
+  function continueAsSubscriber() {
+    setLoginOpen(false);
+    dispatch({ type: "setCustomerType", customerType: "assinante" });
+    // Espera o modal fechar para o foco ir ao título da próxima etapa.
+    advanceAfterSelection("servico");
+  }
+
+  async function signOut() {
+    setLoginOpen(false);
+    await subscriber.signOut();
+    dispatch({ type: "setCustomerType", customerType: null });
+  }
+
   function submitDetails() {
     setDetailsAttempted(true);
     const errors = validateCustomer(draft.customer);
     if (!hasErrors(errors)) {
-      goTo(4);
+      goTo("confirmacao");
       return;
     }
     const firstInvalid = (["name", "phone", "email", "notes"] as const).find((field) => errors[field]);
@@ -181,9 +280,10 @@ function BookingFlowContent({
     setIsSubmitting(true);
     setSubmissionError(null);
     try {
-      const created = await createReservation(draft);
+      const created =
+        draft.customerType === "assinante" ? await createSubscriberReservation(draft) : await createReservation(draft);
       setReservation(created);
-      // Mantém os dados de contato para um próximo agendamento; limpa as escolhas.
+      // Mantém quem é o cliente e os dados de contato para um próximo agendamento; limpa as escolhas.
       dispatch({ type: "reset" });
       setDetailsAttempted(false);
     } catch (error) {
@@ -197,10 +297,13 @@ function BookingFlowContent({
     }
   }
 
-  const isPrimaryDisabled = step === 4 ? maxReachable < 4 : step < 3 && maxReachable <= step;
+  const isPrimaryDisabled =
+    step === "confirmacao"
+      ? maxIndex < stepIndex || checkingCoverage || sessionPending
+      : step !== "dados" && maxIndex <= stepIndex;
   const primaryHint = isPrimaryDisabled ? stepHints[step] : undefined;
   const primaryAction: PrimaryAction =
-    step === 4
+    step === "confirmacao"
       ? {
           label: "Confirmar agendamento",
           shortLabel: "Confirmar",
@@ -209,9 +312,9 @@ function BookingFlowContent({
           loading: isSubmitting,
           loadingLabel: "Confirmando…",
         }
-      : step === 3
+      : step === "dados"
         ? { label: "Revisar agendamento", shortLabel: "Revisar", onClick: submitDetails, disabled: false }
-        : { label: "Continuar", onClick: () => goTo((step + 1) as StepIndex), disabled: isPrimaryDisabled };
+        : { label: "Continuar", onClick: () => goTo(steps[stepIndex + 1]), disabled: isPrimaryDisabled };
 
   if (reservation) {
     return (
@@ -230,22 +333,25 @@ function BookingFlowContent({
       <header className="booking-intro">
         <p className="section-heading__eyebrow">Agendamento online</p>
         <h1>Reserve seu horário.</h1>
-        <p>Cinco passos rápidos, sem cadastro. Escolha o serviço, o profissional e o melhor horário para você.</p>
+        <p>
+          Poucos passos, sem cadastro. Escolha o serviço, o profissional e o melhor horário para você. Assinantes entram
+          com o telefone cadastrado na barbearia.
+        </p>
       </header>
 
       <div className="booking-flow__progress" ref={flowRef}>
-        <BookingProgress current={step} maxReachable={maxReachable} onSelect={goTo} />
+        <BookingProgress current={step} maxReachable={maxReachable} onSelect={goTo} steps={steps} />
       </div>
 
       <p aria-live="polite" className="sr-only">
-        Etapa {step + 1} de {bookingSteps.length}: {bookingSteps[step]}
+        Etapa {stepIndex + 1} de {steps.length}: {stepLabels[step]}
       </p>
 
       <div className="booking-flow__layout">
         <section aria-labelledby="booking-step-title" className="booking-step" key={step}>
           <header className="booking-step__header">
             <p className="booking-step__count">
-              Etapa {step + 1} de {bookingSteps.length}
+              Etapa {stepIndex + 1} de {steps.length}
             </p>
             <h2 id="booking-step-title" ref={stepHeadingRef} tabIndex={-1}>
               {copy.title}
@@ -253,32 +359,45 @@ function BookingFlowContent({
             <p>{copy.description}</p>
           </header>
 
-          {step === 0 ? (
-            <ServiceStep
-              onSelect={(serviceId) => {
-                dispatch({ type: "selectService", serviceId });
-                advanceAfterSelection(1);
-              }}
-              selectedId={draft.serviceId}
+          {step === "perfil" ? (
+            <ProfileStep
+              customerType={draft.customerType}
+              notice={sessionNotice}
+              onChooseGuest={chooseGuest}
+              onChooseSubscriber={chooseSubscriber}
+              onSignOut={signOut}
+              session={subscriber.session}
             />
           ) : null}
 
-          {step === 1 && draft.serviceId ? (
+          {step === "servico" ? (
+            <ServiceStep
+              loading={sessionPending}
+              onSelect={(serviceId) => {
+                dispatch({ type: "selectService", serviceId });
+                advanceAfterSelection("profissional");
+              }}
+              selectedId={draft.serviceId}
+              session={session}
+            />
+          ) : null}
+
+          {step === "profissional" && draft.serviceId ? (
             <ProfessionalStep
               onSelect={(professionalId) => {
                 dispatch({ type: "selectProfessional", professionalId });
-                advanceAfterSelection(2);
+                advanceAfterSelection("horario");
               }}
               selectedId={draft.professionalId}
               serviceId={draft.serviceId}
             />
           ) : null}
 
-          {step === 2 && draft.serviceId && draft.professionalId ? (
+          {step === "horario" && draft.serviceId && draft.professionalId ? (
             <ScheduleStep
               assignedProfessionalId={draft.assignedProfessionalId}
               date={draft.date}
-              onChangeProfessional={() => goTo(1)}
+              onChangeProfessional={() => goTo("profissional")}
               onSelectDate={(date) => dispatch({ type: "selectDate", date })}
               onSelectSlot={(date, slot) => dispatch({ type: "selectSlot", date, slot })}
               onSlotsLoaded={handleSlotsLoaded}
@@ -289,7 +408,7 @@ function BookingFlowContent({
             />
           ) : null}
 
-          {step === 3 ? (
+          {step === "dados" ? (
             <DetailsStep
               customer={draft.customer}
               onChange={(changes) => dispatch({ type: "updateCustomer", changes })}
@@ -298,11 +417,24 @@ function BookingFlowContent({
             />
           ) : null}
 
-          {step === 4 ? <ReviewStep draft={draft} error={submissionError} onEdit={goTo} /> : null}
+          {step === "confirmacao" && sessionPending ? (
+            <div aria-busy="true" aria-label="Carregando os dados da sua conta" className="booking-skeleton booking-review--loading" />
+          ) : null}
 
-          <footer className={`booking-step__footer${step === 0 ? " booking-step__footer--first" : ""}`}>
-            {step > 0 ? (
-              <button className="booking-back" onClick={() => goTo((step - 1) as StepIndex)} type="button">
+          {step === "confirmacao" && !sessionPending ? (
+            <ReviewStep
+              checkingCoverage={checkingCoverage}
+              coverage={coverage}
+              draft={draft}
+              error={submissionError}
+              onEdit={goTo}
+              session={session}
+            />
+          ) : null}
+
+          <footer className={`booking-step__footer${stepIndex === 0 ? " booking-step__footer--first" : ""}`}>
+            {stepIndex > 0 ? (
+              <button className="booking-back" onClick={() => goTo(steps[stepIndex - 1])} type="button">
                 <ArrowLeft aria-hidden="true" size={16} />
                 Voltar
               </button>
@@ -314,10 +446,20 @@ function BookingFlowContent({
           </footer>
         </section>
 
-        <BookingSummaryPanel draft={draft} />
+        <BookingSummaryPanel draft={draft} planInfo={planInfo} />
       </div>
 
-      <BookingSummaryBar action={primaryAction} draft={draft} />
+      <BookingSummaryBar action={primaryAction} draft={draft} planInfo={planInfo} />
+
+      <SubscriberLoginDialog
+        onClose={() => setLoginOpen(false)}
+        onContinue={continueAsSubscriber}
+        onDecline={signOut}
+        onSignIn={subscriber.signIn}
+        open={loginOpen}
+        openKey={loginKey}
+        session={subscriber.session}
+      />
     </div>
   );
 }

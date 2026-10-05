@@ -1,3 +1,4 @@
+import type { PlanId } from "./plans";
 import { barbers, openingHours, services } from "./site";
 
 // Regras e dados do fluxo de agendamento. Tudo aqui é puro (sem React e sem rede)
@@ -90,13 +91,18 @@ export type CustomerDetails = {
   whatsappOptIn: boolean;
 };
 
+/** Resposta da etapa Perfil. "assinante" só é gravado depois do login. */
+export type CustomerType = "assinante" | "avulso";
+
 export type BookingDraft = {
+  customerType: CustomerType | null;
   serviceId: ServiceId | null;
   professionalId: ProfessionalChoice | null;
   date: string | null;
   time: string | null;
   /** Profissional que atenderá de fato (definido pelo horário quando a escolha é "qualquer"). */
   assignedProfessionalId: ProfessionalId | null;
+  /** Preenchido na etapa Dados. Assinantes usam os dados da conta. */
   customer: CustomerDetails;
 };
 
@@ -123,11 +129,14 @@ export type Reservation = {
   durationMinutes: number;
   price: number;
   customer: CustomerDetails;
+  /** Plano do assinante e se o atendimento entra nele. `null` para avulso. */
+  plan: { id: PlanId; name: string; covered: boolean } | null;
 };
 
 export const emptyCustomer: CustomerDetails = { name: "", phone: "", email: "", notes: "", whatsappOptIn: false };
 
 export const emptyDraft: BookingDraft = {
+  customerType: null,
   serviceId: null,
   professionalId: null,
   date: null,

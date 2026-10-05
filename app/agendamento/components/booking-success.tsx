@@ -51,12 +51,13 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
     { label: "Duração", value: service?.duration },
     { label: "Local", value: `${siteConfig.address}, ${siteConfig.city}` },
     {
-      label: "Cliente",
+      label: reservation.plan ? "Assinante" : "Cliente",
       value: (
         <span className="booking-review__stack">
           {reservation.customer.name}
           <small>{reservation.customer.phone}</small>
           {reservation.customer.email ? <small>{reservation.customer.email}</small> : null}
+          {reservation.plan ? <small>{reservation.plan.name}</small> : null}
         </span>
       ),
     },
@@ -92,7 +93,9 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
         </dl>
         <div className="booking-review__total">
           <span>Valor</span>
-          <strong>{formatCurrency(reservation.price)}</strong>
+          <strong>
+            {reservation.plan?.covered ? "Incluído no plano" : formatCurrency(reservation.price)}
+          </strong>
         </div>
       </div>
 

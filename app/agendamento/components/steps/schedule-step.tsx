@@ -18,7 +18,7 @@ import {
 } from "../../../data/booking";
 import { fetchDayAvailability, fetchDaySummaries, findNextAvailable } from "../../lib/booking-api";
 import ProfessionalAvatar from "../professional-avatar";
-import useAsyncData from "../use-async-data";
+import useAsyncData from "../../../components/use-async-data";
 import DateStrip from "./date-strip";
 import TimeSlotGroups, { TimeSlotSkeleton } from "./time-slot-groups";
 

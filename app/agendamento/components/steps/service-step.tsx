@@ -1,47 +1,172 @@
-import { Clock3 } from "lucide-react";
+import { CircleAlert, Clock3 } from "lucide-react";
 import { serviceIcons } from "../../../components/service-icons";
-import { bookingServices, formatCurrency, type ServiceId } from "../../../data/booking";
+import { bookingServices, formatCurrency, type BookingService, type ServiceId } from "../../../data/booking";
+import {
+  describePlanBenefits,
+  formatPerWeek,
+  getPlan,
+  getPlanBenefit,
+  type SubscriptionPlan,
+} from "../../../data/plans";
+import { blockedMessages, type SubscriberSession } from "../../../data/subscribers";
 import ChoiceCard from "../choice-card";
 
 type ServiceStepProps = {
   selectedId: ServiceId | null;
   onSelect: (serviceId: ServiceId) => void;
+  /** Assinante logado: os serviços do plano aparecem primeiro. */
+  session: SubscriberSession | null;
+  /** A sessão do assinante ainda está sendo conferida. */
+  loading: boolean;
 };
 
-export default function ServiceStep({ selectedId, onSelect }: ServiceStepProps) {
+function ServiceCard({
+  service,
+  index,
+  selected,
+  onSelect,
+  plan,
+}: {
+  service: BookingService;
+  index: number;
+  selected: boolean;
+  onSelect: () => void;
+  /** Preenchido quando o serviço faz parte do plano do assinante. */
+  plan?: SubscriptionPlan;
+}) {
+  const Icon = serviceIcons[service.icon];
+  const isPopular = "popular" in service && service.popular;
+  const benefit = plan ? getPlanBenefit(plan.id, service.id) : null;
+
+  return (
+    <ChoiceCard
+      className={`service-choice${benefit ? " service-choice--plan" : ""}`}
+      index={index}
+      onSelect={onSelect}
+      selected={selected}
+    >
+      <span className="service-choice__topline">
+        <span className="service-card__icon">
+          <Icon aria-hidden="true" size={20} strokeWidth={1.6} />
+        </span>
+        {benefit ? (
+          <span className="service-card__badge">Incluído no plano</span>
+        ) : isPopular ? (
+          <span className="service-card__badge">Mais pedido</span>
+        ) : null}
+      </span>
+      <span className="choice-card__title">{service.name}</span>
+      <span className="choice-card__description">{service.description}</span>
+      <span className="service-choice__meta">
+        <span>
+          <Clock3 aria-hidden="true" size={14} strokeWidth={1.7} />
+          {service.duration}
+          {benefit ? ` · ${formatPerWeek(benefit.perWeek)}` : null}
+        </span>
+        <strong>{benefit ? "Incluído" : formatCurrency(service.price)}</strong>
+      </span>
+    </ChoiceCard>
+  );
+}
+
+function ServiceGrid({
+  services,
+  startIndex = 0,
+  selectedId,
+  onSelect,
+  plan,
+}: {
+  services: BookingService[];
+  startIndex?: number;
+  selectedId: ServiceId | null;
+  onSelect: (serviceId: ServiceId) => void;
+  plan?: SubscriptionPlan;
+}) {
   return (
     <ul className="choice-grid">
-      {bookingServices.map((service, index) => {
-        const Icon = serviceIcons[service.icon];
-        const isPopular = "popular" in service && service.popular;
-
-        return (
-          <li key={service.id}>
-            <ChoiceCard
-              className="service-choice"
-              index={index}
-              onSelect={() => onSelect(service.id)}
-              selected={selectedId === service.id}
-            >
-              <span className="service-choice__topline">
-                <span className="service-card__icon">
-                  <Icon aria-hidden="true" size={20} strokeWidth={1.6} />
-                </span>
-                {isPopular ? <span className="service-card__badge">Mais pedido</span> : null}
-              </span>
-              <span className="choice-card__title">{service.name}</span>
-              <span className="choice-card__description">{service.description}</span>
-              <span className="service-choice__meta">
-                <span>
-                  <Clock3 aria-hidden="true" size={14} strokeWidth={1.7} />
-                  {service.duration}
-                </span>
-                <strong>{formatCurrency(service.price)}</strong>
-              </span>
-            </ChoiceCard>
-          </li>
-        );
-      })}
+      {services.map((service, index) => (
+        <li key={service.id}>
+          <ServiceCard
+            index={startIndex + index}
+            onSelect={() => onSelect(service.id)}
+            plan={plan}
+            selected={selectedId === service.id}
+            service={service}
+          />
+        </li>
+      ))}
     </ul>
+  );
+}
+
+export default function ServiceStep({ selectedId, onSelect, session, loading }: ServiceStepProps) {
+  if (loading) {
+    return (
+      <ul aria-busy="true" aria-label="Carregando os serviços do seu plano" className="choice-grid">
+        {bookingServices.map((service) => (
+          <li key={service.id}>
+            <span className="choice-card service-choice booking-skeleton service-choice--skeleton" />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  const plan = getPlan(session?.planId ?? null);
+
+  if (!session || !plan) {
+    return <ServiceGrid onSelect={onSelect} selectedId={selectedId} services={bookingServices} />;
+  }
+
+  if (session.blockedReason) {
+    const message = blockedMessages[session.blockedReason];
+    return (
+      <>
+        <div className="booking-alert service-step__notice" role="status">
+          <p>
+            <CircleAlert aria-hidden="true" size={16} />
+            <span>
+              <strong>
+                {message.title} · {plan.name}.
+              </strong>{" "}
+              Os benefícios do plano não estão liberados, então os serviços têm o valor avulso.
+            </span>
+          </p>
+        </div>
+        <ServiceGrid onSelect={onSelect} selectedId={selectedId} services={bookingServices} />
+      </>
+    );
+  }
+
+  const included = bookingServices.filter((service) => getPlanBenefit(plan.id, service.id));
+  const others = bookingServices.filter((service) => !getPlanBenefit(plan.id, service.id));
+
+  return (
+    <>
+      <section aria-labelledby="service-group-plan" className="service-group">
+        <header className="service-group__header">
+          <h3 id="service-group-plan">Serviços do seu plano</h3>
+          <p>
+            {plan.name}: {describePlanBenefits(plan.id)}.
+          </p>
+        </header>
+        <ServiceGrid onSelect={onSelect} plan={plan} selectedId={selectedId} services={included} />
+      </section>
+
+      {others.length ? (
+        <section aria-labelledby="service-group-others" className="service-group">
+          <header className="service-group__header">
+            <h3 id="service-group-others">Serviços fora do plano</h3>
+            <p>Valor avulso, pago na barbearia.</p>
+          </header>
+          <ServiceGrid
+            onSelect={onSelect}
+            selectedId={selectedId}
+            services={others}
+            startIndex={included.length}
+          />
+        </section>
+      ) : null}
+    </>
   );
 }

@@ -173,13 +173,15 @@ export default function AppointmentsTable({
   );
 }
 
-/** Preço exibido na agenda: coberto, bloqueado por atraso, fora do plano ou avulso. */
+/** Preço exibido na agenda: coberto, plano congelado, bloqueado por atraso, fora do plano ou avulso. */
 function getPriceNote(appointment: Appointment, payments: PlanPayment[]) {
   const price = formatCurrency(servicePrices[appointment.serviceName]);
-  const plan = getPlan(getSubscriptionOn(appointment.clientId, appointment.date)?.planId ?? null);
+  const subscription = getSubscriptionOn(appointment.clientId, appointment.date);
+  const plan = getPlan(subscription?.planId ?? null);
 
   if (isCoveredByPlan(appointment, payments)) return "Coberto pelo plano";
   if (!plan) return price;
+  if (subscription?.status === "suspensa") return `Plano congelado · cobrar ${price}`;
   if (plan.covers.includes(appointment.serviceName)) return `Plano bloqueado por atraso · cobrar ${price}`;
   return `Fora do plano · ${price}`;
 }

@@ -37,8 +37,9 @@ const statusOrder: Record<MembershipStatus, number> = {
   atrasado: 0,
   pendente: 1,
   ativo: 2,
-  ex_assinante: 3,
-  avulso: 4,
+  congelado: 3,
+  ex_assinante: 4,
+  avulso: 5,
 };
 
 function matchesFilter(profile: ClientProfile, filter: ClientFilter) {
@@ -105,6 +106,17 @@ function BillingCell({ profile, date, payments }: { profile: ClientProfile; date
         <span className="admin-row__service">Em dia</span>
         <span className="admin-row__price">
           {next ? `Próxima em ${formatShortDate(next.dueDate)}` : `Assinante desde ${formatShortDate(profile.subscription.startedAt)}`}
+        </span>
+      </>
+    );
+  }
+
+  if (profile.membership === "congelado" && profile.subscription) {
+    return (
+      <>
+        <span className="admin-row__service">Plano congelado</span>
+        <span className="admin-row__price">
+          Desde {formatShortDate(profile.subscription.startedAt)} · sem mensalidade
         </span>
       </>
     );

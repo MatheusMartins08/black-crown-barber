@@ -10,6 +10,9 @@ import {
   getService,
   type BookingDraft,
 } from "../../data/booking";
+import { getPlan } from "../../data/plans";
+import type { PlanCoverage, SubscriberSession } from "../../data/subscribers";
+import { getPriceLabel } from "../lib/plan-pricing";
 import PrimaryActionButton, { type PrimaryAction } from "./primary-action-button";
 import ProfessionalAvatar from "./professional-avatar";
 
@@ -20,13 +23,26 @@ function getProfessionalLabel(draft: BookingDraft) {
   return getProfessional(draft.professionalId)?.name ?? null;
 }
 
-function SummaryList({ draft }: { draft: BookingDraft }) {
+/** Assinante logado e a cobertura do plano para o serviço escolhido. */
+export type SummaryPlanInfo = { session: SubscriberSession | null; coverage: PlanCoverage | null };
+
+function getTotal(draft: BookingDraft, { session, coverage }: SummaryPlanInfo) {
+  const service = getService(draft.serviceId);
+  if (!service) return null;
+  return session ? getPriceLabel(service.price, coverage) : formatCurrency(service.price);
+}
+
+function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: SummaryPlanInfo }) {
   const service = getService(draft.serviceId);
   const professionalLabel = getProfessionalLabel(draft);
   const professionalAvatarId =
     draft.professionalId === ANY_PROFESSIONAL ? draft.assignedProfessionalId : draft.professionalId;
 
+  const { session } = planInfo;
   const rows = [
+    ...(session
+      ? [{ label: "Assinante", value: `${session.name.split(" ")[0]} · ${getPlan(session.planId)?.shortName}` }]
+      : []),
     { label: "Serviço", value: service?.name },
     {
       label: "Profissional",
@@ -56,31 +72,39 @@ function SummaryList({ draft }: { draft: BookingDraft }) {
   );
 }
 
-export function BookingSummaryPanel({ draft }: { draft: BookingDraft }) {
-  const service = getService(draft.serviceId);
+export function BookingSummaryPanel({ draft, planInfo }: { draft: BookingDraft; planInfo: SummaryPlanInfo }) {
+  const total = getTotal(draft, planInfo);
 
   return (
     <aside aria-label="Resumo do agendamento" className="booking-summary">
       <p className="booking-summary__title">Seu agendamento</p>
-      <SummaryList draft={draft} />
+      <SummaryList draft={draft} planInfo={planInfo} />
       <div className="booking-summary__total">
         <span>Total</span>
-        <strong key={service?.price ?? "empty"}>{service ? formatCurrency(service.price) : "—"}</strong>
+        <strong key={total ?? "empty"}>{total ?? "—"}</strong>
       </div>
     </aside>
   );
 }
 
-export function BookingSummaryBar({ draft, action }: { draft: BookingDraft; action: PrimaryAction }) {
+export function BookingSummaryBar({
+  draft,
+  action,
+  planInfo,
+}: {
+  draft: BookingDraft;
+  action: PrimaryAction;
+  planInfo: SummaryPlanInfo;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const service = getService(draft.serviceId);
-  const meta = [service?.duration, service ? formatCurrency(service.price) : null, draft.time].filter(Boolean).join(" · ");
+  const meta = [service?.duration, getTotal(draft, planInfo), draft.time].filter(Boolean).join(" · ");
 
   return (
     <div className={`booking-bar${isOpen ? " is-open" : ""}`}>
       <div className="booking-bar__panel" id="booking-bar-panel" inert={!isOpen}>
         <div className="booking-bar__panel-inner">
-          <SummaryList draft={draft} />
+          <SummaryList draft={draft} planInfo={planInfo} />
         </div>
       </div>
       <div className="booking-bar__inner">

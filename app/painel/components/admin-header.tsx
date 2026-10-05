@@ -5,6 +5,7 @@ const sections = [
   { label: "Produção", href: "#producao" },
   { label: "Agenda", href: "#agenda" },
   { label: "Clientes", href: "#clientes" },
+  { label: "Assinantes", href: "#assinantes" },
   { label: "Fechamento", href: "#fechamento" },
   { label: "Planos", href: "#planos" },
 ];

@@ -1,27 +1,31 @@
 import type { CSSProperties } from "react";
 import { Check } from "lucide-react";
-import { bookingSteps, type StepIndex } from "./use-booking-draft";
+import { stepLabels, type StepId } from "./use-booking-draft";
 
 type BookingProgressProps = {
-  current: StepIndex;
-  maxReachable: StepIndex;
-  onSelect: (step: StepIndex) => void;
+  steps: readonly StepId[];
+  current: StepId;
+  maxReachable: StepId;
+  onSelect: (step: StepId) => void;
 };
 
-export default function BookingProgress({ current, maxReachable, onSelect }: BookingProgressProps) {
+export default function BookingProgress({ steps, current, maxReachable, onSelect }: BookingProgressProps) {
+  const currentIndex = steps.indexOf(current);
+  const maxIndex = steps.indexOf(maxReachable);
+
   return (
     <nav aria-label="Etapas do agendamento" className="booking-progress">
       <span
         aria-hidden="true"
         className="booking-progress__fill"
-        style={{ "--progress": (current + 1) / bookingSteps.length } as CSSProperties}
+        style={{ "--progress": (currentIndex + 1) / steps.length } as CSSProperties}
       />
-      <ol className="booking-progress__list">
-        {bookingSteps.map((label, index) => {
-          const step = index as StepIndex;
+      <ol className="booking-progress__list" style={{ "--step-count": steps.length } as CSSProperties}>
+        {steps.map((step, index) => {
+          const label = stepLabels[step];
           const isCurrent = step === current;
-          const isDone = !isCurrent && step < maxReachable;
-          const canOpen = !isCurrent && step <= maxReachable;
+          const isDone = !isCurrent && index < maxIndex;
+          const canOpen = !isCurrent && index <= maxIndex;
           const className = `booking-progress__step${isCurrent ? " is-current" : ""}${isDone ? " is-done" : ""}`;
           const content = (
             <>
@@ -33,7 +37,7 @@ export default function BookingProgress({ current, maxReachable, onSelect }: Boo
           );
 
           return (
-            <li className="booking-progress__item" key={label}>
+            <li className="booking-progress__item" key={step}>
               {canOpen ? (
                 <button
                   aria-label={`Ir para a etapa ${label}${isDone ? " (concluída)" : ""}`}
@@ -53,7 +57,7 @@ export default function BookingProgress({ current, maxReachable, onSelect }: Boo
         })}
       </ol>
       <p className="booking-progress__caption">
-        Etapa {current + 1} de {bookingSteps.length} · <strong>{bookingSteps[current]}</strong>
+        Etapa {currentIndex + 1} de {steps.length} · <strong>{stepLabels[current]}</strong>
       </p>
     </nav>
   );

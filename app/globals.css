@@ -2779,3 +2779,9 @@ button:focus-visible,
     transform: none;
   }
 }
+
+/* Modais (app/components/dialog.tsx): trava a rolagem da página sem deslocar o layout. */
+:root:has(dialog[open]) {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}

@@ -10,6 +10,7 @@ import {
   type Appointment,
   type PlanPayment,
 } from "../../data/painel";
+import { formatPerWeek } from "../../data/plans";
 import { isSubscriber } from "./membership-tag";
 
 export default function PlansOverview({
@@ -50,6 +51,7 @@ export default function PlansOverview({
               <th className="is-numeric" scope="col">Mensalidade</th>
               <th className="is-numeric" scope="col">Em dia</th>
               <th className="is-numeric" scope="col">Pendentes</th>
+              <th className="is-numeric" scope="col">Congelados</th>
               <th className="is-numeric" scope="col">Usos no período</th>
               <th className="is-numeric" scope="col">Recebido no mês</th>
             </tr>
@@ -60,7 +62,8 @@ export default function PlansOverview({
                 (client) => getSubscriptionOn(client.id, date)?.planId === plan.id,
               );
               const upToDate = planClients.filter((client) => memberships.get(client.id) === "ativo").length;
-              const pending = planClients.length - upToDate;
+              const frozen = planClients.filter((client) => memberships.get(client.id) === "congelado").length;
+              const pending = planClients.length - upToDate - frozen;
               const uses = completed.filter(
                 (appointment) =>
                   getSubscriptionOn(appointment.clientId, appointment.date)?.planId === plan.id &&
@@ -80,7 +83,11 @@ export default function PlansOverview({
               return (
                 <tr key={plan.id}>
                   <th scope="row">{plan.name}</th>
-                  <td data-label="Cobre">{plan.covers.join(", ")}</td>
+                  <td data-label="Cobre">
+                    {plan.covers
+                      .map((serviceName, index) => `${serviceName} (${formatPerWeek(plan.benefits[index].perWeek)})`)
+                      .join(", ")}
+                  </td>
                   <td className="is-numeric" data-label="Mensalidade">
                     {formatCurrency(plan.monthlyPrice)}
                   </td>
@@ -89,6 +96,9 @@ export default function PlansOverview({
                   </td>
                   <td className="is-numeric" data-label="Pendentes">
                     {pending}
+                  </td>
+                  <td className="is-numeric" data-label="Congelados">
+                    {frozen}
                   </td>
                   <td className="is-numeric" data-label="Usos no período">
                     {uses}

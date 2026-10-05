@@ -28,6 +28,7 @@ import BarberProduction from "./barber-production";
 import ClientsOverview from "./clients-overview";
 import PayrollSummary from "./payroll-summary";
 import PlansOverview from "./plans-overview";
+import SubscribersOverview from "./subscribers-overview";
 import { isSubscriber } from "./membership-tag";
 
 function getPeriodLabel(date: string, period: Period) {
@@ -190,6 +191,8 @@ export default function AdminDashboard() {
       />
 
       <ClientsOverview date={selectedDate} onRegisterPayment={registerPayment} payments={payments} />
+
+      <SubscribersOverview />
 
       <PayrollSummary
         onPeriodChange={setPeriod}

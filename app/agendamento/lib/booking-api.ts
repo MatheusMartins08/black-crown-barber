@@ -19,6 +19,8 @@ import {
   type ServiceId,
   type TimeSlot,
 } from "../../data/booking";
+import { getPlan } from "../../data/plans";
+import { claimPlanCoverage, SubscriberApiError } from "../../lib/subscribers-api";
 
 // Adaptador da agenda. Este é o único ponto que precisa mudar ao conectar um
 // backend: cada função assíncrona abaixo vira uma chamada à API (ou Server Action)
@@ -151,13 +153,11 @@ function createReservationCode() {
   return `BC-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("")}`;
 }
 
-/** Confirma a reserva. No backend real, esta chamada deve revalidar tudo no servidor. */
-export async function createReservation(draft: BookingDraft): Promise<Reservation> {
-  await wait(simulatedLatency * 3);
-
+/** Revalida serviço, profissional e horário e define quem atende. */
+function resolveSlot(draft: BookingDraft) {
   const { serviceId, professionalId, date, time } = draft;
   const service = getService(serviceId);
-  if (!service || !professionalId || !date || !time || hasErrors(validateCustomer(draft.customer))) {
+  if (!service || !professionalId || !date || !time) {
     throw new BookingApiError("Revise os dados do agendamento antes de confirmar.", "invalid_request");
   }
 
@@ -170,6 +170,18 @@ export async function createReservation(draft: BookingDraft): Promise<Reservatio
   if (!slot || !assignedId) {
     throw new BookingApiError("Esse horário acabou de ser ocupado. Escolha outro horário.", "slot_unavailable");
   }
+
+  return { service, professionalId, date, time, assignedId };
+}
+
+/** Confirma a reserva de quem não é assinante. No backend real, revalida tudo no servidor (create_reservation). */
+export async function createReservation(draft: BookingDraft): Promise<Reservation> {
+  await wait(simulatedLatency * 3);
+
+  if (hasErrors(validateCustomer(draft.customer))) {
+    throw new BookingApiError("Revise os dados do agendamento antes de confirmar.", "invalid_request");
+  }
+  const { service, professionalId, date, time, assignedId } = resolveSlot(draft);
 
   return {
     code: createReservationCode(),
@@ -189,5 +201,45 @@ export async function createReservation(draft: BookingDraft): Promise<Reservatio
       notes: draft.customer.notes.trim(),
       whatsappOptIn: draft.customer.whatsappOptIn,
     },
+    plan: null,
+  };
+}
+
+/**
+ * Confirma a reserva do assinante logado (create_subscriber_reservation). Os dados do
+ * cliente vêm da conta, e o servidor decide se o plano cobre o atendimento.
+ */
+export async function createSubscriberReservation(draft: BookingDraft): Promise<Reservation> {
+  await wait(simulatedLatency * 3);
+
+  const { service, professionalId, date, time, assignedId } = resolveSlot(draft);
+  const code = createReservationCode();
+  let claimed: ReturnType<typeof claimPlanCoverage>;
+
+  try {
+    claimed = claimPlanCoverage({ serviceId: service.id, date, code });
+  } catch (error) {
+    throw new BookingApiError(
+      error instanceof SubscriberApiError ? error.message : "Não foi possível confirmar agora. Tente novamente.",
+      "invalid_request",
+    );
+  }
+
+  const { session, coverage } = claimed;
+  const plan = getPlan(session.planId);
+
+  return {
+    code,
+    status: "confirmado",
+    createdAt: new Date().toISOString(),
+    serviceId: service.id,
+    professionalId: assignedId,
+    requestedAnyProfessional: professionalId === ANY_PROFESSIONAL,
+    date,
+    time,
+    durationMinutes: service.durationMinutes,
+    price: service.price,
+    customer: { name: session.name, phone: session.phone, email: "", notes: "", whatsappOptIn: false },
+    plan: plan ? { id: session.planId, name: plan.name, covered: coverage.covered } : null,
   };
 }

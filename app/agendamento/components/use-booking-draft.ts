@@ -14,39 +14,67 @@ import {
   validateCustomer,
   type BookingDraft,
   type CustomerDetails,
+  type CustomerType,
   type ProfessionalChoice,
   type ProfessionalId,
   type ServiceId,
   type TimeSlot,
 } from "../../data/booking";
 
-export const bookingSteps = ["Serviço", "Profissional", "Data e horário", "Dados", "Confirmação"] as const;
-export type StepIndex = 0 | 1 | 2 | 3 | 4;
+export type StepId = "perfil" | "servico" | "profissional" | "horario" | "dados" | "confirmacao";
+
+const allSteps: readonly StepId[] = ["perfil", "servico", "profissional", "horario", "dados", "confirmacao"];
+
+export const stepLabels: Record<StepId, string> = {
+  perfil: "Perfil",
+  servico: "Serviço",
+  profissional: "Profissional",
+  horario: "Data e horário",
+  dados: "Dados",
+  confirmacao: "Confirmação",
+};
+
+/** Etapas do fluxo. O assinante já tem os dados na conta, então não passa por "Dados". */
+export function getBookingSteps(customerType: CustomerType | null): readonly StepId[] {
+  return customerType === "assinante" ? allSteps.filter((step) => step !== "dados") : allSteps;
+}
 
 export type BookingState = {
-  step: StepIndex;
+  step: StepId;
   draft: BookingDraft;
 };
 
 type Action =
+  | { type: "setCustomerType"; customerType: CustomerType | null }
   | { type: "selectService"; serviceId: ServiceId }
   | { type: "selectProfessional"; professionalId: ProfessionalChoice }
   | { type: "selectDate"; date: string }
   | { type: "selectSlot"; date: string; slot: TimeSlot }
   | { type: "syncSlots"; date: string; slots: TimeSlot[] }
   | { type: "updateCustomer"; changes: Partial<CustomerDetails> }
-  | { type: "goTo"; step: StepIndex }
+  | { type: "goTo"; step: StepId }
   | { type: "reset" };
 
-const storageKey = "black-crown:booking-draft:v1";
+const storageKey = "black-crown:booking-draft:v2";
 
 /** Etapa mais avançada que as escolhas atuais permitem abrir. */
-export function getMaxReachableStep(draft: BookingDraft): StepIndex {
-  if (!draft.serviceId) return 0;
-  if (!draft.professionalId) return 1;
-  if (!draft.date || !draft.time) return 2;
-  if (hasErrors(validateCustomer(draft.customer))) return 3;
-  return 4;
+export function getMaxReachableStep(draft: BookingDraft): StepId {
+  if (!draft.customerType) return "perfil";
+  if (!draft.serviceId) return "servico";
+  if (!draft.professionalId) return "profissional";
+  if (!draft.date || !draft.time) return "horario";
+  if (draft.customerType === "avulso" && hasErrors(validateCustomer(draft.customer))) return "dados";
+  return "confirmacao";
+}
+
+/** Limita a etapa pedida à mais avançada permitida, dentro das etapas deste tipo de cliente. */
+function clampStep(draft: BookingDraft, step: StepId): StepId {
+  const steps = getBookingSteps(draft.customerType);
+  const maxIndex = steps.indexOf(getMaxReachableStep(draft));
+  const requested = steps.indexOf(step);
+  // "dados" não existe para assinante: segue para a confirmação.
+  const index = requested === -1 ? steps.indexOf("confirmacao") : requested;
+  return steps[Math.max(0, Math.min(index, maxIndex))];
 }
 
 function pickAssignee(draft: BookingDraft, slot: TimeSlot): ProfessionalId | null {
@@ -63,6 +91,11 @@ function reducer(state: BookingState, action: Action): BookingState {
   const { draft } = state;
 
   switch (action.type) {
+    case "setCustomerType": {
+      if (draft.customerType === action.customerType) return state;
+      const next = { ...draft, customerType: action.customerType };
+      return { step: action.customerType ? clampStep(next, state.step) : "perfil", draft: next };
+    }
     case "selectService": {
       if (draft.serviceId === action.serviceId) return state;
       const keepsProfessional = draft.professionalId && offersService(draft.professionalId, action.serviceId);
@@ -104,9 +137,13 @@ function reducer(state: BookingState, action: Action): BookingState {
     case "updateCustomer":
       return { ...state, draft: { ...draft, customer: { ...draft.customer, ...action.changes } } };
     case "goTo":
-      return { ...state, step: Math.min(action.step, getMaxReachableStep(draft)) as StepIndex };
+      return { ...state, step: clampStep(draft, action.step) };
     case "reset":
-      return { step: 0, draft: { ...emptyDraft, customer: draft.customer } };
+      // Mantém quem é o cliente e os dados de contato para um próximo agendamento.
+      return {
+        step: draft.customerType ? "servico" : "perfil",
+        draft: { ...emptyDraft, customerType: draft.customerType, customer: draft.customer },
+      };
   }
 }
 
@@ -136,7 +173,12 @@ function readStoredState(): BookingState | null {
   }
 }
 
+function isStepId(value: unknown): value is StepId {
+  return allSteps.includes(value as StepId);
+}
+
 function sanitizeDraft(value: Partial<BookingDraft> | undefined, today: string): BookingDraft {
+  const customerType = value?.customerType === "assinante" || value?.customerType === "avulso" ? value.customerType : null;
   const serviceId = isServiceId(value?.serviceId) ? value.serviceId : null;
   const professionalId =
     serviceId && isProfessionalChoice(value?.professionalId) && offersService(value.professionalId, serviceId)
@@ -148,6 +190,7 @@ function sanitizeDraft(value: Partial<BookingDraft> | undefined, today: string):
   const customer = value?.customer;
 
   return {
+    customerType,
     serviceId,
     professionalId,
     date,
@@ -168,22 +211,28 @@ function init({ initialServiceId, initialProfessionalId, restore }: InitOptions)
   const hasLinkSelection = Boolean(initialServiceId || initialProfessionalId);
 
   // Um link com serviço/profissional ("Agendar com Júlia") tem prioridade sobre o
-  // rascunho salvo; os dados de contato já digitados são mantidos.
+  // rascunho salvo e sempre começa pela pergunta de assinante; a resposta e os dados
+  // de contato já informados são mantidos.
   if (hasLinkSelection || !stored) {
-    const customer = stored ? sanitizeDraft(stored.draft, getTodayIso()).customer : emptyDraft.customer;
+    const kept = stored ? sanitizeDraft(stored.draft, getTodayIso()) : emptyDraft;
     const professionalId =
       initialProfessionalId && (!initialServiceId || offersService(initialProfessionalId, initialServiceId))
         ? initialProfessionalId
         : null;
     return {
-      step: initialServiceId ? 1 : 0,
-      draft: { ...emptyDraft, serviceId: initialServiceId, professionalId, customer },
+      step: "perfil",
+      draft: {
+        ...emptyDraft,
+        customerType: kept.customerType,
+        serviceId: initialServiceId,
+        professionalId,
+        customer: kept.customer,
+      },
     };
   }
 
   const draft = sanitizeDraft(stored.draft, getTodayIso());
-  const savedStep = typeof stored.step === "number" ? stored.step : 0;
-  return { step: Math.max(0, Math.min(savedStep, getMaxReachableStep(draft))) as StepIndex, draft };
+  return { step: clampStep(draft, isStepId(stored.step) ? stored.step : "perfil"), draft };
 }
 
 export default function useBookingDraft(options: InitOptions) {
