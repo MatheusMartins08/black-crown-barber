@@ -95,10 +95,6 @@ export default function ReviewStep({ draft, onEdit, error }: ReviewStepProps) {
           ) : null}
         </div>
       ) : null}
-
-      <p className="booking-review__note">
-        Agendamento demonstrativo · nenhuma reserva real é criada. Valores e durações demonstrativos.
-      </p>
     </div>
   );
 }

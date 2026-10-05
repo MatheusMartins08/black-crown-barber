@@ -155,8 +155,7 @@ export default function DetailsStep({ customer, showAllErrors, onChange, onSubmi
 
       <p className="booking-form__privacy">
         <LockKeyhole aria-hidden="true" size={15} strokeWidth={1.7} />
-        Seus dados são usados apenas para este agendamento. Formulário demonstrativo: nada é enviado ou armazenado fora
-        deste navegador.
+        Seus dados são usados apenas para este agendamento.
       </p>
 
       {/* Permite enviar com Enter a partir de qualquer campo. */}

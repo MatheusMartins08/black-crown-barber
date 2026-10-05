@@ -11,7 +11,6 @@ type ImageComparisonProps = {
   before: ComparisonImage;
   after: ComparisonImage;
   instruction: string;
-  caption: string;
   controlLabel: string;
 };
 
@@ -20,7 +19,6 @@ export default function ImageComparison({
   before,
   after,
   instruction,
-  caption,
   controlLabel,
 }: ImageComparisonProps) {
   const [position, setPosition] = useState(50);
@@ -85,7 +83,6 @@ export default function ImageComparison({
       </div>
       <figcaption className="image-comparison__caption">
         <span id={instructionId}>{instruction}</span>
-        <span>{caption}</span>
       </figcaption>
     </figure>
   );

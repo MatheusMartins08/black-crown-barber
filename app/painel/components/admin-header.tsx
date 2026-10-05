@@ -29,7 +29,6 @@ export default function AdminHeader() {
         </nav>
 
         <div className="admin-header__meta">
-          <span className="admin-badge">Dados demonstrativos</span>
           <Link className="admin-header__site-link" href="/">
             Ver site
             <ArrowUpRight aria-hidden="true" size={14} />

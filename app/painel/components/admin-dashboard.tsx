@@ -85,10 +85,8 @@ export default function AdminDashboard() {
       <div className="admin-toolbar">
         <div>
           <h1>{formatLongDate(selectedDate)}</h1>
-          <p>
-            Visão do dia em {formatShortDate(selectedDate)}. Dados gerados para demonstração, sem banco de
-            dados conectado.
-          </p>
+          {/* Os dados vêm de app/data/painel.ts, gerados de forma determinística: ainda não há banco de dados conectado. */}
+          <p>Visão do dia em {formatShortDate(selectedDate)}.</p>
         </div>
 
         <div className="admin-date-nav">

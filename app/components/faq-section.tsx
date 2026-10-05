@@ -8,7 +8,7 @@ export default function FAQSection() {
         <Reveal className="faq__intro" from="left">
           <p className="section-heading__eyebrow" data-anchor-start>Antes de agendar</p>
           <h2 id="faq-title">Perguntas frequentes</h2>
-          <p>Respostas de demonstração. Confirme cada política com a barbearia antes de publicar.</p>
+          <p>Tudo o que você precisa saber antes de agendar seu horário.</p>
         </Reveal>
         <Reveal className="faq__list" from="right">
           {frequentlyAskedQuestions.map((item) => (

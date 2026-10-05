@@ -3,7 +3,8 @@ import type { Reservation } from "../../data/booking";
 // Ações oferecidas depois da confirmação. Nenhuma está conectada ainda: ao integrar
 // WhatsApp, calendário ou a API de remarcação/cancelamento, preencha `getHref` e
 // marque `enabled: true`. Enquanto `enabled` for falso, a tela de sucesso mostra a
-// ação como "a configurar", sem simular um comportamento que não existe.
+// ação apenas como informação (sem link e sem seta), sem simular um comportamento
+// que não existe.
 
 export type ReservationActionId = "whatsapp" | "calendar" | "reschedule" | "cancel";
 

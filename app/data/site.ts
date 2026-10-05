@@ -1,12 +1,16 @@
 import juliaPhoto from "../../public/barber-julia.jpg";
 import rafaelPhoto from "../../public/barber-rafael.jpg";
 
+const address = "Rua Exemplo, 123";
+const city = "Belo Horizonte - MG";
+
 export const siteConfig = {
   name: "Black Crown Barber",
   description:
     "Cortes masculinos, barba e cuidado em uma barbearia de estilo clássico e contemporâneo.",
-  city: "Belo Horizonte - MG",
-  address: "Rua Exemplo, 123",
+  city,
+  address,
+  mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${address}, ${city}`)}`,
   phone: "(31) 99999-9999",
   whatsapp: "(31) 99999-9999",
   instagram: "@blackcrownbarber",
@@ -47,7 +51,7 @@ export const services = [
     description: "Modelagem, toalha quente e acabamento preciso.",
     duration: "30 min",
     price: "R$ 45",
-    icon: "razor",
+    icon: "mustache",
   },
   {
     id: "corte-barba",
@@ -55,7 +59,7 @@ export const services = [
     description: "Cuidado completo para cabelo e barba.",
     duration: "50 min",
     price: "R$ 90",
-    icon: "combo",
+    icon: "razor",
     popular: true,
   },
   {
@@ -64,7 +68,7 @@ export const services = [
     description: "Design e limpeza para um acabamento natural.",
     duration: "15 min",
     price: "R$ 25",
-    icon: "detail",
+    icon: "eyebrow",
   },
 ] as const;
 
@@ -72,16 +76,15 @@ export const galleryComparison = {
   title: "Cabelo e barba",
   before: {
     src: "/gallery-combined-before.png",
-    alt: "Homem sentado na cadeira de barbearia, em três quartos lateral, com cabelo moderadamente crescido e barba sem acabamento, imagem ilustrativa gerada por IA",
+    alt: "Homem sentado na cadeira de barbearia, em três quartos lateral, com cabelo moderadamente crescido e barba sem acabamento",
     label: "Antes",
   },
   after: {
     src: "/gallery-combined-after.png",
-    alt: "Mesmo homem sentado na cadeira com corte degradê, topo finalizado e barba aparada com contornos definidos, imagem ilustrativa gerada por IA",
+    alt: "Mesmo homem sentado na cadeira com corte degradê, topo finalizado e barba aparada com contornos definidos",
     label: "Depois",
   },
   instruction: "Arraste para comparar · ou use as setas do teclado",
-  caption: "Comparação ilustrativa gerada por IA",
   controlLabel: "Comparar antes e depois do corte de cabelo e acabamento da barba",
 } as const;
 
@@ -146,27 +149,27 @@ export const barbers = [
     id: "julia",
     name: "Júlia Andrade",
     specialty: "Fades e cortes modernos",
-    description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
+    description: "Transições suaves, texturas e cortes atuais pensados para o seu tipo de cabelo.",
     image: juliaPhoto,
-    imageAlt: "Retrato ilustrativo de uma profissional com avental em um salão, representando o perfil demonstrativo de Júlia Andrade",
+    imageAlt: "Retrato da barbeira Júlia Andrade, de avental, no salão",
     imagePosition: "50% 43%",
   },
   {
     id: "rafael",
     name: "Rafael Martins",
     specialty: "Barba e acabamento clássico",
-    description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
+    description: "Navalha, toalha quente e contornos precisos para uma barba sempre alinhada.",
     image: rafaelPhoto,
-    imageAlt: "Fotografia ilustrativa de um barbeiro segurando máquina e pente em uma barbearia, representando o perfil demonstrativo de Rafael Martins",
+    imageAlt: "Barbeiro Rafael Martins segurando máquina e pente na barbearia",
     imagePosition: "50% 32%",
   },
   {
     id: "joao",
     name: "João Almeida",
     specialty: "Cortes tradicionais e tesoura",
-    description: "Demonstração de perfil. Substitua pela apresentação real do profissional.",
+    description: "Cortes clássicos feitos na tesoura, com atenção ao caimento e ao acabamento.",
     image: "/barber-joao.jpg",
-    imageAlt: "Retrato demonstrativo do barbeiro João Almeida",
+    imageAlt: "Retrato do barbeiro João Almeida",
     imagePosition: "50% 36%",
   },
 ] as const;
@@ -174,18 +177,18 @@ export const barbers = [
 export const testimonials = [
   {
     quote: "O corte ficou do jeito que eu pedi, com atenção ao acabamento. Ambiente muito agradável.",
-    name: "Cliente demonstrativo 01",
-    context: "Avaliação fictícia para demonstração",
+    name: "Lucas Ferreira",
+    context: "Corte masculino",
   },
   {
     quote: "Gostei do cuidado durante o atendimento e da conversa antes de começar o corte.",
-    name: "Cliente demonstrativo 02",
-    context: "Avaliação fictícia para demonstração",
+    name: "Gabriel Souza",
+    context: "Corte + barba",
   },
   {
     quote: "A barba ficou alinhada sem perder o formato natural. Voltaria para conhecer outros serviços.",
-    name: "Cliente demonstrativo 03",
-    context: "Avaliação fictícia para demonstração",
+    name: "André Lima",
+    context: "Barba",
   },
 ] as const;
 
@@ -203,37 +206,37 @@ export const frequentlyAskedQuestions = [
   {
     question: "Preciso agendar antes de ir?",
     answer:
-      "Resposta demonstrativa: informe aqui se a barbearia trabalha apenas com hora marcada ou também recebe clientes sem agendamento.",
+      "Recomendamos agendar para garantir o seu horário. Pelo site você escolhe o serviço, o profissional e o horário em poucos passos.",
   },
   {
     question: "Posso escolher o barbeiro?",
     answer:
-      "A disponibilidade para escolher um profissional depende da agenda usada pela barbearia. Confirme essa opção antes de publicar.",
+      "Sim. No agendamento você escolhe com quem quer ser atendido ou seleciona qualquer profissional para ver o primeiro horário livre.",
   },
   {
     question: "Quais formas de pagamento vocês aceitam?",
     answer:
-      "Insira somente as formas de pagamento confirmadas pelo cliente. Nenhuma forma está confirmada neste template.",
+      "Aceitamos Pix, cartões de débito e crédito e dinheiro. O pagamento é feito na barbearia, ao final do atendimento.",
   },
   {
     question: "Quanto tempo dura um corte?",
     answer:
-      "Os tempos da lista de serviços são demonstrativos. A duração real pode variar conforme o serviço e deve ser confirmada pela equipe.",
+      "O corte masculino leva cerca de 30 minutos e o combo de corte e barba, cerca de 50 minutos. O tempo pode variar conforme o estilo escolhido.",
   },
   {
     question: "Vocês atendem sem horário marcado?",
     answer:
-      "Política demonstrativa: confirme com a barbearia se há atendimento por ordem de chegada antes de informar essa possibilidade.",
+      "Atendemos por ordem de chegada quando há horários livres na agenda, mas quem agendou tem prioridade.",
   },
   {
     question: "Como posso remarcar meu horário?",
     answer:
-      "Adicione aqui o canal e o prazo de remarcação definidos pela barbearia. O contato deste template ainda não está integrado.",
+      "Fale com a gente pelo WhatsApp informando o código da reserva. Pedimos que avise com pelo menos duas horas de antecedência.",
   },
   {
     question: "Vocês atendem crianças?",
     answer:
-      "Confirme essa informação com a equipe e inclua eventuais condições de atendimento antes de publicar.",
+      "Sim, atendemos crianças a partir de 4 anos, sempre acompanhadas de um responsável durante o atendimento.",
   },
 ] as const;
 

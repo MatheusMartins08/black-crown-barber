@@ -46,10 +46,10 @@ function SectionHeading({
 
 export function QuickInfo() {
   const details = [
-    { icon: MapPin, label: "Localização", value: `${siteConfig.city} · demonstrativo` },
+    { icon: MapPin, label: "Localização", value: siteConfig.city },
     { icon: Clock3, label: "Funcionamento", value: "Segunda a sábado" },
     { icon: CalendarDays, label: "Atendimento", value: "Com agendamento" },
-    { icon: MessageCircle, label: "Contato", value: "WhatsApp demonstrativo" },
+    { icon: MessageCircle, label: "Contato", value: siteConfig.whatsapp },
   ];
 
   return (
@@ -65,7 +65,6 @@ export function QuickInfo() {
           </Reveal>
         ))}
       </div>
-      <p className="demo-ribbon">Informações demonstrativas · substitua pelos dados confirmados da barbearia</p>
     </section>
   );
 }
@@ -80,8 +79,6 @@ export function ServicesSection() {
           id="services-title"
           title="Escolha seu próximo visual"
         />
-        <p className="section-note">Valores e durações demonstrativos.</p>
-
         <div className="services__grid">
           {services.map((service, index) => {
             const Icon = serviceIcons[service.icon];
@@ -129,11 +126,10 @@ export function GallerySection() {
         <div className="gallery__heading-row">
           <SectionHeading
             description="Confira alguns estilos, acabamentos e detalhes do espaço."
-            eyebrow="Portfólio demonstrativo"
+            eyebrow="Portfólio"
             id="gallery-title"
             title="Nosso trabalho fala por nós."
           />
-          <p className="gallery__aside">Imagens ilustrativas<br />substitua por trabalhos autorizados</p>
         </div>
 
         <div className="gallery__feature">
@@ -182,7 +178,7 @@ export function AboutSection() {
             Um bom corte começa com uma boa conversa. Aqui, cada atendimento parte do que combina com você: o caimento, o acabamento e o tempo dedicado a cada detalhe.
           </p>
           <p className="about__text">
-            A Black Crown é uma marca demonstrativa, criada para apresentar uma experiência de barbearia contemporânea com referências clássicas e atendimento próximo.
+            A Black Crown une a experiência de uma barbearia contemporânea às referências clássicas do ofício, com atendimento próximo e tempo para cada cliente.
           </p>
           <ul className="about__values">
             {values.map((value) => (
@@ -198,7 +194,6 @@ export function AboutSection() {
             sizes="(max-width: 800px) 100vw, 50vw"
             src="/gallery-interior-01.jpg"
           />
-          <figcaption>Ambiente ilustrativo · substitua por fotografia do estabelecimento</figcaption>
         </Reveal>
       </div>
     </section>
@@ -211,7 +206,7 @@ export function TeamSection() {
       <div className="section__inner">
         <SectionHeading
           description="Conheça quem cuida do seu estilo."
-          eyebrow="Equipe demonstrativa"
+          eyebrow="Nossa equipe"
           id="team-title"
           title="Técnica em cada detalhe."
         />
@@ -252,15 +247,15 @@ export function TestimonialsSection() {
     <section aria-labelledby="testimonials-title" className="section testimonials" id="avaliacoes">
       <div className="section__inner">
         <SectionHeading
-          description="Relatos fictícios, incluídos apenas para demonstrar esta seção."
-          eyebrow="Prova social demonstrativa"
+          description="O que nossos clientes dizem sobre a experiência."
+          eyebrow="Avaliações"
           id="testimonials-title"
           title="Quem passa por aqui, volta."
         />
         <div className="testimonials__grid">
           {testimonials.map((testimonial, index) => (
             <Reveal as="article" className="testimonial-card" delay={1 + (index % 3)} key={testimonial.name}>
-              <div aria-label="5 de 5 estrelas, exemplo fictício" className="testimonial-card__stars">
+              <div aria-label="5 de 5 estrelas" className="testimonial-card__stars">
                 {Array.from({ length: 5 }, (_, index) => (
                   <Star aria-hidden="true" fill="currentColor" key={index} size={15} strokeWidth={1.5} />
                 ))}
@@ -294,7 +289,7 @@ export function BookingSection() {
         <p className="section-heading__eyebrow" data-anchor-start>Seu próximo horário</p>
         <h2 id="booking-title">Seu próximo corte começa aqui.</h2>
         <p>
-          Escolha o serviço, encontre um horário e venha conhecer a experiência demonstrativa da {siteConfig.name}.
+          Escolha o serviço, encontre um horário e venha conhecer a experiência da {siteConfig.name}.
         </p>
         <div className="booking__actions">
           <Link className="button" href={siteConfig.bookingUrl}>
@@ -304,7 +299,6 @@ export function BookingSection() {
             Falar pelo WhatsApp <MessageCircle aria-hidden="true" size={17} />
           </Link>
         </div>
-        <span className="booking__note">Links demonstrativos · configurar agenda e WhatsApp antes de publicar</span>
       </Reveal>
     </section>
   );
@@ -326,19 +320,18 @@ export function LocationSection() {
               <div className="location__contact-block">
                 <MapPin aria-hidden="true" size={19} />
                 <div>
-                  <h3>Endereço demonstrativo</h3>
+                  <h3>Endereço</h3>
                   <p>{siteConfig.address}<br />{siteConfig.city}</p>
                 </div>
               </div>
               <div className="location__contact-block">
                 <MessageCircle aria-hidden="true" size={19} />
                 <div>
-                  <h3>Contato demonstrativo</h3>
+                  <h3>Contato</h3>
                   <p>Telefone: {siteConfig.phone}<br />WhatsApp: {siteConfig.whatsapp}</p>
                   <p>Instagram: {siteConfig.instagram}</p>
                 </div>
               </div>
-              <p className="location__demo-warning">Dados fictícios. Substitua por canais oficiais antes de publicar.</p>
             </div>
 
             <div className="hours">
@@ -354,18 +347,17 @@ export function LocationSection() {
                   </div>
                 ))}
               </dl>
-              <p className="section-note">Horários demonstrativos.</p>
             </div>
           </div>
 
-          <aside aria-label="Espaço reservado para mapa" className="map-placeholder">
+          <aside aria-label="Como chegar" className="map-placeholder">
             <div className="map-placeholder__mark"><MapPin aria-hidden="true" size={25} /></div>
-            <p className="map-placeholder__title">Mapa a configurar</p>
-            <p>Adicione aqui o mapa do endereço real do estabelecimento.</p>
-            <span>{siteConfig.city} · local demonstrativo</span>
-            <Link className="text-link" href="#localizacao">
-              Configurar rota no Maps <ArrowUpRight aria-hidden="true" size={15} />
-            </Link>
+            <p className="map-placeholder__title">Como chegar</p>
+            <p>Atendimento com hora marcada. Abra a rota direto no seu aplicativo de mapas.</p>
+            <span>{siteConfig.address} · {siteConfig.city}</span>
+            <a className="text-link" href={siteConfig.mapsUrl} rel="noopener noreferrer" target="_blank">
+              Ver rota no Google Maps <ArrowUpRight aria-hidden="true" size={15} />
+            </a>
           </aside>
         </Reveal>
       </div>
@@ -379,7 +371,7 @@ export function FinalCallToAction() {
       <Reveal className="final-cta__inner">
         <p className="section-heading__eyebrow">Black Crown Barber</p>
         <h2 id="final-cta-title">Pronto para renovar o visual?</h2>
-        <p>Agende seu horário e venha conhecer a experiência demonstrativa Black Crown Barber.</p>
+        <p>Agende seu horário e venha conhecer a experiência Black Crown Barber.</p>
         <Link className="button" href={siteConfig.bookingUrl}>
           Agendar horário <ArrowDownRight aria-hidden="true" size={17} />
         </Link>

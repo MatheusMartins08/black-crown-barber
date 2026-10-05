@@ -5,7 +5,7 @@ import "./painel.css";
 
 export const metadata: Metadata = {
   title: "Painel | Black Crown Barber",
-  description: "Painel administrativo demonstrativo: agenda, produção da equipe e fechamento.",
+  description: "Painel administrativo: agenda, produção da equipe e fechamento.",
   robots: {
     index: false,
     follow: false,

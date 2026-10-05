@@ -39,7 +39,7 @@ export default async function AgendamentoPage({ searchParams }: PageProps<"/agen
             {siteConfig.name} · {siteConfig.address}, {siteConfig.city}
           </span>
           <span>
-            {openDays[0]?.day.replace("-feira", "")} a {openDays.at(-1)?.day.toLowerCase()} · Dados demonstrativos
+            {openDays[0]?.day.replace("-feira", "")} a {openDays.at(-1)?.day.toLowerCase()}
           </span>
         </div>
       </footer>

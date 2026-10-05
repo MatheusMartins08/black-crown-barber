@@ -37,10 +37,6 @@ export default function Hero() {
             Conhecer serviços
           </Link>
         </div>
-
-        <p className="hero__demo-note">
-          Demonstração · links de atendimento a configurar
-        </p>
       </div>
 
       <span aria-hidden="true" className="hero__index">

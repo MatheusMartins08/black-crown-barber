@@ -13,22 +13,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Black Crown Barber | Template demonstrativo",
+  title: "Black Crown Barber | Barbearia em Belo Horizonte",
   description:
-    "Cortes masculinos, barba e cuidado em um template demonstrativo de barbearia. Substitua informações e contatos antes de publicar.",
+    "Cortes masculinos, barba e cuidado em uma barbearia de estilo clássico e contemporâneo em Belo Horizonte. Agende seu horário online.",
   openGraph: {
-    title: "Black Crown Barber | Template demonstrativo",
+    title: "Black Crown Barber | Barbearia em Belo Horizonte",
     description:
-      "Conheça os serviços, a equipe e o espaço da Black Crown Barber. Conteúdo demonstrativo.",
+      "Conheça os serviços, a equipe e o espaço da Black Crown Barber.",
     locale: "pt_BR",
     siteName: "Black Crown Barber",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Black Crown Barber | Template demonstrativo",
+    title: "Black Crown Barber | Barbearia em Belo Horizonte",
     description:
-      "Cortes masculinos e barba em um template demonstrativo de barbearia.",
+      "Cortes masculinos e barba em uma barbearia de estilo clássico e contemporâneo.",
   },
   robots: {
     index: false,

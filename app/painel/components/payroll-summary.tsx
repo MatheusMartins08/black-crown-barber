@@ -163,13 +163,14 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
         </table>
       </div>
 
+      {/* Regras de repasse ilustrativas: ajuste `commissionRules` em app/data/painel.ts. */}
       <p className="admin-footnote">
-        Regras ilustrativas: avulsos rendem {commissionRules.walkInRate * 100}% do valor do serviço ao
+        Regras de repasse: avulsos rendem {commissionRules.walkInRate * 100}% do valor do serviço ao
         profissional; atendimentos cobertos por plano têm repasse fixo (
         {serviceNames
           .map((name) => `${name} ${formatCurrency(commissionRules.planPayout[name])}`)
           .join(" · ")}
-        ). Ajuste em <code>app/data/painel.ts</code>.
+        ).
       </p>
     </section>
   );

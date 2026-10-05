@@ -67,7 +67,6 @@ export function BookingSummaryPanel({ draft }: { draft: BookingDraft }) {
         <span>Total</span>
         <strong key={service?.price ?? "empty"}>{service ? formatCurrency(service.price) : "—"}</strong>
       </div>
-      <p className="booking-summary__note">Valores demonstrativos.</p>
     </aside>
   );
 }

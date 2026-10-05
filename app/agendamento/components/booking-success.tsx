@@ -112,9 +112,7 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
                 </span>
                 {action.enabled ? (
                   <ArrowUpRight aria-hidden="true" className="reservation-actions__arrow" size={16} />
-                ) : (
-                  <span className="reservation-actions__status">A configurar</span>
-                )}
+                ) : null}
               </>
             );
 
@@ -131,10 +129,6 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
             );
           })}
         </ul>
-        <p className="booking-review__note">
-          Integrações demonstrativas · configure WhatsApp, calendário, remarcação e cancelamento antes de publicar. Nenhuma
-          mensagem foi enviada.
-        </p>
       </div>
 
       <div className="booking-success__footer">

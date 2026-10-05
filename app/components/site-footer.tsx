@@ -14,7 +14,7 @@ export default function SiteFooter() {
               <span className="brand__descriptor">Barber</span>
             </span>
           </Link>
-          <p>Barbearia de estilo clássico e contemporâneo. Conteúdo e informações demonstrativos.</p>
+          <p>Barbearia de estilo clássico e contemporâneo.</p>
         </div>
 
         <nav aria-label="Links do rodapé" className="site-footer__nav">
@@ -25,14 +25,14 @@ export default function SiteFooter() {
         </nav>
 
         <div className="site-footer__contact">
-          <h2>Contato demonstrativo</h2>
+          <h2>Contato</h2>
           <p><Phone aria-hidden="true" size={15} />{siteConfig.phone}</p>
           <p><AtSign aria-hidden="true" size={15} />{siteConfig.instagram}</p>
           <p><MapPin aria-hidden="true" size={15} />{siteConfig.address}, {siteConfig.city}</p>
         </div>
 
         <div className="site-footer__hours">
-          <h2>Horários demonstrativos</h2>
+          <h2>Horários</h2>
           {openingHours.slice(0, 6).map((item) => (
             <p key={item.day}><span>{item.day.replace("-feira", "")}</span><span>{item.hours}</span></p>
           ))}
@@ -40,7 +40,6 @@ export default function SiteFooter() {
       </div>
       <div className="site-footer__bottom">
         <span>© {new Date().getFullYear()} {siteConfig.name}. Todos os direitos reservados.</span>
-        <span>Template demonstrativo · substitua os dados antes de publicar</span>
       </div>
     </footer>
   );
