@@ -7,9 +7,10 @@ import {
   formatPhone,
   validateCustomer,
   type CustomerDetails,
+  type CustomerTextField,
 } from "../../../data/booking";
 
-type FieldName = keyof CustomerDetails;
+type FieldName = CustomerTextField;
 
 type DetailsStepProps = {
   customer: CustomerDetails;
@@ -152,6 +153,18 @@ export default function DetailsStep({ customer, showAllErrors, onChange, onSubmi
           rows={3}
         />
       </Field>
+
+      {/* Consentimento da LGPD para mensagens: opcional e desmarcado por padrão. */}
+      <label className="booking-consent" htmlFor="booking-whatsappOptIn">
+        <input
+          checked={customer.whatsappOptIn}
+          id="booking-whatsappOptIn"
+          name="whatsappOptIn"
+          onChange={(event) => onChange({ whatsappOptIn: event.target.checked })}
+          type="checkbox"
+        />
+        <span>Aceito receber a confirmação e lembretes do horário pelo WhatsApp.</span>
+      </label>
 
       <p className="booking-form__privacy">
         <LockKeyhole aria-hidden="true" size={15} strokeWidth={1.7} />

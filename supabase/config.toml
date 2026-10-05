@@ -1,0 +1,3 @@
+# Configuração mínima para a Supabase CLI (gerar tipos, inspecionar o projeto).
+# As migrações são aplicadas pelo MCP, não por "db push" (ver README.md).
+project_id = "black-crown-barber"

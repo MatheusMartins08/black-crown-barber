@@ -158,6 +158,7 @@ function sanitizeDraft(value: Partial<BookingDraft> | undefined, today: string):
       phone: typeof customer?.phone === "string" ? customer.phone : "",
       email: typeof customer?.email === "string" ? customer.email : "",
       notes: typeof customer?.notes === "string" ? customer.notes : "",
+      whatsappOptIn: customer?.whatsappOptIn === true,
     },
   };
 }

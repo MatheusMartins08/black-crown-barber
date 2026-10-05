@@ -4,6 +4,7 @@ import { ArrowUpRight, Crown } from "lucide-react";
 const sections = [
   { label: "Produção", href: "#producao" },
   { label: "Agenda", href: "#agenda" },
+  { label: "Clientes", href: "#clientes" },
   { label: "Fechamento", href: "#fechamento" },
   { label: "Planos", href: "#planos" },
 ];

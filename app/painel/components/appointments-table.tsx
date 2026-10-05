@@ -3,20 +3,24 @@ import {
   barberNames,
   formatCurrency,
   getClient,
+  getMembership,
   getPlan,
+  getSubscriptionOn,
   isCoveredByPlan,
   servicePrices,
   serviceNames,
   type Appointment,
   type AppointmentStatus,
   type BarberName,
+  type PlanPayment,
   type ServiceName,
 } from "../../data/painel";
 import BarberAvatar from "./barber-avatar";
+import MembershipTag, { isSubscriber } from "./membership-tag";
 
 export type AgendaFilters = {
   barber: BarberName | "todos";
-  clientType: "todos" | "assinante" | "avulso";
+  clientType: "todos" | "assinante" | "pendente" | "avulso";
   service: ServiceName | "todos";
 };
 
@@ -33,15 +37,17 @@ type AppointmentsTableProps = {
   isClosed: boolean;
   onFiltersChange: (filters: AgendaFilters) => void;
   onUpdate: (id: string, changes: Partial<Pick<Appointment, "status" | "performedBy">>) => void;
+  payments: PlanPayment[];
 };
 
-export function matchesFilters(appointment: Appointment, filters: AgendaFilters) {
+export function matchesFilters(appointment: Appointment, filters: AgendaFilters, payments: PlanPayment[]) {
   if (filters.barber !== "todos" && appointment.performedBy !== filters.barber) return false;
   if (filters.service !== "todos" && appointment.serviceName !== filters.service) return false;
   if (filters.clientType === "todos") return true;
 
-  const isSubscriber = getClient(appointment.clientId).planId !== null;
-  return filters.clientType === "assinante" ? isSubscriber : !isSubscriber;
+  const membership = getMembership(appointment.clientId, appointment.date, payments);
+  if (filters.clientType === "pendente") return membership === "pendente" || membership === "atrasado";
+  return filters.clientType === "assinante" ? isSubscriber(membership) : !isSubscriber(membership);
 }
 
 const defaultFilters: AgendaFilters = { barber: "todos", clientType: "todos", service: "todos" };
@@ -52,8 +58,9 @@ export default function AppointmentsTable({
   isClosed,
   onFiltersChange,
   onUpdate,
+  payments,
 }: AppointmentsTableProps) {
-  const visible = appointments.filter((appointment) => matchesFilters(appointment, filters));
+  const visible = appointments.filter((appointment) => matchesFilters(appointment, filters, payments));
   const hasFilters =
     filters.barber !== "todos" || filters.clientType !== "todos" || filters.service !== "todos";
 
@@ -99,6 +106,7 @@ export default function AppointmentsTable({
           >
             <option value="todos">Todos</option>
             <option value="assinante">Assinantes</option>
+            <option value="pendente">Pagamento pendente</option>
             <option value="avulso">Avulsos</option>
           </select>
         </label>
@@ -155,7 +163,7 @@ export default function AppointmentsTable({
             </thead>
             <tbody>
               {visible.map((appointment) => (
-                <AppointmentRow appointment={appointment} key={appointment.id} onUpdate={onUpdate} />
+                <AppointmentRow appointment={appointment} key={appointment.id} onUpdate={onUpdate} payments={payments} />
               ))}
             </tbody>
           </table>
@@ -165,16 +173,29 @@ export default function AppointmentsTable({
   );
 }
 
+/** Preço exibido na agenda: coberto, bloqueado por atraso, fora do plano ou avulso. */
+function getPriceNote(appointment: Appointment, payments: PlanPayment[]) {
+  const price = formatCurrency(servicePrices[appointment.serviceName]);
+  const plan = getPlan(getSubscriptionOn(appointment.clientId, appointment.date)?.planId ?? null);
+
+  if (isCoveredByPlan(appointment, payments)) return "Coberto pelo plano";
+  if (!plan) return price;
+  if (plan.covers.includes(appointment.serviceName)) return `Plano bloqueado por atraso · cobrar ${price}`;
+  return `Fora do plano · ${price}`;
+}
+
 function AppointmentRow({
   appointment,
   onUpdate,
+  payments,
 }: {
   appointment: Appointment;
   onUpdate: AppointmentsTableProps["onUpdate"];
+  payments: PlanPayment[];
 }) {
   const client = getClient(appointment.clientId);
-  const plan = getPlan(client.planId);
-  const covered = isCoveredByPlan(appointment);
+  const membership = getMembership(client.id, appointment.date, payments);
+  const plan = getPlan(getSubscriptionOn(client.id, appointment.date)?.planId ?? null);
   const status = statusOptions.find((option) => option.value === appointment.status)!;
   const StatusIcon = status.icon;
   const reassigned = appointment.performedBy !== appointment.bookedWith;
@@ -186,21 +207,11 @@ function AppointmentRow({
       </td>
       <td data-label="Cliente">
         <span className="admin-row__client">{client.name}</span>
-        {plan ? (
-          <span className="admin-tag admin-tag--plan">Assinante · {plan.name}</span>
-        ) : (
-          <span className="admin-tag admin-tag--walkin">Avulso</span>
-        )}
+        <MembershipTag planName={plan?.name} status={membership} />
       </td>
       <td data-label="Serviço">
         <span className="admin-row__service">{appointment.serviceName}</span>
-        <span className="admin-row__price">
-          {covered
-            ? "Coberto pelo plano"
-            : plan
-              ? `Fora do plano · ${formatCurrency(servicePrices[appointment.serviceName])}`
-              : formatCurrency(servicePrices[appointment.serviceName])}
-        </span>
+        <span className="admin-row__price">{getPriceNote(appointment, payments)}</span>
       </td>
       <td data-label="Marcado com">
         <span className="admin-person">

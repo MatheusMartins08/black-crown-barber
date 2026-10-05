@@ -9,21 +9,26 @@ import {
   formatLongDate,
   formatMonth,
   formatShortDate,
-  getClient,
+  getMembership,
   getPayout,
   getPeriodRange,
   getServicePrice,
   getWeekday,
   initialAppointments,
+  initialPayments,
   referenceDate,
   summarizeByBarber,
   type Appointment,
+  type PaymentMethod,
   type Period,
+  type PlanPayment,
 } from "../../data/painel";
 import AppointmentsTable, { type AgendaFilters } from "./appointments-table";
 import BarberProduction from "./barber-production";
+import ClientsOverview from "./clients-overview";
 import PayrollSummary from "./payroll-summary";
 import PlansOverview from "./plans-overview";
+import { isSubscriber } from "./membership-tag";
 
 function getPeriodLabel(date: string, period: Period) {
   if (period === "dia") return `Dia ${formatShortDate(date)}`;
@@ -37,6 +42,7 @@ function getPeriodLabel(date: string, period: Period) {
 
 export default function AdminDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
+  const [payments, setPayments] = useState<PlanPayment[]>(initialPayments);
   const [selectedDate, setSelectedDate] = useState(referenceDate);
   const [period, setPeriod] = useState<Period>("semana");
   const [filters, setFilters] = useState<AgendaFilters>({
@@ -57,15 +63,20 @@ export default function AdminDashboard() {
     );
   }, [appointments, selectedDate, period]);
 
-  const daySummaries = useMemo(() => summarizeByBarber(dayAppointments), [dayAppointments]);
-  const periodSummaries = useMemo(() => summarizeByBarber(periodAppointments), [periodAppointments]);
+  const daySummaries = useMemo(() => summarizeByBarber(dayAppointments, payments), [dayAppointments, payments]);
+  const periodSummaries = useMemo(
+    () => summarizeByBarber(periodAppointments, payments),
+    [periodAppointments, payments],
+  );
   const periodLabel = getPeriodLabel(selectedDate, period);
 
   const active = dayAppointments.filter((appointment) => appointment.status !== "cancelado");
   const completed = dayAppointments.filter((appointment) => appointment.status === "concluido");
-  const subscribers = active.filter((appointment) => getClient(appointment.clientId).planId !== null).length;
-  const walkInRevenue = completed.reduce((sum, appointment) => sum + getServicePrice(appointment), 0);
-  const payout = completed.reduce((sum, appointment) => sum + getPayout(appointment), 0);
+  const subscribers = active.filter((appointment) =>
+    isSubscriber(getMembership(appointment.clientId, appointment.date, payments)),
+  ).length;
+  const walkInRevenue = completed.reduce((sum, appointment) => sum + getServicePrice(appointment, payments), 0);
+  const payout = completed.reduce((sum, appointment) => sum + getPayout(appointment, payments), 0);
 
   const canGoBack = selectedDate > dataRange.start;
   const canGoForward = selectedDate < dataRange.end;
@@ -73,6 +84,15 @@ export default function AdminDashboard() {
   function updateAppointment(id: string, changes: Partial<Pick<Appointment, "status" | "performedBy">>) {
     setAppointments((current) =>
       current.map((appointment) => (appointment.id === id ? { ...appointment, ...changes } : appointment)),
+    );
+  }
+
+  // Registro manual (Pix, cartão ou dinheiro) na data de hoje do painel.
+  function registerPayment(id: string, method: PaymentMethod) {
+    setPayments((current) =>
+      current.map((payment) =>
+        payment.id === id ? { ...payment, status: "pago", paidAt: referenceDate, method } : payment,
+      ),
     );
   }
 
@@ -166,7 +186,10 @@ export default function AdminDashboard() {
         isClosed={getWeekday(selectedDate) === 0}
         onFiltersChange={setFilters}
         onUpdate={updateAppointment}
+        payments={payments}
       />
+
+      <ClientsOverview date={selectedDate} onRegisterPayment={registerPayment} payments={payments} />
 
       <PayrollSummary
         onPeriodChange={setPeriod}
@@ -175,7 +198,12 @@ export default function AdminDashboard() {
         summaries={periodSummaries}
       />
 
-      <PlansOverview appointments={periodAppointments} periodLabel={periodLabel} />
+      <PlansOverview
+        appointments={periodAppointments}
+        date={selectedDate}
+        payments={payments}
+        periodLabel={periodLabel}
+      />
     </main>
   );
 }
