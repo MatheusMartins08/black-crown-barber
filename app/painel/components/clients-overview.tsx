@@ -5,14 +5,11 @@ import { Users } from "lucide-react";
 import {
   addDays,
   billingRules,
-  clients,
   formatCurrency,
   formatShortDate,
-  getClientProfile,
   type ClientProfile,
   type MembershipStatus,
   type PaymentMethod,
-  type PlanPayment,
 } from "../../data/painel";
 import MembershipTag from "./membership-tag";
 
@@ -57,8 +54,8 @@ function matchesSearch(profile: ClientProfile, search: string) {
   if (!term) return true;
   const digits = term.replace(/\D/g, "");
   return (
-    normalize(profile.client.name).includes(term) ||
-    (digits.length > 0 && profile.client.phone.replace(/\D/g, "").includes(digits))
+    normalize(profile.name).includes(term) ||
+    (digits.length > 0 && profile.phone.replace(/\D/g, "").includes(digits))
   );
 }
 
@@ -67,18 +64,16 @@ function getWhatsappUrl(phone: string) {
 }
 
 /** Texto da coluna "Mensalidade" conforme a situação. */
-function BillingCell({ profile, date, payments }: { profile: ClientProfile; date: string; payments: PlanPayment[] }) {
-  const oldest = profile.openPayments[0];
+function BillingCell({ profile }: { profile: ClientProfile }) {
+  const oldest = profile.oldestDueDate;
 
   if (profile.membership === "atrasado" && oldest) {
     return (
       <>
-        <span className="admin-row__service">
-          {formatCurrency(profile.openAmount)} em aberto
-        </span>
+        <span className="admin-row__service">{formatCurrency(profile.openAmount)} em aberto</span>
         <span className="admin-row__note">
           Atrasada há {profile.daysOverdue} dias · plano bloqueado desde{" "}
-          {formatShortDate(addDays(oldest.dueDate, billingRules.graceDays + 1))}
+          {formatShortDate(addDays(oldest, billingRules.graceDays + 1))}
         </span>
       </>
     );
@@ -88,44 +83,37 @@ function BillingCell({ profile, date, payments }: { profile: ClientProfile; date
     return (
       <>
         <span className="admin-row__service">
-          {formatCurrency(profile.openAmount)} vencida em {formatShortDate(oldest.dueDate)}
+          {formatCurrency(profile.openAmount)} vencida em {formatShortDate(oldest)}
         </span>
         <span className="admin-row__price">
-          Plano cobre até {formatShortDate(addDays(oldest.dueDate, billingRules.graceDays))}
+          Plano cobre até {formatShortDate(addDays(oldest, billingRules.graceDays))}
         </span>
       </>
     );
   }
 
-  if (profile.membership === "ativo" && profile.subscription) {
-    const next = payments
-      .filter((payment) => payment.subscriptionId === profile.subscription!.id && payment.dueDate > date)
-      .sort((first, second) => first.dueDate.localeCompare(second.dueDate))[0];
+  if (profile.membership === "ativo" && profile.subscribedSince) {
     return (
       <>
         <span className="admin-row__service">Em dia</span>
-        <span className="admin-row__price">
-          {next ? `Próxima em ${formatShortDate(next.dueDate)}` : `Assinante desde ${formatShortDate(profile.subscription.startedAt)}`}
-        </span>
+        <span className="admin-row__price">Período desde {formatShortDate(profile.subscribedSince)}</span>
       </>
     );
   }
 
-  if (profile.membership === "congelado" && profile.subscription) {
+  if (profile.membership === "congelado" && profile.subscribedSince) {
     return (
       <>
         <span className="admin-row__service">Plano congelado</span>
-        <span className="admin-row__price">
-          Desde {formatShortDate(profile.subscription.startedAt)} · sem mensalidade
-        </span>
+        <span className="admin-row__price">Desde {formatShortDate(profile.subscribedSince)} · sem mensalidade</span>
       </>
     );
   }
 
-  if (profile.membership === "ex_assinante" && profile.lastEnded) {
+  if (profile.membership === "ex_assinante" && profile.lastSubscriptionEndedAt) {
     return (
       <>
-        <span className="admin-row__service">Encerrado em {formatShortDate(profile.lastEnded.endedAt!)}</span>
+        <span className="admin-row__service">Encerrado em {formatShortDate(profile.lastSubscriptionEndedAt)}</span>
         {profile.openAmount > 0 ? (
           <span className="admin-row__note">{formatCurrency(profile.openAmount)} em aberto</span>
         ) : null}
@@ -138,28 +126,27 @@ function BillingCell({ profile, date, payments }: { profile: ClientProfile; date
 
 export default function ClientsOverview({
   date,
-  payments,
+  profiles,
   onRegisterPayment,
 }: {
+  /** Hoje (a situação de cada cliente é a de hoje). */
   date: string;
-  payments: PlanPayment[];
+  profiles: ClientProfile[];
   onRegisterPayment: (paymentId: string, method: PaymentMethod) => void;
 }) {
   const [filter, setFilter] = useState<ClientFilter>("todos");
   const [search, setSearch] = useState("");
 
-  const profiles = clients
-    .map((client) => getClientProfile(client, date, payments))
-    .sort(
-      (first, second) =>
-        statusOrder[first.membership] - statusOrder[second.membership] ||
-        first.client.name.localeCompare(second.client.name, "pt-BR"),
-    );
+  const sorted = [...profiles].sort(
+    (first, second) =>
+      statusOrder[first.membership] - statusOrder[second.membership] ||
+      first.name.localeCompare(second.name, "pt-BR"),
+  );
   const counts = Object.fromEntries(
-    filterOptions.map((option) => [option.value, profiles.filter((profile) => matchesFilter(profile, option.value)).length]),
+    filterOptions.map((option) => [option.value, sorted.filter((profile) => matchesFilter(profile, option.value)).length]),
   ) as Record<ClientFilter, number>;
-  const overdueCount = profiles.filter((profile) => profile.membership === "atrasado").length;
-  const visible = profiles.filter((profile) => matchesFilter(profile, filter) && matchesSearch(profile, search));
+  const overdueCount = sorted.filter((profile) => profile.membership === "atrasado").length;
+  const visible = sorted.filter((profile) => matchesFilter(profile, filter) && matchesSearch(profile, search));
 
   function clearFilters() {
     setFilter("todos");
@@ -207,7 +194,13 @@ export default function ClientsOverview({
         </label>
       </div>
 
-      {visible.length === 0 ? (
+      {profiles.length === 0 ? (
+        <div className="admin-empty">
+          <Users aria-hidden="true" size={22} strokeWidth={1.6} />
+          <p className="admin-empty__title">Nenhum cliente cadastrado ainda</p>
+          <p>Os clientes entram aqui ao agendar pelo site ou ao serem cadastrados como assinantes.</p>
+        </div>
+      ) : visible.length === 0 ? (
         <div className="admin-empty">
           <Users aria-hidden="true" size={22} strokeWidth={1.6} />
           <p className="admin-empty__title">Nenhum cliente com esses filtros</p>
@@ -231,13 +224,7 @@ export default function ClientsOverview({
             </thead>
             <tbody>
               {visible.map((profile) => (
-                <ClientRow
-                  date={date}
-                  key={profile.client.id}
-                  onRegisterPayment={onRegisterPayment}
-                  payments={payments}
-                  profile={profile}
-                />
+                <ClientRow key={profile.id} onRegisterPayment={onRegisterPayment} profile={profile} />
               ))}
             </tbody>
           </table>
@@ -249,49 +236,45 @@ export default function ClientsOverview({
 
 function ClientRow({
   profile,
-  date,
-  payments,
   onRegisterPayment,
 }: {
   profile: ClientProfile;
-  date: string;
-  payments: PlanPayment[];
   onRegisterPayment: (paymentId: string, method: PaymentMethod) => void;
 }) {
-  const { client, plan, lastPayment } = profile;
-  const oldest = profile.openPayments[0];
+  const next = profile.nextToReceive;
 
   return (
     <tr className={`admin-row admin-row--${profile.membership}`}>
       <th scope="row">
-        <span className="admin-row__client">{client.name}</span>
-        <MembershipTag planName={plan?.name} status={profile.membership} />
+        <span className="admin-row__client">{profile.name}</span>
+        <MembershipTag planName={profile.planName ?? undefined} status={profile.membership} />
       </th>
       <td data-label="WhatsApp">
-        <a className="admin-link" href={getWhatsappUrl(client.phone)} rel="noreferrer" target="_blank">
-          {client.phone}
+        <a className="admin-link" href={getWhatsappUrl(profile.phone)} rel="noreferrer" target="_blank">
+          {profile.phone}
         </a>
-        {client.whatsappOptIn ? null : <span className="admin-row__price">Sem aceite para lembretes</span>}
+        {profile.whatsappOptIn ? null : <span className="admin-row__price">Sem aceite para lembretes</span>}
       </td>
       <td data-label="Plano">
-        {plan ? (
+        {profile.planName && profile.monthlyPrice !== null ? (
           <>
-            <span className="admin-row__service">{plan.name}</span>
-            <span className="admin-row__price">{formatCurrency(plan.monthlyPrice)}/mês</span>
+            <span className="admin-row__service">{profile.planName}</span>
+            <span className="admin-row__price">{formatCurrency(profile.monthlyPrice)}/mês</span>
           </>
         ) : (
           <span className="admin-row__price">—</span>
         )}
       </td>
       <td data-label="Mensalidade">
-        <BillingCell date={date} payments={payments} profile={profile} />
+        <BillingCell profile={profile} />
       </td>
       <td data-label="Último pagamento">
-        {lastPayment ? (
+        {profile.lastPaidAt && profile.lastPaymentAmount !== null ? (
           <>
-            <span className="admin-row__service">{formatShortDate(lastPayment.paidAt!)}</span>
+            <span className="admin-row__service">{formatShortDate(profile.lastPaidAt)}</span>
             <span className="admin-row__price">
-              {formatCurrency(lastPayment.amount)} · {paymentMethodLabels[lastPayment.method!]}
+              {formatCurrency(profile.lastPaymentAmount)}
+              {profile.lastPaymentMethod ? ` · ${paymentMethodLabels[profile.lastPaymentMethod]}` : ""}
             </span>
           </>
         ) : (
@@ -299,19 +282,19 @@ function ClientRow({
         )}
       </td>
       <td data-label="Receber">
-        {oldest ? (
+        {next ? (
           <label className="admin-inline-select">
             <span className="sr-only">
-              Registrar pagamento da mensalidade de {formatShortDate(oldest.dueDate)} de {client.name}
+              Registrar pagamento da mensalidade de {formatShortDate(next.dueDate)} de {profile.name}
             </span>
             <select
               onChange={(event) => {
-                if (event.target.value) onRegisterPayment(oldest.id, event.target.value as PaymentMethod);
+                if (event.target.value) onRegisterPayment(next.id, event.target.value as PaymentMethod);
               }}
               value=""
             >
               <option disabled value="">
-                {formatCurrency(oldest.amount)} · venc. {formatShortDate(oldest.dueDate)}
+                {formatCurrency(next.amount)} · venc. {formatShortDate(next.dueDate)}
               </option>
               {(Object.keys(paymentMethodLabels) as PaymentMethod[]).map((method) => (
                 <option key={method} value={method}>

@@ -163,7 +163,7 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
         </table>
       </div>
 
-      {/* Regras de repasse ilustrativas: ajuste `commissionRules` em app/data/painel.ts. */}
+      {/* Valores de payroll_settings e service_payouts no Supabase (espelhados em commissionRules). */}
       <p className="admin-footnote">
         Regras de repasse: avulsos rendem {commissionRules.walkInRate * 100}% do valor do serviço ao
         profissional; atendimentos cobertos por plano têm repasse fixo (

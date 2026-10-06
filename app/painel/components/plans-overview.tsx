@@ -1,14 +1,12 @@
 import {
-  clients,
   formatCurrency,
   formatMonth,
-  getMembership,
-  getSubscriptionOn,
+  getPlanByName,
   isCoveredByPlan,
-  subscriptions,
   subscriptionPlans,
   type Appointment,
-  type PlanPayment,
+  type ClientProfile,
+  type MonthPayment,
 } from "../../data/painel";
 import { formatPerWeek } from "../../data/plans";
 import { isSubscriber } from "./membership-tag";
@@ -16,18 +14,20 @@ import { isSubscriber } from "./membership-tag";
 export default function PlansOverview({
   appointments,
   date,
-  payments,
+  monthPayments,
   periodLabel,
+  profiles,
 }: {
   appointments: Appointment[];
+  /** Data selecionada: define o mês das mensalidades. */
   date: string;
-  payments: PlanPayment[];
+  monthPayments: MonthPayment[];
   periodLabel: string;
+  /** Situação de hoje de cada cliente. */
+  profiles: ClientProfile[];
 }) {
   const completed = appointments.filter((appointment) => appointment.status === "concluido");
-  const memberships = new Map(clients.map((client) => [client.id, getMembership(client.id, date, payments)]));
-  const nonSubscribers = clients.filter((client) => !isSubscriber(memberships.get(client.id)!)).length;
-  const month = date.slice(0, 7);
+  const nonSubscribers = profiles.filter((profile) => !isSubscriber(profile.membership)).length;
   const monthLabel = formatMonth(date);
 
   return (
@@ -58,25 +58,20 @@ export default function PlansOverview({
           </thead>
           <tbody>
             {subscriptionPlans.map((plan) => {
-              const planClients = clients.filter(
-                (client) => getSubscriptionOn(client.id, date)?.planId === plan.id,
+              const planClients = profiles.filter(
+                (profile) => profile.planId === plan.id && isSubscriber(profile.membership),
               );
-              const upToDate = planClients.filter((client) => memberships.get(client.id) === "ativo").length;
-              const frozen = planClients.filter((client) => memberships.get(client.id) === "congelado").length;
+              const upToDate = planClients.filter((profile) => profile.membership === "ativo").length;
+              const frozen = planClients.filter((profile) => profile.membership === "congelado").length;
               const pending = planClients.length - upToDate - frozen;
               const uses = completed.filter(
-                (appointment) =>
-                  getSubscriptionOn(appointment.clientId, appointment.date)?.planId === plan.id &&
-                  isCoveredByPlan(appointment, payments),
+                (appointment) => getPlanByName(appointment.planName)?.id === plan.id && isCoveredByPlan(appointment),
               ).length;
-              const planSubscriptionIds = new Set(
-                subscriptions.filter((subscription) => subscription.planId === plan.id).map((subscription) => subscription.id),
+              const planPayments = monthPayments.filter(
+                (payment) => payment.planId === plan.id && payment.status !== "cancelado",
               );
-              const monthPayments = payments.filter(
-                (payment) => planSubscriptionIds.has(payment.subscriptionId) && payment.dueDate.startsWith(month),
-              );
-              const expected = monthPayments.reduce((sum, payment) => sum + payment.amount, 0);
-              const received = monthPayments
+              const expected = planPayments.reduce((sum, payment) => sum + payment.amount, 0);
+              const received = planPayments
                 .filter((payment) => payment.status === "pago")
                 .reduce((sum, payment) => sum + payment.amount, 0);
 

@@ -2,17 +2,12 @@ import { CalendarX2, CheckCircle2, Clock3, UserX, XCircle } from "lucide-react";
 import {
   barberNames,
   formatCurrency,
-  getClient,
-  getMembership,
-  getPlan,
-  getSubscriptionOn,
+  getPlanByName,
   isCoveredByPlan,
-  servicePrices,
   serviceNames,
   type Appointment,
   type AppointmentStatus,
   type BarberName,
-  type PlanPayment,
   type ServiceName,
 } from "../../data/painel";
 import BarberAvatar from "./barber-avatar";
@@ -37,15 +32,14 @@ type AppointmentsTableProps = {
   isClosed: boolean;
   onFiltersChange: (filters: AgendaFilters) => void;
   onUpdate: (id: string, changes: Partial<Pick<Appointment, "status" | "performedBy">>) => void;
-  payments: PlanPayment[];
 };
 
-export function matchesFilters(appointment: Appointment, filters: AgendaFilters, payments: PlanPayment[]) {
+export function matchesFilters(appointment: Appointment, filters: AgendaFilters) {
   if (filters.barber !== "todos" && appointment.performedBy !== filters.barber) return false;
   if (filters.service !== "todos" && appointment.serviceName !== filters.service) return false;
   if (filters.clientType === "todos") return true;
 
-  const membership = getMembership(appointment.clientId, appointment.date, payments);
+  const membership = appointment.membership;
   if (filters.clientType === "pendente") return membership === "pendente" || membership === "atrasado";
   return filters.clientType === "assinante" ? isSubscriber(membership) : !isSubscriber(membership);
 }
@@ -58,9 +52,8 @@ export default function AppointmentsTable({
   isClosed,
   onFiltersChange,
   onUpdate,
-  payments,
 }: AppointmentsTableProps) {
-  const visible = appointments.filter((appointment) => matchesFilters(appointment, filters, payments));
+  const visible = appointments.filter((appointment) => matchesFilters(appointment, filters));
   const hasFilters =
     filters.barber !== "todos" || filters.clientType !== "todos" || filters.service !== "todos";
 
@@ -163,7 +156,7 @@ export default function AppointmentsTable({
             </thead>
             <tbody>
               {visible.map((appointment) => (
-                <AppointmentRow appointment={appointment} key={appointment.id} onUpdate={onUpdate} payments={payments} />
+                <AppointmentRow appointment={appointment} key={appointment.id} onUpdate={onUpdate} />
               ))}
             </tbody>
           </table>
@@ -173,31 +166,26 @@ export default function AppointmentsTable({
   );
 }
 
-/** Preço exibido na agenda: coberto, plano congelado, bloqueado por atraso, fora do plano ou avulso. */
-function getPriceNote(appointment: Appointment, payments: PlanPayment[]) {
-  const price = formatCurrency(servicePrices[appointment.serviceName]);
-  const subscription = getSubscriptionOn(appointment.clientId, appointment.date);
-  const plan = getPlan(subscription?.planId ?? null);
+/** Preço exibido na agenda: coberto, plano congelado, bloqueado por atraso, limite da semana, fora do plano ou avulso. */
+function getPriceNote(appointment: Appointment) {
+  const price = formatCurrency(appointment.charged ?? appointment.price);
+  const plan = getPlanByName(appointment.planName);
 
-  if (isCoveredByPlan(appointment, payments)) return "Coberto pelo plano";
-  if (!plan) return price;
-  if (subscription?.status === "suspensa") return `Plano congelado · cobrar ${price}`;
-  if (plan.covers.includes(appointment.serviceName)) return `Plano bloqueado por atraso · cobrar ${price}`;
+  if (isCoveredByPlan(appointment)) return "Coberto pelo plano";
+  if (!appointment.planName) return price;
+  if (appointment.membership === "congelado") return `Plano congelado · cobrar ${price}`;
+  if (appointment.membership === "atrasado") return `Plano bloqueado por atraso · cobrar ${price}`;
+  if (plan?.covers.includes(appointment.serviceName)) return `Limite semanal do plano · cobrar ${price}`;
   return `Fora do plano · ${price}`;
 }
 
 function AppointmentRow({
   appointment,
   onUpdate,
-  payments,
 }: {
   appointment: Appointment;
   onUpdate: AppointmentsTableProps["onUpdate"];
-  payments: PlanPayment[];
 }) {
-  const client = getClient(appointment.clientId);
-  const membership = getMembership(client.id, appointment.date, payments);
-  const plan = getPlan(getSubscriptionOn(client.id, appointment.date)?.planId ?? null);
   const status = statusOptions.find((option) => option.value === appointment.status)!;
   const StatusIcon = status.icon;
   const reassigned = appointment.performedBy !== appointment.bookedWith;
@@ -208,12 +196,12 @@ function AppointmentRow({
         {appointment.time}
       </td>
       <td data-label="Cliente">
-        <span className="admin-row__client">{client.name}</span>
-        <MembershipTag planName={plan?.name} status={membership} />
+        <span className="admin-row__client">{appointment.clientName}</span>
+        <MembershipTag planName={appointment.planName ?? undefined} status={appointment.membership} />
       </td>
       <td data-label="Serviço">
         <span className="admin-row__service">{appointment.serviceName}</span>
-        <span className="admin-row__price">{getPriceNote(appointment, payments)}</span>
+        <span className="admin-row__price">{getPriceNote(appointment)}</span>
       </td>
       <td data-label="Marcado com">
         <span className="admin-person">
