@@ -84,10 +84,6 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
         },
   ];
 
-  if (!session && draft.customer.notes.trim()) {
-    rows.push({ label: "Observações", value: draft.customer.notes.trim(), step: "dados" });
-  }
-
   const showLimitNotice = session && coverage?.reason === "limite_semanal" && !checkingCoverage;
 
   return (

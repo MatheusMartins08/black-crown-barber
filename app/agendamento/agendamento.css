@@ -18,7 +18,7 @@
   color: var(--foreground);
 }
 
-.booking-page :is(button, input, textarea):focus-visible {
+.booking-page :is(button, input):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -1182,13 +1182,6 @@ button.booking-progress__step:hover {
   transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 
-textarea.booking-input {
-  min-height: 108px;
-  padding: 13px 14px;
-  line-height: 1.6;
-  resize: vertical;
-}
-
 .booking-input::placeholder {
   color: rgb(var(--foreground-rgb) / 40%);
 }
@@ -1228,11 +1221,6 @@ textarea.booking-input {
   justify-content: space-between;
   gap: 16px;
   color: var(--muted);
-}
-
-.booking-field__counter {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
 }
 
 .booking-consent {

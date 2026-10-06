@@ -116,7 +116,6 @@ export async function createReservation(draft: BookingDraft): Promise<Reservatio
     p_name: draft.customer.name,
     p_phone: draft.customer.phone,
     p_email: draft.customer.email,
-    p_notes: draft.customer.notes,
     p_whatsapp_opt_in: draft.customer.whatsappOptIn,
   });
   if (error) fail(error);

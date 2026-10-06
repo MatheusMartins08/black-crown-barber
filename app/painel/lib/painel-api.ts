@@ -6,7 +6,7 @@ import {
   type ClientProfile,
   type MembershipStatus,
   type MonthPayment,
-  type OpenPayment,
+  type CyclePayment,
   type PaymentMethod,
   type ServiceName,
 } from "../../data/painel";
@@ -164,17 +164,41 @@ type ProfileRow = {
   last_payment_amount: number | null;
 };
 
-type OpenPaymentRow = {
+type CyclePaymentRow = {
   id: string;
+  period_start: string;
+  period_end: string;
   due_date: string;
   amount: number;
+  status: CyclePayment["status"];
+  method: PaymentMethod | null;
   customer_subscriptions: { customer_id: string } | null;
 };
 
-/** Perfis de todos os clientes com a mensalidade em aberto mais antiga de cada um. */
+const cyclePaymentColumns =
+  "id, period_start, period_end, due_date, amount, status, method, customer_subscriptions!inner(customer_id)";
+
+function toCyclePayment(row: CyclePaymentRow, clientId: string): CyclePayment {
+  return {
+    id: row.id,
+    clientId,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    dueDate: row.due_date,
+    amount: Number(row.amount),
+    status: row.status,
+    method: row.method,
+  };
+}
+
+/**
+ * Perfis de todos os clientes com a mensalidade em aberto mais antiga e a do ciclo atual
+ * (a que contém hoje, paga ou não) de cada um.
+ */
 export async function fetchClientProfiles(): Promise<ClientProfile[]> {
   const supabase = getSupabaseBrowserClient();
-  const [profiles, open] = await Promise.all([
+  const today = getTodayIso();
+  const [profiles, open, current] = await Promise.all([
     supabase
       .from("customer_profiles")
       .select(
@@ -183,19 +207,32 @@ export async function fetchClientProfiles(): Promise<ClientProfile[]> {
       .order("name"),
     supabase
       .from("subscription_payments")
-      .select("id, due_date, amount, customer_subscriptions!inner(customer_id)")
+      .select(cyclePaymentColumns)
       .eq("status", "pendente")
       .order("due_date"),
+    supabase
+      .from("subscription_payments")
+      .select(cyclePaymentColumns)
+      .neq("status", "cancelado")
+      .lte("period_start", today)
+      .gte("period_end", today)
+      .order("period_start"),
   ]);
   if (profiles.error) fail(profiles.error, "Não foi possível carregar os clientes.");
   if (open.error) fail(open.error, "Não foi possível carregar as mensalidades.");
+  if (current.error) fail(current.error, "Não foi possível carregar as mensalidades.");
 
-  const oldestByClient = new Map<string, OpenPayment>();
-  for (const row of open.data as unknown as OpenPaymentRow[]) {
+  const oldestByClient = new Map<string, CyclePayment>();
+  for (const row of open.data as unknown as CyclePaymentRow[]) {
     const clientId = row.customer_subscriptions?.customer_id;
-    if (clientId && !oldestByClient.has(clientId)) {
-      oldestByClient.set(clientId, { id: row.id, clientId, dueDate: row.due_date, amount: Number(row.amount) });
-    }
+    if (clientId && !oldestByClient.has(clientId)) oldestByClient.set(clientId, toCyclePayment(row, clientId));
+  }
+
+  // Em ordem de início: se houver mais de um período hoje (troca de plano), fica o mais novo.
+  const currentByClient = new Map<string, CyclePayment>();
+  for (const row of current.data as unknown as CyclePaymentRow[]) {
+    const clientId = row.customer_subscriptions?.customer_id;
+    if (clientId) currentByClient.set(clientId, toCyclePayment(row, clientId));
   }
 
   return (profiles.data as ProfileRow[]).map((row) => {
@@ -218,6 +255,7 @@ export async function fetchClientProfiles(): Promise<ClientProfile[]> {
       lastPaymentMethod: row.last_payment_method,
       lastPaymentAmount: row.last_payment_amount === null ? null : Number(row.last_payment_amount),
       nextToReceive: next,
+      currentCycle: currentByClient.get(row.id) ?? null,
     };
   });
 }
@@ -248,7 +286,10 @@ export async function fetchMonthPayments(month: string): Promise<MonthPayment[]>
   });
 }
 
-/** Registra o pagamento de uma mensalidade (só admin). */
+/**
+ * Registra o pagamento de uma mensalidade ou troca a forma de uma já paga (só admin).
+ * Numa linha já paga, o banco mantém a data do pagamento e só troca a forma.
+ */
 export async function registerPayment(paymentId: string, method: PaymentMethod) {
   const { data, error } = await getSupabaseBrowserClient()
     .from("subscription_payments")

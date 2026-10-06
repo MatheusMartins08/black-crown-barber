@@ -8,6 +8,7 @@
   --admin-panel: var(--surface);
   --admin-sunken: #ecebe4;
   --admin-content: min(calc(100% - 48px), var(--content-width));
+  --admin-header-height: 68px;
   width: 100%;
   min-height: 100svh;
   background: var(--background);
@@ -20,7 +21,7 @@
   color: var(--foreground);
 }
 
-.admin :is(select, input, button):focus-visible {
+.admin :is(select, input, button, summary):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -44,34 +45,201 @@
 .admin-header__inner {
   display: flex;
   width: var(--admin-content);
-  height: 68px;
+  height: var(--admin-header-height);
   align-items: center;
   gap: 32px;
   margin: 0 auto;
 }
 
+/* Links ocupam a altura do cabeçalho: a tela ativa ganha a barra de 2px na base. */
 .admin-header__nav {
   display: flex;
+  align-self: stretch;
   gap: 4px;
   margin-right: auto;
 }
 
 .admin-header__nav a {
-  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
   color: var(--muted);
   font-size: 13px;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color 160ms ease, box-shadow 160ms ease;
 }
 
 .admin-header__nav a:hover {
-  background: rgb(var(--foreground-rgb) / 6%);
+  box-shadow: inset 0 -2px 0 rgb(var(--foreground-rgb) / 16%);
   color: var(--foreground);
+}
+
+.admin-header__nav a[aria-current="page"] {
+  box-shadow: inset 0 -2px 0 var(--accent);
+  color: var(--foreground);
+  font-weight: 600;
 }
 
 .admin-header__meta {
   display: flex;
   align-items: center;
   gap: 18px;
+  margin-left: auto;
+}
+
+/* Menu do celular e do tablet (admin-nav.tsx) */
+
+.admin-menu-toggle,
+.admin-menu,
+.admin-menu__scrim {
+  display: none;
+}
+
+.admin-menu-toggle {
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin-left: auto;
+  border: 1px solid rgb(var(--foreground-rgb) / 20%);
+  background: var(--admin-panel);
+  color: var(--foreground);
+  cursor: pointer;
+  padding: 0 12px 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.admin-menu-toggle svg {
+  color: var(--accent);
+}
+
+.admin-menu-toggle:hover,
+.admin-menu-toggle[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.admin-menu__scrim {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 100svh;
+  background: rgb(27 30 27 / 28%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms ease, visibility 0s linear 180ms;
+}
+
+.admin-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  max-height: calc(100svh - var(--admin-header-height));
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 2px solid var(--accent);
+  background: var(--admin-panel);
+  box-shadow: 0 18px 40px rgb(27 30 27 / 14%);
+  padding: 8px max(16px, calc((100% - var(--content-width)) / 2)) 12px;
+  opacity: 0;
+  transform: translateY(-6px);
+  visibility: hidden;
+  transition:
+    opacity 180ms ease,
+    transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    visibility 0s linear 180ms;
+}
+
+.admin-menu.is-open,
+.admin-menu__scrim.is-open {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.admin-menu__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-menu__list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.admin-menu__item {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 14px;
+  border-left: 2px solid transparent;
+  color: var(--foreground);
+  padding: 9px 12px;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.admin-menu__item svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.admin-menu__item:hover {
+  background: rgb(var(--foreground-rgb) / 4%);
+}
+
+.admin-menu__item[aria-current="page"] {
+  border-left-color: var(--accent);
+  background: rgb(var(--accent-rgb) / 6%);
+}
+
+.admin-menu__item[aria-current="page"] svg {
+  color: var(--accent);
+}
+
+.admin-menu__label,
+.admin-menu__description {
+  display: block;
+}
+
+.admin-menu__label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.admin-menu__description {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-menu__account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  padding: 6px 12px 0 14px;
+}
+
+.admin-menu__user {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-menu__links {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.admin-menu__links > * {
+  min-height: 44px;
 }
 
 .admin-header__site-link {
@@ -96,6 +264,12 @@
   margin: 0 auto;
   padding: 40px 0 72px;
   overflow-x: visible;
+}
+
+/* Abas e invólucros de carregamento também são itens da grade: sem isso, uma tabela
+   larga alargaria a página em vez de rolar dentro do painel. */
+.admin-main > * {
+  min-width: 0;
 }
 
 .admin-toolbar {
@@ -228,12 +402,11 @@
 
 /* Painéis */
 
-
 .admin-panel {
   min-width: 0;
   border: 1px solid var(--line);
   background: var(--admin-panel);
-  scroll-margin-top: 88px;
+  scroll-margin-top: calc(var(--admin-header-height) + 20px);
 }
 
 .admin-panel__heading {
@@ -262,6 +435,141 @@
   color: var(--muted);
   font-size: 13px;
   line-height: 1.55;
+}
+
+/* Cabeçalho com uma ação à direita (ex.: "Filtros" no celular). */
+.admin-panel__heading--action {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-show-mobile,
+.admin-show-compact {
+  display: none;
+}
+
+/* Botão com borda, mesma linguagem do admin-icon-button, com texto. */
+.admin-toggle-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgb(var(--foreground-rgb) / 20%);
+  background: var(--admin-panel);
+  color: var(--foreground);
+  cursor: pointer;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.admin-toggle-button svg {
+  color: var(--muted);
+}
+
+.admin-toggle-button:hover,
+.admin-toggle-button[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.admin-toggle-button__badge {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  background: var(--accent);
+  color: var(--admin-panel);
+  padding: 0 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.admin-filter-toggle {
+  display: none;
+}
+
+/* Abas da tela Clientes: ficam presas logo abaixo do cabeçalho. */
+.admin-tabs-bar {
+  position: sticky;
+  top: var(--admin-header-height);
+  z-index: 5;
+  margin: -6px 0;
+  background: var(--background);
+  padding: 6px 0;
+}
+
+.admin-tabs button {
+  min-width: 132px;
+  min-height: 38px;
+}
+
+/* Lista cortada e explicações recolhíveis */
+
+.admin-show-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  padding: 4px 14px 4px 24px;
+  font-size: 12px;
+}
+
+.admin-help {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.admin-help summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 0 24px;
+  color: var(--foreground);
+  font-weight: 600;
+  list-style: none;
+}
+
+.admin-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-help summary::after {
+  width: 7px;
+  height: 7px;
+  margin: -3px 0 0 auto;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  content: "";
+  transform: rotate(45deg);
+  transition: transform 180ms ease;
+}
+
+.admin-help[open] summary::after {
+  margin-top: 3px;
+  transform: rotate(-135deg);
+}
+
+.admin-help summary:hover {
+  color: var(--accent);
+}
+
+.admin-help p {
+  max-width: 90ch;
+  margin: 0;
+  padding: 0 24px 14px;
 }
 
 /* Filtros e campos */
@@ -350,9 +658,19 @@
   font-weight: 500;
 }
 
+/* Filtros secundários: no desktop seguem na linha; no celular, atrás de "Filtros". */
+.admin-filters__extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
 /* Tabelas */
 
+/* position: os rótulos sr-only (absolutos) ficam presos aqui e não alargam a página. */
 .admin-table-wrap {
+  position: relative;
   overflow-x: auto;
   border-top: 1px solid var(--line);
 }
@@ -542,6 +860,68 @@
 
 .admin-inline-select select {
   min-width: 156px;
+}
+
+/* Pagamento do ciclo (tela Clientes): sempre visível, a forma marcada pode ser trocada. */
+.admin-cycle {
+  display: grid;
+  width: 166px;
+  gap: 6px;
+}
+
+.admin-cycle__label {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.admin-cycle__state--paid {
+  color: var(--admin-success);
+  font-weight: 600;
+}
+
+.admin-cycle__state--pending {
+  color: var(--admin-warning);
+  font-weight: 600;
+}
+
+.admin-cycle__methods {
+  display: flex;
+}
+
+/* .admin-segmented button vem depois no arquivo: a classe dupla vence o min-width dele. */
+.admin-segmented.admin-cycle__methods button {
+  min-width: 0;
+  min-height: 30px;
+  flex: 1 1 0;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.admin-cycle__methods button:disabled {
+  cursor: progress;
+}
+
+.admin-cycle__methods[aria-busy="true"] {
+  opacity: 0.7;
+}
+
+/* Select de profissional com a foto dentro, como o ícone do status. */
+.admin-person-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.admin-person-select .admin-avatar {
+  position: absolute;
+  left: 8px;
+  pointer-events: none;
+}
+
+.admin-person-select select {
+  min-width: 140px;
+  padding-left: 36px;
 }
 
 .admin-status {
@@ -887,6 +1267,12 @@
   white-space: nowrap;
 }
 
+.admin-row__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .admin-table--subscribers .admin-row__price {
   font-weight: 400;
   white-space: nowrap;
@@ -1138,12 +1524,18 @@
 /* Responsivo */
 
 @media (max-width: 960px) {
-  .admin-header__nav {
+  .admin-header__nav,
+  .admin-header__meta--account {
     display: none;
   }
 
-  .admin-header__meta {
-    margin-left: auto;
+  .admin-menu-toggle {
+    display: inline-flex;
+  }
+
+  .admin-menu,
+  .admin-menu__scrim {
+    display: block;
   }
 
   .admin-toolbar {
@@ -1172,23 +1564,703 @@
   }
 }
 
+/* Tablet: cada profissional numa linha (identidade e divisão à esquerda, barras à direita). */
+@media (min-width: 761px) and (max-width: 960px) {
+  .admin-barber {
+    display: grid;
+    grid-template-areas:
+      "identity bars"
+      "split bars";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    align-items: start;
+    column-gap: 36px;
+  }
+
+  .admin-barber__identity {
+    grid-area: identity;
+  }
+
+  .admin-bars {
+    grid-area: bars;
+    margin: 0;
+  }
+
+  .admin-split {
+    grid-area: split;
+  }
+}
+
+/* Agenda em cartões até 960px (a tabela larga rolava de lado no tablet e escondia as ações). */
+@media (max-width: 960px) {
+  .admin-hide-compact {
+    display: none;
+  }
+
+  .admin-show-compact {
+    display: inline;
+  }
+
+  .admin-table--agenda thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .admin-table.admin-table--agenda,
+  .admin-table.admin-table--agenda tbody {
+    display: block;
+  }
+
+  /* Tablet: horário | cliente e serviço | executor | status, numa linha. */
+  .admin-table.admin-table--agenda tbody tr {
+    display: grid;
+    grid-template-areas:
+      "time who performed state"
+      "time what performed state"
+      "time what note .";
+    grid-template-columns: 52px minmax(0, 1fr) minmax(140px, 180px) auto;
+    align-items: center;
+    column-gap: 16px;
+    border-bottom: 1px solid var(--line);
+    border-left: 2px solid rgb(var(--foreground-rgb) / 16%);
+    padding: 12px 24px 12px 22px;
+  }
+
+  .admin-table.admin-table--agenda tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .admin-table.admin-table--agenda tbody tr.admin-row--concluido {
+    border-left-color: var(--admin-success);
+  }
+
+  .admin-table.admin-table--agenda tbody tr.admin-row--faltou {
+    border-left-color: var(--admin-warning);
+  }
+
+  .admin-table.admin-table--agenda tbody tr.admin-row--cancelado {
+    border-left-color: transparent;
+  }
+
+  .admin-table.admin-table--agenda tbody td {
+    display: block;
+    min-width: 0;
+    justify-items: normal;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+  }
+
+  .admin-table.admin-table--agenda tbody td::before {
+    content: none;
+  }
+
+  .admin-table.admin-table--agenda tbody td.admin-row__time {
+    grid-area: time;
+    padding-top: 1px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .admin-table.admin-table--agenda tbody td.admin-row__who {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    grid-area: who;
+  }
+
+  .admin-table--agenda .admin-row__client {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: normal;
+  }
+
+  .admin-table--agenda .admin-row__who .admin-tag {
+    margin: 0;
+  }
+
+  /* Serviço e preço correm como uma frase só (quebra natural, sem "·" no início da linha). */
+  .admin-table.admin-table--agenda tbody td.admin-row__what {
+    grid-area: what;
+    margin-top: 3px;
+    line-height: 1.45;
+  }
+
+  .admin-table--agenda .admin-row__what .admin-row__service,
+  .admin-table--agenda .admin-row__what .admin-row__price {
+    display: inline;
+    margin: 0;
+    white-space: normal;
+  }
+
+  .admin-table--agenda .admin-row__what .admin-row__service {
+    font-size: 13px;
+  }
+
+  .admin-table--agenda .admin-row__what .admin-row__price::before {
+    content: " · ";
+  }
+
+  .admin-table.admin-table--agenda tbody td.admin-row__booked {
+    display: none;
+  }
+
+  /* Select e aviso de troca viram itens da grade: o aviso ocupa a linha inteira. */
+  .admin-table.admin-table--agenda tbody td.admin-row__performed {
+    display: contents;
+  }
+
+  .admin-table--agenda .admin-row__performed .admin-person-select {
+    display: flex;
+    grid-area: performed;
+  }
+
+  .admin-table.admin-table--agenda tbody td.admin-row__state {
+    grid-area: state;
+  }
+
+  .admin-table--agenda .admin-person-select select {
+    width: 100%;
+    min-width: 0;
+    padding-right: 28px;
+    text-overflow: ellipsis;
+  }
+
+  .admin-table--agenda .admin-status select {
+    min-width: 0;
+    padding-right: 28px;
+  }
+
+  .admin-table--agenda .admin-row__performed .admin-row__note {
+    grid-area: note;
+    margin-top: 4px;
+  }
+}
+
+/* Clientes e assinantes em cartões até 960px. */
+@media (max-width: 960px) {
+  .admin-table--clients thead,
+  .admin-table--subscribers thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .admin-table.admin-table--clients,
+  .admin-table.admin-table--clients tbody,
+  .admin-table.admin-table--subscribers,
+  .admin-table.admin-table--subscribers tbody {
+    display: block;
+  }
+
+  .admin-table.admin-table--clients tbody tr,
+  .admin-table.admin-table--subscribers tbody tr {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .admin-table.admin-table--clients tbody tr:last-child,
+  .admin-table.admin-table--subscribers tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .admin-table.admin-table--clients tbody th,
+  .admin-table.admin-table--subscribers tbody th {
+    border: 0;
+    background: transparent;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  /* Clientes: só as linhas que têm dado (células vazias somem). */
+
+  .admin-table.admin-table--clients tbody tr {
+    display: grid;
+    grid-template-areas:
+      "name billing"
+      "phone visit"
+      "plan payment"
+      ". receive";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-content: start;
+    column-gap: 28px;
+    padding: 14px 24px 15px;
+  }
+
+  .admin-table.admin-table--clients tbody th {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 10px;
+    grid-area: name;
+    padding: 0;
+  }
+
+  .admin-table--clients .admin-row__client {
+    white-space: normal;
+  }
+
+  .admin-table--clients th .admin-tag {
+    margin-top: 0;
+  }
+
+  .admin-table.admin-table--clients tbody td {
+    display: block;
+    min-width: 0;
+    justify-items: normal;
+    border: 0;
+    background: transparent;
+    margin-top: 4px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  .admin-table.admin-table--clients tbody td::before {
+    content: none;
+  }
+
+  .admin-table.admin-table--clients tbody td.has-inline-label::before {
+    display: inline;
+    margin-right: 5px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .admin-table.admin-table--clients tbody tr td.is-empty {
+    display: none;
+  }
+
+  /* Telefone: área de toque maior sem mudar a linha. */
+  .admin-table--clients .admin-link,
+  .admin-table--subscribers .admin-link {
+    display: inline-block;
+    margin-block: -8px;
+    padding-block: 8px;
+  }
+
+  .admin-table--clients td > * {
+    display: inline;
+    margin: 0;
+    white-space: normal;
+  }
+
+  .admin-table--clients td > * + *::before {
+    color: var(--muted);
+    content: " · ";
+  }
+
+  .admin-table--clients td.admin-clients__phone {
+    grid-area: phone;
+  }
+
+  .admin-table--clients td.admin-clients__plan {
+    grid-area: plan;
+  }
+
+  .admin-table--clients td.admin-clients__billing {
+    grid-area: billing;
+  }
+
+  .admin-table--clients td.admin-clients__visit {
+    grid-area: visit;
+  }
+
+  .admin-table--clients td.admin-clients__payment {
+    grid-area: payment;
+  }
+
+  /* Pagamento do ciclo: legenda e Pix | Cartão | Dinheiro em largura total. */
+  .admin-table.admin-table--clients tbody td.admin-clients__receive {
+    grid-area: receive;
+    margin-top: 10px;
+  }
+
+  .admin-table.admin-table--clients tbody td.admin-clients__receive > * {
+    display: block;
+  }
+
+  .admin-table.admin-table--clients tbody td.admin-clients__receive > * + *::before {
+    content: none;
+  }
+
+  .admin-table--clients .admin-cycle {
+    width: auto;
+  }
+
+  .admin-table--clients .admin-cycle__methods {
+    display: flex;
+    width: 100%;
+  }
+
+  .admin-table--clients .admin-segmented.admin-cycle__methods button {
+    min-height: 38px;
+  }
+
+  /* Assinantes: ações em ícones no canto, plano e status lado a lado. */
+
+  .admin-table.admin-table--subscribers tbody tr {
+    position: relative;
+    display: grid;
+    grid-template-areas:
+      "name plan status actions"
+      "phone benefits benefits actions";
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 170px) minmax(130px, 150px) auto;
+    align-items: center;
+    column-gap: 16px;
+    padding: 12px 24px;
+  }
+
+  .admin-table.admin-table--subscribers tbody th {
+    grid-area: name;
+    padding: 0;
+  }
+
+  .admin-table--subscribers th .admin-row__client {
+    white-space: normal;
+  }
+
+  .admin-table--subscribers th .admin-row__price {
+    margin-top: 2px;
+  }
+
+  .admin-table.admin-table--subscribers tbody td {
+    display: block;
+    min-width: 0;
+    justify-items: normal;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+  }
+
+  .admin-table.admin-table--subscribers tbody td::before {
+    content: none;
+  }
+
+  .admin-table.admin-table--subscribers tbody td.admin-subscribers__phone {
+    grid-area: phone;
+    align-self: start;
+    margin-top: 2px;
+    font-size: 13px;
+  }
+
+  /* As duas partes da célula viram itens da grade: select ao lado do status, benefícios embaixo. */
+  .admin-table.admin-table--subscribers tbody td.admin-subscribers__plan {
+    display: contents;
+  }
+
+  .admin-subscribers__plan .admin-inline-select {
+    grid-area: plan;
+  }
+
+  .admin-table--subscribers .admin-subscribers__plan .admin-row__benefits {
+    grid-area: benefits;
+    margin-top: 4px;
+    white-space: normal;
+  }
+
+  .admin-table.admin-table--subscribers tbody td.admin-subscribers__status {
+    grid-area: status;
+  }
+
+  .admin-table--subscribers .admin-status {
+    display: flex;
+  }
+
+  .admin-table--subscribers .admin-inline-select select,
+  .admin-table--subscribers .admin-status select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-table.admin-table--subscribers tbody td.admin-subscribers__actions {
+    grid-area: actions;
+  }
+
+  .admin-table--subscribers .admin-row__actions {
+    gap: 6px;
+  }
+
+  .admin-table--subscribers .admin-row__actions .admin-row__action {
+    display: grid;
+    width: 40px;
+    min-height: 40px;
+    place-items: center;
+    border: 1px solid rgb(var(--foreground-rgb) / 20%);
+    background: var(--admin-panel);
+    color: var(--foreground);
+    text-decoration: none;
+  }
+
+  .admin-table--subscribers .admin-row__action:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .admin-row__action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .admin-table--subscribers .admin-row--updated {
+    animation: admin-row-flash 1400ms ease-out;
+  }
+}
+
+/* Planos e fechamento em cartões até 960px. */
+@media (max-width: 960px) {
+  .admin-table--plans thead,
+  .admin-table--payroll thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .admin-table.admin-table--plans,
+  .admin-table.admin-table--plans tbody,
+  .admin-table.admin-table--payroll,
+  .admin-table.admin-table--payroll tbody,
+  .admin-table.admin-table--payroll tfoot {
+    display: block;
+  }
+
+  .admin-table.admin-table--plans tbody tr,
+  .admin-table.admin-table--payroll tbody tr {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .admin-table.admin-table--plans tbody tr:last-child,
+  .admin-table.admin-table--payroll tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .admin-table.admin-table--payroll tfoot tr {
+    border-top: 1px solid rgb(var(--foreground-rgb) / 28%);
+    background: var(--admin-sunken);
+  }
+
+  .admin-table.admin-table--plans tbody th {
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+
+  /* Planos: um cartão por plano */
+
+  .admin-table.admin-table--plans tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 12px;
+    padding: 14px 24px 15px;
+  }
+
+  .admin-table.admin-table--plans tbody th {
+    grid-column: 1 / 3;
+    grid-row: 1;
+    padding: 0;
+    font-size: 16px;
+  }
+
+  .admin-table.admin-table--plans tbody td {
+    display: block;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    justify-items: normal;
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .admin-table.admin-table--plans tbody td::before {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .admin-table.admin-table--plans tbody td.admin-plans__price {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .admin-table.admin-table--plans tbody td.admin-plans__price::before {
+    content: none;
+  }
+
+  .admin-table--plans .admin-plans__price::after {
+    color: var(--muted);
+    content: "/mês";
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .admin-table.admin-table--plans tbody td.admin-plans__covers {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .admin-table.admin-table--plans tbody td.admin-plans__covers::before {
+    content: none;
+  }
+
+  .admin-table.admin-table--plans tbody td.admin-plans__stat {
+    grid-row: 3;
+    margin-top: 12px;
+    border-top: 1px dashed var(--line);
+    padding-top: 10px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .admin-table.admin-table--plans tbody td.admin-plans__uses {
+    grid-column: 1;
+    grid-row: 4;
+    margin-top: 10px;
+    font-weight: 600;
+  }
+
+  .admin-table.admin-table--plans tbody td.admin-plans__received {
+    grid-column: 2 / -1;
+    grid-row: 4;
+    margin-top: 10px;
+  }
+
+  /* Fechamento: total no topo, planos e avulsos no meio, serviços embaixo. */
+
+  .admin-table.admin-table--payroll tbody tr,
+  .admin-table.admin-table--payroll tfoot tr {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: 8px;
+    padding: 12px 24px 13px;
+  }
+
+  .admin-table.admin-table--payroll tr > th {
+    grid-column: 1 / 8;
+    grid-row: 1;
+    align-self: center;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .admin-table.admin-table--payroll tr > td {
+    display: flex;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .admin-table.admin-table--payroll tr > td::before {
+    margin-bottom: 2px;
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  .admin-table.admin-table--payroll tr > td.is-total {
+    grid-column: 8 / 13;
+    grid-row: 1;
+    align-items: flex-end;
+    font-size: 17px;
+    text-align: right;
+  }
+
+  .admin-table.admin-table--payroll tr > td.admin-payroll__completed,
+  .admin-table.admin-table--payroll tr > td.admin-payroll__plans,
+  .admin-table.admin-table--payroll tr > td.admin-payroll__walkin {
+    grid-row: 2;
+    margin-top: 10px;
+  }
+
+  .admin-table.admin-table--payroll tr > td.admin-payroll__completed {
+    grid-column: 1 / 5;
+    font-size: 15px;
+  }
+
+  .admin-table.admin-table--payroll tr > td.admin-payroll__plans {
+    grid-column: 5 / 9;
+  }
+
+  .admin-table.admin-table--payroll tr > td.admin-payroll__walkin {
+    grid-column: 9 / 13;
+  }
+
+  /* Rótulos de serviço podem ter duas linhas: os números alinham pela base. */
+  .admin-table.admin-table--payroll tr > td.admin-payroll__service {
+    grid-column: span 3;
+    grid-row: 3;
+    justify-content: space-between;
+    margin-top: 10px;
+    border-top: 1px dashed var(--line);
+    padding-top: 8px;
+    font-weight: 600;
+  }
+}
+
 @media (max-width: 760px) {
   .admin {
     --admin-content: calc(100% - 32px);
+    --admin-header-height: 62px;
   }
 
   .admin-header__inner {
-    height: 62px;
     gap: 12px;
   }
 
   .admin-main {
     gap: 16px;
-    padding-top: 28px;
+    padding-top: 22px;
+  }
+
+  .admin-toolbar {
+    gap: 14px;
+    padding-bottom: 0;
   }
 
   .admin-toolbar h1 {
-    font-size: 32px;
+    font-size: 28px;
+  }
+
+  .admin-toolbar p {
+    margin-top: 6px;
   }
 
   .admin-date-nav {
@@ -1201,6 +2273,15 @@
 
   .admin-date-input input {
     width: 100%;
+    font-size: 16px;
+  }
+
+  .admin-hide-mobile {
+    display: none;
+  }
+
+  .admin-show-mobile {
+    display: inline;
   }
 
   .admin-kpis {
@@ -1208,7 +2289,7 @@
   }
 
   .admin-kpis > div {
-    padding: 14px 16px 16px;
+    padding: 11px 14px 12px;
   }
 
   .admin-kpis > div:nth-child(n) {
@@ -1229,28 +2310,66 @@
   }
 
   .admin-kpis dd {
-    font-size: 22px;
+    margin-top: 4px;
+    font-size: 20px;
+  }
+
+  .admin-kpis dd span {
+    font-size: 13px;
   }
 
   .admin-panel__heading,
   .admin-filters,
   .admin-footnote,
-  .admin-barber {
+  .admin-barber,
+  .admin-help summary,
+  .admin-help p {
     padding-inline: 16px;
   }
+
+  .admin-panel__heading {
+    padding-top: 18px;
+    padding-bottom: 14px;
+  }
+
+  .admin-panel__heading h2 {
+    font-size: 22px;
+  }
+
+  .admin-show-more {
+    padding-inline: 16px 6px;
+  }
+
+  /* Filtros */
 
   .admin-filters {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding-block: 12px;
   }
 
-  .admin-filters select {
+  /* 16px: o iOS não dá zoom ao focar. */
+  .admin-filters select,
+  .admin-filters input {
     width: 100%;
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  .admin-filter-toggle {
+    display: inline-flex;
+  }
+
+  .admin-filters--collapsible:not(.is-open) {
+    display: none;
   }
 
   .admin-clients__segmented {
     grid-column: 1 / -1;
     overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
 
   .admin-clients__segmented button {
@@ -1262,11 +2381,94 @@
     max-width: none;
   }
 
-  .admin-bars__row {
-    grid-template-columns: 100px minmax(0, 1fr);
+  .admin-filters--clients {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  /* Tabelas viram lista de cartões */
+  .admin-filters--clients .admin-clients__search {
+    grid-column: auto;
+  }
+
+  .admin-clients__date {
+    grid-column: 1 / -1;
+  }
+
+  .admin-filters--subscribers {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-filters--subscribers .admin-clients__search {
+    grid-column: auto;
+  }
+
+  .admin-filters--subscribers .admin-filter-toggle {
+    align-self: end;
+  }
+
+  .admin-filters__extra.is-open {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 10px;
+  }
+
+  .admin-plans__month {
+    width: 100%;
+  }
+
+  .admin-plans__month select {
+    width: 100%;
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  /* Abas */
+
+  .admin-tabs {
+    display: flex;
+    width: 100%;
+  }
+
+  .admin-tabs button {
+    min-width: 0;
+    min-height: 40px;
+    flex: 1 1 0;
+    padding-inline: 6px;
+  }
+
+  /* Produção: barras em grade 2×2 */
+
+  .admin-barber {
+    padding-block: 16px 18px;
+  }
+
+  .admin-bars {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 18px;
+    margin-top: 12px;
+  }
+
+  .admin-bars__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .admin-bars dt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-split {
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+
+  .admin-split__legend {
+    margin-top: 8px;
+  }
+
+  /* Tabelas viram lista de cartões (base; cada tabela ajusta o seu cartão abaixo) */
 
   .admin-table-wrap {
     overflow: visible;
@@ -1351,41 +2553,11 @@
     margin-top: 0;
   }
 
-  .admin-table--agenda td:has(select)::before {
-    align-self: center;
-    padding-top: 0;
-  }
-
-  .admin-table--agenda td.admin-row__time {
-    display: block;
-    padding-bottom: 6px;
-    font-size: 17px;
-    text-align: left;
-  }
-
-  .admin-table--agenda .admin-row__time::before {
-    display: none;
-  }
-
-  .admin-table--agenda .admin-row__client,
-  .admin-table--agenda .admin-row__service {
-    white-space: normal;
-  }
-
   .admin-inline-select select,
   .admin-status select {
     min-width: 168px;
+    min-height: 40px;
     font-size: 16px;
-  }
-
-  .admin-table--subscribers .admin-row__client,
-  .admin-table--subscribers .admin-row__price {
-    white-space: normal;
-  }
-
-  .admin-table--subscribers td:has(select)::before {
-    align-self: center;
-    padding-top: 0;
   }
 
   .admin-row__actions {
@@ -1394,6 +2566,93 @@
 
   .admin-row__actions .admin-text-button {
     min-height: 44px;
+  }
+
+  /* Agenda no celular: horário, cliente e serviço em cima; executor e status lado a lado embaixo. */
+
+  .admin-table.admin-table--agenda tbody tr {
+    grid-template-areas:
+      "time who who"
+      "time what what"
+      "performed performed state"
+      "note note note";
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 12px;
+    padding: 12px 16px 13px 14px;
+  }
+
+  .admin-table--agenda .admin-row__performed .admin-person-select,
+  .admin-table.admin-table--agenda tbody td.admin-row__state {
+    margin-top: 10px;
+  }
+
+  .admin-table--agenda .admin-row__performed .admin-row__note {
+    margin-top: 6px;
+  }
+
+  /* Clientes no celular: uma coluna. */
+  .admin-table.admin-table--clients tbody tr {
+    grid-template-areas:
+      "name"
+      "phone"
+      "plan"
+      "billing"
+      "visit"
+      "payment"
+      "receive";
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px 16px 13px;
+  }
+
+  .admin-table--clients .admin-segmented.admin-cycle__methods button {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  /* Assinantes no celular: ações em ícones no canto, plano e status lado a lado. */
+  .admin-table.admin-table--subscribers tbody tr {
+    grid-template-areas:
+      "name name"
+      "phone phone"
+      "plan status"
+      "benefits benefits";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    column-gap: 8px;
+    padding: 12px 16px 13px;
+  }
+
+  .admin-table.admin-table--subscribers tbody th {
+    padding-right: 96px;
+  }
+
+  .admin-table.admin-table--subscribers tbody td.admin-subscribers__phone {
+    margin-top: 4px;
+  }
+
+  .admin-subscribers__plan .admin-inline-select,
+  .admin-table.admin-table--subscribers tbody td.admin-subscribers__status {
+    margin-top: 10px;
+  }
+
+  .admin-table--subscribers .admin-subscribers__plan .admin-row__benefits {
+    margin-top: 6px;
+  }
+
+  .admin-table.admin-table--subscribers tbody td.admin-subscribers__actions {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+  }
+
+  .admin-table.admin-table--plans tbody tr {
+    padding-inline: 16px;
+  }
+
+  .admin-table.admin-table--payroll tbody tr,
+  .admin-table.admin-table--payroll tfoot tr {
+    padding-inline: 16px;
   }
 
   /* Modal vira folha presa ao rodapé. */
@@ -1439,10 +2698,18 @@
   .admin-bars__fill,
   .admin-segmented button,
   .admin-table tbody tr,
-  .admin-password__toggle {
+  .admin-password__toggle,
+  .admin-header__nav a,
+  .admin-menu,
+  .admin-menu__scrim,
+  .admin-menu__item,
+  .admin-menu-toggle,
+  .admin-toggle-button,
+  .admin-help summary::after {
     transition: none;
   }
 
+  .admin-row--updated,
   .admin-row--updated > *,
   .admin-dialog[open],
   .admin-dialog[open]::backdrop,
