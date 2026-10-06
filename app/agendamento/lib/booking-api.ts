@@ -1,15 +1,6 @@
 import {
-  ANY_PROFESSIONAL,
-  addDays,
-  bookingRules,
-  getMinutesOfDay,
-  getOpeningWindow,
-  getProfessionalsForService,
-  getService,
-  getTodayIso,
   hasErrors,
-  toMinutes,
-  toTime,
+  isProfessionalChoice,
   validateCustomer,
   type BookingDraft,
   type DaySummary,
@@ -19,13 +10,12 @@ import {
   type ServiceId,
   type TimeSlot,
 } from "../../data/booking";
-import { getPlan } from "../../data/plans";
-import { claimPlanCoverage, SubscriberApiError } from "../../lib/subscribers-api";
+import { getSupabaseBrowserClient } from "../../lib/supabase/client";
+import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 
-// Adaptador da agenda. Este é o único ponto que precisa mudar ao conectar um
-// backend: cada função assíncrona abaixo vira uma chamada à API (ou Server Action)
-// mantendo as mesmas assinaturas. Enquanto isso, a ocupação é demonstrativa e
-// determinística (mesma data e profissional sempre geram os mesmos horários livres).
+// Adaptador da agenda: cada função chama uma RPC pública do Supabase
+// (supabase/migrations/…120500_booking_rpc.sql e …121000_subscriber_accounts.sql).
+// O banco revalida tudo: expediente, bloqueios, antecedência, horário livre e plano.
 
 export class BookingApiError extends Error {
   constructor(
@@ -42,167 +32,95 @@ type AvailabilityQuery = {
   professionalId: ProfessionalChoice;
 };
 
-const simulatedLatency = 350;
+const genericMessage = "Não foi possível falar com a agenda agora. Tente novamente.";
 
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function fail(error: RpcError): never {
+  throw new BookingApiError(
+    getRpcMessage(error, genericMessage),
+    error.code === "BC002" ? "slot_unavailable" : "invalid_request",
+  );
 }
 
-function hashSeed(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index++) {
-    hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
-  }
-  return hash;
-}
+type SlotRow = { slot_time: string; professional_slugs: string[] };
 
-// Mesmo gerador usado na agenda ilustrativa do painel.
-function createRandom(seed: number) {
-  let state = seed;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let value = Math.imul(state ^ (state >>> 15), 1 | state);
-    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+function toSlot(row: SlotRow): TimeSlot {
+  return {
+    time: row.slot_time,
+    professionalIds: row.professional_slugs.filter(
+      (slug): slug is ProfessionalId => isProfessionalChoice(slug) && slug !== "qualquer",
+    ),
   };
-}
-
-const baseOccupancy: Record<ProfessionalId, number> = { julia: 0.5, rafael: 0.42, joao: 0.34 };
-
-/** Blocos de 30 min ocupados na agenda demonstrativa de um profissional. */
-function getBusyBlocks(professionalId: ProfessionalId, date: string, blockCount: number) {
-  const random = createRandom(hashSeed(`${professionalId}:${date}`));
-  const fullyBooked = random() < 0.1;
-  const load = fullyBooked ? 1 : baseOccupancy[professionalId] * (0.6 + random() * 0.8);
-  return Array.from({ length: blockCount }, () => random() < load);
-}
-
-function getProfessionalSlots(serviceId: ServiceId, professionalId: ProfessionalId, date: string, now: Date) {
-  const service = getService(serviceId);
-  const opening = getOpeningWindow(date);
-  if (!service || !opening) return [];
-
-  const interval = bookingRules.slotIntervalMinutes;
-  const busy = getBusyBlocks(professionalId, date, Math.ceil((opening.closes - opening.opens) / interval));
-  const blocksNeeded = Math.ceil(service.durationMinutes / interval);
-  const earliest = date === getTodayIso(now) ? getMinutesOfDay(now) + bookingRules.minLeadMinutes : 0;
-  const times: string[] = [];
-
-  for (let start = opening.opens; start + service.durationMinutes <= opening.closes; start += interval) {
-    const firstBlock = (start - opening.opens) / interval;
-    const isFree = busy.slice(firstBlock, firstBlock + blocksNeeded).every((blocked) => !blocked);
-    if (isFree && start >= earliest) times.push(toTime(start));
-  }
-
-  return times;
-}
-
-function computeDaySlots({ serviceId, professionalId }: AvailabilityQuery, date: string, now = new Date()): TimeSlot[] {
-  const today = getTodayIso(now);
-  if (date < today) return [];
-
-  const candidates =
-    professionalId === ANY_PROFESSIONAL
-      ? getProfessionalsForService(serviceId).map((professional) => professional.id)
-      : [professionalId];
-  const slots = new Map<string, ProfessionalId[]>();
-
-  for (const candidate of candidates) {
-    for (const time of getProfessionalSlots(serviceId, candidate, date, now)) {
-      slots.set(time, [...(slots.get(time) ?? []), candidate]);
-    }
-  }
-
-  return [...slots.entries()]
-    .map(([time, professionalIds]) => ({ time, professionalIds }))
-    .sort((first, second) => toMinutes(first.time) - toMinutes(second.time));
 }
 
 /** Horários livres de um dia. */
 export async function fetchDayAvailability(query: AvailabilityQuery & { date: string }): Promise<TimeSlot[]> {
-  await wait(simulatedLatency);
-  return computeDaySlots(query, query.date);
+  const { data, error } = await getSupabaseBrowserClient().rpc("get_day_availability", {
+    p_service: query.serviceId,
+    p_professional: query.professionalId,
+    p_date: query.date,
+  });
+  if (error) fail(error);
+  return (data as SlotRow[]).map(toSlot);
 }
 
 /** Resumo de disponibilidade para a janela de datas exibida no calendário. */
 export async function fetchDaySummaries(query: AvailabilityQuery & { startDate: string; days: number }): Promise<DaySummary[]> {
-  await wait(simulatedLatency);
-  return Array.from({ length: query.days }, (_, index): DaySummary => {
-    const date = addDays(query.startDate, index);
-    if (!getOpeningWindow(date)) return { date, status: "closed", availableCount: 0 };
-    const availableCount = computeDaySlots(query, date).length;
-    return { date, status: availableCount ? "open" : "full", availableCount };
+  const { data, error } = await getSupabaseBrowserClient().rpc("get_day_summaries", {
+    p_service: query.serviceId,
+    p_professional: query.professionalId,
+    p_start: query.startDate,
+    p_days: query.days,
   });
+  if (error) fail(error);
+  return (data as { day: string; status: DaySummary["status"]; available_count: number }[]).map((row) => ({
+    date: row.day,
+    status: row.status,
+    availableCount: row.available_count,
+  }));
 }
 
 /** Primeiro horário livre a partir de uma data, dentro da janela de agendamento. */
 export async function findNextAvailable(query: AvailabilityQuery & { fromDate: string }) {
-  await wait(simulatedLatency);
-  const limit = addDays(getTodayIso(), bookingRules.windowDays);
-
-  for (let date = query.fromDate; date < limit; date = addDays(date, 1)) {
-    const [slot] = computeDaySlots(query, date);
-    if (slot) return { date, slot };
-  }
-
-  return null;
+  const { data, error } = await getSupabaseBrowserClient().rpc("find_next_available", {
+    p_service: query.serviceId,
+    p_professional: query.professionalId,
+    p_from: query.fromDate,
+  });
+  if (error) fail(error);
+  const [row] = data as (SlotRow & { day: string })[];
+  return row ? { date: row.day, slot: toSlot(row) } : null;
 }
 
-function createReservationCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return `BC-${Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("")}`;
-}
-
-/** Revalida serviço, profissional e horário e define quem atende. */
-function resolveSlot(draft: BookingDraft) {
+function getSlotParams(draft: BookingDraft) {
   const { serviceId, professionalId, date, time } = draft;
-  const service = getService(serviceId);
-  if (!service || !professionalId || !date || !time) {
+  if (!serviceId || !professionalId || !date || !time) {
     throw new BookingApiError("Revise os dados do agendamento antes de confirmar.", "invalid_request");
   }
-
-  const slot = computeDaySlots({ serviceId: service.id, professionalId }, date).find((item) => item.time === time);
-  const assignedId =
-    draft.assignedProfessionalId && slot?.professionalIds.includes(draft.assignedProfessionalId)
-      ? draft.assignedProfessionalId
-      : slot?.professionalIds[0];
-
-  if (!slot || !assignedId) {
-    throw new BookingApiError("Esse horário acabou de ser ocupado. Escolha outro horário.", "slot_unavailable");
-  }
-
-  return { service, professionalId, date, time, assignedId };
+  return {
+    p_service: serviceId,
+    p_professional: professionalId,
+    p_date: date,
+    p_time: time,
+    p_assigned_professional: draft.assignedProfessionalId,
+  };
 }
 
-/** Confirma a reserva de quem não é assinante. No backend real, revalida tudo no servidor (create_reservation). */
+/** Confirma a reserva de quem não é assinante (create_reservation). */
 export async function createReservation(draft: BookingDraft): Promise<Reservation> {
-  await wait(simulatedLatency * 3);
-
   if (hasErrors(validateCustomer(draft.customer))) {
     throw new BookingApiError("Revise os dados do agendamento antes de confirmar.", "invalid_request");
   }
-  const { service, professionalId, date, time, assignedId } = resolveSlot(draft);
 
-  return {
-    code: createReservationCode(),
-    status: "confirmado",
-    createdAt: new Date().toISOString(),
-    serviceId: service.id,
-    professionalId: assignedId,
-    requestedAnyProfessional: professionalId === ANY_PROFESSIONAL,
-    date,
-    time,
-    durationMinutes: service.durationMinutes,
-    price: service.price,
-    customer: {
-      name: draft.customer.name.trim(),
-      phone: draft.customer.phone,
-      email: draft.customer.email.trim(),
-      notes: draft.customer.notes.trim(),
-      whatsappOptIn: draft.customer.whatsappOptIn,
-    },
-    plan: null,
-  };
+  const { data, error } = await getSupabaseBrowserClient().rpc("create_reservation", {
+    ...getSlotParams(draft),
+    p_name: draft.customer.name,
+    p_phone: draft.customer.phone,
+    p_email: draft.customer.email,
+    p_notes: draft.customer.notes,
+    p_whatsapp_opt_in: draft.customer.whatsappOptIn,
+  });
+  if (error) fail(error);
+  return data as Reservation;
 }
 
 /**
@@ -210,36 +128,7 @@ export async function createReservation(draft: BookingDraft): Promise<Reservatio
  * cliente vêm da conta, e o servidor decide se o plano cobre o atendimento.
  */
 export async function createSubscriberReservation(draft: BookingDraft): Promise<Reservation> {
-  await wait(simulatedLatency * 3);
-
-  const { service, professionalId, date, time, assignedId } = resolveSlot(draft);
-  const code = createReservationCode();
-  let claimed: ReturnType<typeof claimPlanCoverage>;
-
-  try {
-    claimed = claimPlanCoverage({ serviceId: service.id, date, code });
-  } catch (error) {
-    throw new BookingApiError(
-      error instanceof SubscriberApiError ? error.message : "Não foi possível confirmar agora. Tente novamente.",
-      "invalid_request",
-    );
-  }
-
-  const { session, coverage } = claimed;
-  const plan = getPlan(session.planId);
-
-  return {
-    code,
-    status: "confirmado",
-    createdAt: new Date().toISOString(),
-    serviceId: service.id,
-    professionalId: assignedId,
-    requestedAnyProfessional: professionalId === ANY_PROFESSIONAL,
-    date,
-    time,
-    durationMinutes: service.durationMinutes,
-    price: service.price,
-    customer: { name: session.name, phone: session.phone, email: "", notes: "", whatsappOptIn: false },
-    plan: plan ? { id: session.planId, name: plan.name, covered: coverage.covered } : null,
-  };
+  const { data, error } = await getSupabaseBrowserClient().rpc("create_subscriber_reservation", getSlotParams(draft));
+  if (error) fail(error);
+  return data as Reservation;
 }

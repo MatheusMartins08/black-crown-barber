@@ -1,14 +1,10 @@
-import { clients, referenceDate, subscriptionSeeds, subscriptions, type Client, type Subscription } from "./customers";
 import { subscriptionPlans as planCatalog, type PlanBenefit, type PlanId } from "./plans";
 import { barbers, services } from "./site";
 
-// Dados ilustrativos do painel. Tudo é gerado de forma determinística (mesma
-// semente no servidor e no navegador) até o painel ler o Supabase. As regras de
-// assinatura e mensalidade espelham supabase/migrations/…120800_memberships.sql e
-// …121000_subscriber_accounts.sql (planos com limite semanal e plano congelado).
-
-export { clients, referenceDate, subscriptions };
-export type { Client, Subscription };
+// Tipos, regras e formatação do painel. Puro (sem React e sem rede): os dados vêm do
+// Supabase por app/painel/lib/painel-api.ts. Cobertura do plano, valor cobrado e
+// repasse são calculados no banco (appointments_settle e private.plan_coverage) e
+// chegam prontos em cada atendimento.
 
 export type BarberName = (typeof barbers)[number]["name"];
 export type ServiceName = (typeof services)[number]["name"];
@@ -25,20 +21,8 @@ export type SubscriptionPlan = {
 
 export type PaymentMethod = "pix" | "cartao" | "dinheiro";
 
-/** Mensalidade pré-paga: vence no primeiro dia do período. "Atrasado" é calculado, não guardado. */
-export type PlanPayment = {
-  id: string;
-  subscriptionId: string;
-  periodStart: string;
-  dueDate: string;
-  amount: number;
-  status: "pendente" | "pago";
-  paidAt: string | null;
-  method: PaymentMethod | null;
-};
-
 /**
- * Situação do cliente numa data. Mesma regra de private.membership_status no Supabase:
+ * Situação do cliente numa data (private.membership_status no Supabase):
  * - ativo: assinatura vigente e nenhuma mensalidade vencida em aberto;
  * - pendente: mensalidade vencida em aberto, ainda dentro da tolerância (o plano cobre);
  * - atrasado: em aberto há mais dias que a tolerância (o plano deixa de cobrir);
@@ -48,39 +32,76 @@ export type PlanPayment = {
  */
 export type MembershipStatus = "ativo" | "pendente" | "atrasado" | "congelado" | "ex_assinante" | "avulso";
 
+/** Atendimento como o painel enxerga (view appointment_details). */
 export type Appointment = {
   id: string;
+  code: string;
   date: string;
   time: string;
   clientId: string;
+  clientName: string;
   serviceName: ServiceName;
   bookedWith: BarberName;
   performedBy: BarberName;
   status: AppointmentStatus;
+  /** Preço do serviço copiado na reserva. */
+  price: number;
+  /** Situação do cliente no dia do atendimento. */
+  membership: MembershipStatus;
+  /** Plano vigente no dia (inclusive congelado). */
+  planName: string | null;
+  /** Entrou no plano: o snapshot gravado ao concluir ou, em aberto, a cobertura atual. */
+  covered: boolean;
+  /** Valor cobrado e repasse gravados ao concluir. `null` enquanto não concluído. */
+  charged: number | null;
+  payout: number | null;
 };
 
-const referenceTime = "14:00";
-const dataStart = "2026-09-01";
-const dataEnd = "2026-10-10";
+/** Mensalidade em aberto (subscription_payments). "Atrasado" é calculado, não guardado. */
+export type OpenPayment = {
+  id: string;
+  clientId: string;
+  dueDate: string;
+  amount: number;
+};
 
-export const dataRange = { start: dataStart, end: dataEnd };
+/** Mensalidade do mês, para o quadro de planos. */
+export type MonthPayment = {
+  id: string;
+  planId: PlanId | null;
+  amount: number;
+  status: "pendente" | "pago" | "cancelado";
+};
+
+/** Perfil do cliente (view customer_profiles), com a situação de hoje. */
+export type ClientProfile = {
+  id: string;
+  name: string;
+  /** Formatado, ex.: (31) 99999-9999. É o WhatsApp. */
+  phone: string;
+  whatsappOptIn: boolean;
+  membership: MembershipStatus;
+  planId: PlanId | null;
+  planName: string | null;
+  monthlyPrice: number | null;
+  subscribedSince: string | null;
+  lastSubscriptionEndedAt: string | null;
+  openAmount: number;
+  oldestDueDate: string | null;
+  daysOverdue: number;
+  lastPaidAt: string | null;
+  lastPaymentMethod: PaymentMethod | null;
+  lastPaymentAmount: number | null;
+  /** Mensalidade em aberto mais antiga, a próxima a receber. */
+  nextToReceive: OpenPayment | null;
+};
 
 export const barberNames = barbers.map((barber) => barber.name) as BarberName[];
 export const serviceNames = services.map((service) => service.name) as ServiceName[];
 
-export const servicePrices: Record<ServiceName, number> = {
-  "Corte masculino": 55,
-  Barba: 45,
-  "Corte + barba": 90,
-  Sobrancelha: 25,
-};
-
-const serviceSlots: Record<ServiceName, number> = {
-  "Corte masculino": 1,
-  Barba: 1,
-  "Corte + barba": 2,
-  Sobrancelha: 1,
-};
+export const servicePrices = Object.fromEntries(
+  services.map((service) => [service.name, Number(service.price.replace(/\D/g, ""))]),
+) as Record<ServiceName, number>;
 
 const serviceNameById = Object.fromEntries(services.map((service) => [service.id, service.name])) as Record<
   (typeof services)[number]["id"],
@@ -95,7 +116,18 @@ export const subscriptionPlans: SubscriptionPlan[] = planCatalog.map((plan) => (
   covers: plan.benefits.map((benefit) => serviceNameById[benefit.serviceId]),
 }));
 
-// Regras de repasse ilustrativas: ajuste aqui quando a barbearia definir os valores reais.
+const plansById = new Map<string, SubscriptionPlan>(subscriptionPlans.map((plan) => [plan.id, plan]));
+
+export function getPlan(planId: string | null) {
+  return planId ? plansById.get(planId) ?? null : null;
+}
+
+export function getPlanByName(name: string | null) {
+  return subscriptionPlans.find((plan) => plan.name === name) ?? null;
+}
+
+// Regras de repasse exibidas no rodapé do fechamento. O cálculo é do banco
+// (payroll_settings e service_payouts): mantenha estes valores iguais aos de lá.
 export const commissionRules = {
   walkInRate: 0.5,
   planPayout: {
@@ -106,171 +138,23 @@ export const commissionRules = {
   } satisfies Record<ServiceName, number>,
 };
 
-const clientsById = new Map(clients.map((client) => [client.id, client]));
-const plansById = new Map<string, SubscriptionPlan>(subscriptionPlans.map((plan) => [plan.id, plan]));
-
-export function getClient(clientId: string) {
-  return clientsById.get(clientId)!;
-}
-
-export function getPlan(planId: string | null) {
-  return planId ? plansById.get(planId) ?? null : null;
-}
-
-// --- Assinaturas e mensalidades ---
-
 /** Dias depois do vencimento em que o plano ainda cobre (shop_settings.subscription_grace_days). */
 export const billingRules = { graceDays: 5 };
 
-const paymentMethods: PaymentMethod[] = ["pix", "pix", "cartao", "dinheiro"];
-
-/** Gera as mensalidades até o fim dos dados, como private.generate_subscription_payments. */
-function generatePayments() {
-  const generated: PlanPayment[] = [];
-
-  subscriptionSeeds.forEach((seed, index) => {
-    const subscription = subscriptions[index];
-    // Período congelado ou anulado não gera mensalidade.
-    if (subscription.status !== "ativa") return;
-    const plan = getPlan(subscription.planId)!;
-    const lastStart = subscription.endedAt && subscription.endedAt < dataEnd ? subscription.endedAt : dataEnd;
-    const paidThrough = seed.paidThrough ?? referenceDate;
-
-    for (let month = 0; ; month++) {
-      const periodStart = addMonths(subscription.startedAt, month);
-      if (periodStart > lastStart) break;
-      const paid = periodStart <= paidThrough;
-
-      generated.push({
-        id: `${subscription.id}-${periodStart}`,
-        subscriptionId: subscription.id,
-        periodStart,
-        dueDate: periodStart,
-        amount: plan.monthlyPrice,
-        status: paid ? "pago" : "pendente",
-        paidAt: paid ? periodStart : null,
-        method: paid ? paymentMethods[(index + month) % paymentMethods.length] : null,
-      });
-    }
-  });
-
-  return generated;
+/** O atendimento entrou no plano do cliente? */
+export function isCoveredByPlan(appointment: Appointment) {
+  return appointment.covered;
 }
 
-export const initialPayments = generatePayments();
-
-/** Período de assinatura vigente do cliente na data (ativo ou congelado). */
-export function getSubscriptionOn(clientId: string, date: string) {
-  return (
-    subscriptions.find(
-      (subscription) =>
-        subscription.clientId === clientId &&
-        subscription.status !== "cancelada" &&
-        subscription.startedAt <= date &&
-        (subscription.endedAt === null || subscription.endedAt >= date),
-    ) ?? null
-  );
+/** Valor a cobrar do cliente: o gravado ao concluir ou, em aberto, a previsão. */
+export function getServicePrice(appointment: Appointment) {
+  if (appointment.charged !== null) return appointment.charged;
+  return appointment.covered ? 0 : appointment.price;
 }
 
-/** Mensalidades vencidas e em aberto até a data, da mais antiga para a mais recente. */
-export function getOpenPayments(subscriptionIds: string[], date: string, payments: PlanPayment[]) {
-  return payments
-    .filter(
-      (payment) =>
-        subscriptionIds.includes(payment.subscriptionId) && payment.status === "pendente" && payment.dueDate <= date,
-    )
-    .sort((first, second) => first.dueDate.localeCompare(second.dueDate));
-}
-
-function isInGoodStanding(subscriptionId: string, date: string, payments: PlanPayment[]) {
-  const limit = addDays(date, -billingRules.graceDays);
-  return !payments.some(
-    (payment) => payment.subscriptionId === subscriptionId && payment.status === "pendente" && payment.dueDate < limit,
-  );
-}
-
-export function getMembership(clientId: string, date: string, payments: PlanPayment[]): MembershipStatus {
-  const current = getSubscriptionOn(clientId, date);
-
-  if (current) {
-    if (current.status === "suspensa") return "congelado";
-    if (!isInGoodStanding(current.id, date, payments)) return "atrasado";
-    return getOpenPayments([current.id], date, payments).length ? "pendente" : "ativo";
-  }
-
-  const hasSubscribed = subscriptions.some(
-    (subscription) => subscription.clientId === clientId && subscription.startedAt <= date,
-  );
-  return hasSubscribed ? "ex_assinante" : "avulso";
-}
-
-/**
- * Plano que cobre o serviço na data: vigente e não congelado, inclui o serviço e em dia
- * (dentro da tolerância). O limite semanal de cada benefício é garantido pela agenda
- * ilustrativa (generateAppointments); no Supabase, por private.plan_coverage.
- */
-export function getCoveringPlan(clientId: string, serviceName: ServiceName, date: string, payments: PlanPayment[]) {
-  const current = getSubscriptionOn(clientId, date);
-  if (!current || current.status !== "ativa" || !isInGoodStanding(current.id, date, payments)) return null;
-  const plan = getPlan(current.planId);
-  return plan?.covers.includes(serviceName) ? plan : null;
-}
-
-/** O atendimento é coberto pelo plano do cliente? Assinantes pagam à parte serviços fora do plano. */
-export function isCoveredByPlan(appointment: Appointment, payments: PlanPayment[]) {
-  return getCoveringPlan(appointment.clientId, appointment.serviceName, appointment.date, payments) !== null;
-}
-
-export function getServicePrice(appointment: Appointment, payments: PlanPayment[]) {
-  return isCoveredByPlan(appointment, payments) ? 0 : servicePrices[appointment.serviceName];
-}
-
-export function getPayout(appointment: Appointment, payments: PlanPayment[]) {
-  if (appointment.status !== "concluido") return 0;
-  return isCoveredByPlan(appointment, payments)
-    ? commissionRules.planPayout[appointment.serviceName]
-    : servicePrices[appointment.serviceName] * commissionRules.walkInRate;
-}
-
-export type ClientProfile = {
-  client: Client;
-  membership: MembershipStatus;
-  subscription: Subscription | null;
-  plan: SubscriptionPlan | null;
-  /** Assinatura mais recente já encerrada (para ex-assinantes). */
-  lastEnded: Subscription | null;
-  openPayments: PlanPayment[];
-  openAmount: number;
-  daysOverdue: number;
-  lastPayment: PlanPayment | null;
-};
-
-/** Perfil do cliente na data (equivale à view customer_profiles). */
-export function getClientProfile(client: Client, date: string, payments: PlanPayment[]): ClientProfile {
-  const own = subscriptions.filter((subscription) => subscription.clientId === client.id && subscription.startedAt <= date);
-  const subscription = getSubscriptionOn(client.id, date);
-  const ownIds = own.map((item) => item.id);
-  const openPayments = getOpenPayments(ownIds, date, payments);
-  const lastPayment =
-    payments
-      .filter((payment) => ownIds.includes(payment.subscriptionId) && payment.status === "pago" && payment.paidAt! <= date)
-      .sort((first, second) => second.paidAt!.localeCompare(first.paidAt!))[0] ?? null;
-  const lastEnded =
-    own
-      .filter((item) => item.endedAt !== null && item.endedAt < date)
-      .sort((first, second) => second.endedAt!.localeCompare(first.endedAt!))[0] ?? null;
-
-  return {
-    client,
-    membership: getMembership(client.id, date, payments),
-    subscription,
-    plan: getPlan(subscription?.planId ?? lastEnded?.planId ?? null),
-    lastEnded,
-    openPayments,
-    openAmount: openPayments.reduce((sum, payment) => sum + payment.amount, 0),
-    daysOverdue: openPayments.length ? daysBetween(openPayments[0].dueDate, date) : 0,
-    lastPayment,
-  };
+/** Repasse ao profissional: só existe depois de concluído (gravado pelo banco). */
+export function getPayout(appointment: Appointment) {
+  return appointment.status === "concluido" ? appointment.payout ?? 0 : 0;
 }
 
 // --- Datas (strings YYYY-MM-DD, calculadas em UTC para não depender do fuso) ---
@@ -286,17 +170,6 @@ function toIsoDate(date: Date) {
 export function addDays(isoDate: string, amount: number) {
   const date = toDate(isoDate);
   date.setUTCDate(date.getUTCDate() + amount);
-  return toIsoDate(date);
-}
-
-/** Soma meses mantendo o dia; quando o mês é mais curto, usa o último dia (31/01 + 1 = 28/02), como o Postgres. */
-export function addMonths(isoDate: string, amount: number) {
-  const date = toDate(isoDate);
-  const day = date.getUTCDate();
-  date.setUTCDate(1);
-  date.setUTCMonth(date.getUTCMonth() + amount);
-  const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
-  date.setUTCDate(Math.min(day, lastDay));
   return toIsoDate(date);
 }
 
@@ -349,128 +222,6 @@ export function formatCurrency(value: number) {
   return `R$ ${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${cents}`;
 }
 
-// --- Geração da agenda ilustrativa ---
-
-const closingHourByWeekday: Record<number, number | null> = {
-  0: null,
-  1: 20,
-  2: 20,
-  3: 20,
-  4: 20,
-  5: 21,
-  6: 18,
-};
-
-function createRandom(seed: number) {
-  let state = seed;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let value = Math.imul(state ^ (state >>> 15), 1 | state);
-    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function pickService(random: () => number): ServiceName {
-  const roll = random();
-  if (roll < 0.38) return "Corte masculino";
-  if (roll < 0.6) return "Barba";
-  if (roll < 0.88) return "Corte + barba";
-  return "Sobrancelha";
-}
-
-function toTime(minutes: number) {
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-}
-
-function getStatus(date: string, time: string, random: () => number): AppointmentStatus {
-  const isPast = date < referenceDate || (date === referenceDate && time < referenceTime);
-  const roll = random();
-
-  if (!isPast) return roll < 0.04 ? "cancelado" : "agendado";
-  if (roll < 0.05) return "faltou";
-  if (roll < 0.09) return "cancelado";
-  return "concluido";
-}
-
-/** Benefício semanal do plano ativo do cliente para o serviço na data (chave de uso e limite). */
-function getWeeklyBenefit(clientId: string, serviceName: ServiceName, date: string) {
-  const current = getSubscriptionOn(clientId, date);
-  if (current?.status !== "ativa") return null;
-  const benefit = getPlan(current.planId)?.benefits.find(
-    (item) => serviceNameById[item.serviceId] === serviceName,
-  );
-  if (!benefit) return null;
-  return { key: `${clientId}|${serviceName}|${getPeriodRange(date, "semana").start}`, limit: benefit.perWeek };
-}
-
-function generateAppointments() {
-  const random = createRandom(20261003);
-  const generated: Appointment[] = [];
-  // Usos de benefício por cliente, serviço e semana: a agenda nunca passa do limite do plano.
-  const weeklyUsage = new Map<string, number>();
-  const occupancyByBarber: Record<string, number> = {
-    "Júlia Andrade": 0.72,
-    "Rafael Martins": 0.62,
-    "João Almeida": 0.5,
-  };
-
-  for (let date = dataStart; date <= dataEnd; date = addDays(date, 1)) {
-    const closingHour = closingHourByWeekday[getWeekday(date)];
-    if (closingHour === null) continue;
-
-    for (const barberName of barberNames) {
-      let minutes = 9 * 60;
-
-      while (minutes < closingHour * 60 - 30) {
-        if (random() > occupancyByBarber[barberName]) {
-          minutes += 30;
-          continue;
-        }
-
-        const serviceName = pickService(random);
-        const time = toTime(minutes);
-        const firstPick = Math.floor(random() * clients.length);
-        let client = clients[firstPick];
-        let benefit = getWeeklyBenefit(client.id, serviceName, date);
-        // Quem já usou o benefício da semana dá lugar ao próximo cliente da lista.
-        for (
-          let offset = 1;
-          offset < clients.length && benefit && (weeklyUsage.get(benefit.key) ?? 0) >= benefit.limit;
-          offset++
-        ) {
-          client = clients[(firstPick + offset) % clients.length];
-          benefit = getWeeklyBenefit(client.id, serviceName, date);
-        }
-        if (benefit) weeklyUsage.set(benefit.key, (weeklyUsage.get(benefit.key) ?? 0) + 1);
-        const reassigned = random() < 0.06;
-        const performedBy = reassigned
-          ? barberNames[(barberNames.indexOf(barberName) + 1) % barberNames.length]
-          : barberName;
-
-        generated.push({
-          id: `ag-${generated.length + 1}`,
-          date,
-          time,
-          clientId: client.id,
-          serviceName,
-          bookedWith: barberName,
-          performedBy,
-          status: getStatus(date, time, random),
-        });
-
-        minutes += serviceSlots[serviceName] * 30;
-      }
-    }
-  }
-
-  return generated.sort((first, second) =>
-    first.date === second.date ? first.time.localeCompare(second.time) : first.date.localeCompare(second.date),
-  );
-}
-
-export const initialAppointments = generateAppointments();
-
 export type BarberSummary = {
   barberName: BarberName;
   completed: number;
@@ -484,7 +235,7 @@ export type BarberSummary = {
 };
 
 /** Resumo por profissional considerando quem executou o serviço (não com quem foi marcado). */
-export function summarizeByBarber(appointments: Appointment[], payments: PlanPayment[]): BarberSummary[] {
+export function summarizeByBarber(appointments: Appointment[]): BarberSummary[] {
   return barberNames.map((barberName) => {
     const own = appointments.filter((appointment) => appointment.performedBy === barberName);
     const completed = own.filter((appointment) => appointment.status === "concluido");
@@ -495,11 +246,11 @@ export function summarizeByBarber(appointments: Appointment[], payments: PlanPay
 
     for (const appointment of completed) {
       byService[appointment.serviceName] += 1;
-      if (isCoveredByPlan(appointment, payments)) {
+      if (isCoveredByPlan(appointment)) {
         planCount += 1;
-        planPayout += getPayout(appointment, payments);
+        planPayout += getPayout(appointment);
       } else {
-        walkInPayout += getPayout(appointment, payments);
+        walkInPayout += getPayout(appointment);
       }
     }
 

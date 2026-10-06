@@ -87,6 +87,10 @@ Depois de aplicar:
 - **Primeira mensalidade:** o cadastro gera a mensalidade do período como `pendente`; registre o pagamento feito no balcão em Clientes → Receber, ou o plano entra em atraso depois da tolerância.
 - Equivalência com o front: `app/lib/subscribers-api.ts` lista, função por função, a chamada que cada uma vira.
 
+## Login do assinante
+
+O assinante entra com telefone e senha, sem SMS. Por baixo, o Supabase Auth usa um e-mail interno gerado do telefone: `<dígitos>@assinantes.blackcrown.app` (`getSubscriberLoginEmail` em `app/data/subscribers.ts`). Esse e-mail nunca é mostrado nem recebe mensagens. Criar o login, trocar o telefone e redefinir a senha são Server Actions do painel (`app/painel/actions.ts`), que conferem que quem chama é admin e usam a `SUPABASE_SECRET_KEY`.
+
 ## RPCs do site
 
 Equivalentes às funções de `app/agendamento/lib/booking-api.ts`. O visitante (anon) acessa os agendamentos só por elas.

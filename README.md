@@ -28,8 +28,19 @@ You will need Node.js and npm installed. From the project directory, install the
 
 ```bash
 npm ci
+cp .env.example .env.local   # then fill in the Supabase values
 npm run dev
 ```
+
+The site reads and writes data in Supabase (schema and setup in [`supabase/README.md`](supabase/README.md)). `.env.local` needs:
+
+| Variable | Where it is used |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Browser and server |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser and server (public key; access is enforced by RLS) |
+| `SUPABASE_SECRET_KEY` | Server only. Creates subscriber logins and resets their passwords. Never prefix it with `NEXT_PUBLIC_` |
+
+The admin panel lives at `/painel` and requires a staff login (`/painel/entrar`).
 
 Open [http://localhost:3000](http://localhost:3000) to view the site. The development server refreshes the page as you edit the source files.
 
@@ -68,12 +79,12 @@ public/             Photos and other static assets
 
 - Replace all demonstration business details, prices, hours, staff descriptions, testimonials, and FAQ answers with confirmed information.
 - Use photos the business has permission to publish and provide accurate alt text.
-- Set real booking, WhatsApp, social media, and map destinations. The WhatsApp URL is a placeholder in-page anchor, and the booking page runs on simulated availability; no booking, messaging, or map service is integrated.
-- Connect the booking flow to a real schedule. Availability and reservations are simulated in `app/agendamento/lib/booking-api.ts`; replace those functions with API calls, and enable the post-booking actions (WhatsApp, calendar, reschedule, cancel) in `app/agendamento/lib/booking-integrations.ts`.
+- Set real WhatsApp, social media, and map destinations. The WhatsApp URL is a placeholder in-page anchor; no messaging or map service is integrated.
+- Enable the post-booking actions (WhatsApp, calendar, reschedule, cancel) in `app/agendamento/lib/booking-integrations.ts`. Availability and reservations already come from Supabase (`app/agendamento/lib/booking-api.ts`).
 - Review metadata and search indexing settings in `app/layout.tsx`. The current metadata sets `noindex` and `nofollow`, so search engines are asked not to index or follow links on the site.
 - If using the optional LocalBusiness structured data, add and verify the business details in `app/data/site.ts`; it is currently disabled (`null`).
 - Run `npm run lint` and `npm run build` before deployment.
 
 ## Deployment
 
-This is a standard Next.js application and can be deployed to a platform that supports Next.js, such as [Vercel](https://vercel.com/). Follow the deployment instructions for your chosen provider, and verify the production URL, metadata, contact links, and indexing settings after deployment.
+This is a standard Next.js application and can be deployed to a platform that supports Next.js, such as [Vercel](https://vercel.com/). On Vercel, add the three Supabase variables above in **Settings → Environment Variables** (mark `SUPABASE_SECRET_KEY` as Sensitive) and redeploy. Follow the deployment instructions for your chosen provider, and verify the production URL, metadata, contact links, and indexing settings after deployment.
