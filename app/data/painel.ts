@@ -57,12 +57,21 @@ export type Appointment = {
   payout: number | null;
 };
 
-/** Mensalidade em aberto (subscription_payments). "Atrasado" é calculado, não guardado. */
-export type OpenPayment = {
+/**
+ * Mensalidade de um ciclo da assinatura (subscription_payments): um período por mês,
+ * ancorado no dia em que o plano começou. Cada ciclo tem a sua linha; os anteriores
+ * continuam guardados. "Atrasado" é calculado, não guardado.
+ */
+export type CyclePayment = {
   id: string;
   clientId: string;
+  periodStart: string;
+  periodEnd: string;
   dueDate: string;
   amount: number;
+  status: "pendente" | "pago";
+  /** Forma registrada quando pago; pode ser trocada depois. */
+  method: PaymentMethod | null;
 };
 
 /** Mensalidade do mês, para o quadro de planos. */
@@ -97,7 +106,9 @@ export type ClientProfile = {
   /** Atendimentos concluídos guardados no banco. */
   visitCount: number;
   /** Mensalidade em aberto mais antiga, a próxima a receber. */
-  nextToReceive: OpenPayment | null;
+  nextToReceive: CyclePayment | null;
+  /** Mensalidade do ciclo que contém hoje (paga ou não). */
+  currentCycle: CyclePayment | null;
 };
 
 export const barberNames = barbers.map((barber) => barber.name) as BarberName[];

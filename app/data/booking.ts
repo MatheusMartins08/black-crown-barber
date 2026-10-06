@@ -86,7 +86,6 @@ export type CustomerDetails = {
   name: string;
   phone: string;
   email: string;
-  notes: string;
   /** Consentimento (LGPD) para receber confirmação e lembretes no WhatsApp. Desmarcado por padrão. */
   whatsappOptIn: boolean;
 };
@@ -133,7 +132,7 @@ export type Reservation = {
   plan: { id: PlanId; name: string; covered: boolean } | null;
 };
 
-export const emptyCustomer: CustomerDetails = { name: "", phone: "", email: "", notes: "", whatsappOptIn: false };
+export const emptyCustomer: CustomerDetails = { name: "", phone: "", email: "", whatsappOptIn: false };
 
 export const emptyDraft: BookingDraft = {
   customerType: null,
@@ -245,8 +244,6 @@ export function formatCurrency(value: number) {
 
 // --- Dados do cliente ---
 
-export const customerLimits = { notesMaxLength: 280 };
-
 export function formatPhone(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits.length ? `(${digits}` : "";
@@ -269,9 +266,6 @@ export function validateCustomer(customer: CustomerDetails): CustomerErrors {
   if (phoneDigits.length < 10) errors.phone = "Informe um telefone com DDD.";
   if (customer.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim())) {
     errors.email = "Confira o formato do e-mail.";
-  }
-  if (customer.notes.length > customerLimits.notesMaxLength) {
-    errors.notes = `Use até ${customerLimits.notesMaxLength} caracteres.`;
   }
 
   return errors;

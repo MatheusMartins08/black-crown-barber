@@ -3,7 +3,6 @@
 import { useState, type ReactNode } from "react";
 import { CircleAlert, LockKeyhole } from "lucide-react";
 import {
-  customerLimits,
   formatPhone,
   validateCustomer,
   type CustomerDetails,
@@ -80,7 +79,7 @@ export default function DetailsStep({ customer, showAllErrors, onChange, onSubmi
       className: "booking-input",
       value: customer[field],
       "aria-invalid": error ? true : undefined,
-      "aria-describedby": error || field === "notes" || field === "phone" ? `${getFieldId(field)}-message` : undefined,
+      "aria-describedby": error || field === "phone" ? `${getFieldId(field)}-message` : undefined,
       onBlur: () => setTouched((current) => ({ ...current, [field]: true })),
     };
   }
@@ -127,30 +126,6 @@ export default function DetailsStep({ customer, showAllErrors, onChange, onSubmi
           placeholder="voce@email.com"
           spellCheck={false}
           type="email"
-        />
-      </Field>
-
-      <Field
-        error={visibleError("notes")}
-        field="notes"
-        hint={
-          <>
-            <span>Referências de corte, preferências ou algo que o barbeiro deva saber.</span>
-            <span className="booking-field__counter">
-              {customer.notes.length}/{customerLimits.notesMaxLength}
-            </span>
-          </>
-        }
-        label="Observações para o barbeiro"
-        optional
-        wide
-      >
-        <textarea
-          {...inputProps("notes")}
-          maxLength={customerLimits.notesMaxLength}
-          onChange={(event) => onChange({ notes: event.target.value })}
-          placeholder="Ex.: quero manter o comprimento em cima."
-          rows={3}
         />
       </Field>
 

@@ -61,7 +61,6 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
         </span>
       ),
     },
-    ...(reservation.customer.notes ? [{ label: "Observações", value: reservation.customer.notes }] : []),
   ];
 
   return (

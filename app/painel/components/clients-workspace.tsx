@@ -38,6 +38,9 @@ export default function ClientsWorkspace({ initialTab }: { initialTab?: string }
   const [actionError, setActionError] = useState<string | null>(null);
   const [plansMonth, setPlansMonth] = useState(today.slice(0, 7));
   const [paymentsVersion, setPaymentsVersion] = useState(0);
+  // Forma marcada agora (aparece na hora) e mensalidades sendo gravadas.
+  const [chosenMethods, setChosenMethods] = useState<Record<string, PaymentMethod>>({});
+  const [savingPayments, setSavingPayments] = useState<string[]>([]);
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
   // Perfis compartilhados por Clientes e Planos. Ao recarregar, a lista anterior fica na
@@ -78,16 +81,28 @@ export default function ClientsWorkspace({ initialTab }: { initialTab?: string }
     selectTab(target.value, true);
   }
 
-  // Registro manual (Pix, cartão ou dinheiro). Depois de gravar, recarrega clientes e o
-  // mês dos planos: a situação do cliente e o recebido podem mudar.
+  // Registro manual (Pix, cartão ou dinheiro), ou troca da forma de um ciclo já pago. A
+  // escolha aparece na hora; se o banco recusar, volta. Depois de gravar, recarrega clientes
+  // e o mês dos planos: a situação do cliente e o recebido podem mudar.
   async function registerPayment(id: string, method: PaymentMethod) {
+    const previousChoice = chosenMethods[id];
     setActionError(null);
+    setChosenMethods((current) => ({ ...current, [id]: method }));
+    setSavingPayments((current) => [...current, id]);
     try {
       await savePayment(id, method);
       reloadProfiles();
       setPaymentsVersion((version) => version + 1);
     } catch (error) {
+      setChosenMethods((current) => {
+        const next = { ...current };
+        if (previousChoice) next[id] = previousChoice;
+        else delete next[id];
+        return next;
+      });
       setActionError(getErrorMessage(error));
+    } finally {
+      setSavingPayments((current) => current.filter((item) => item !== id));
     }
   }
 
@@ -170,7 +185,9 @@ export default function ClientsWorkspace({ initialTab }: { initialTab?: string }
               <ClientsOverview
                 date={today}
                 loading={!profiles}
+                chosenMethods={chosenMethods}
                 onRegisterPayment={registerPayment}
+                savingPayments={savingPayments}
                 profiles={profiles ?? []}
               />
             ))

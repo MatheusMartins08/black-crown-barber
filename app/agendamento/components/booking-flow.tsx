@@ -272,7 +272,7 @@ function BookingFlowContent({
       goTo("confirmacao");
       return;
     }
-    const firstInvalid = (["name", "phone", "email", "notes"] as const).find((field) => errors[field]);
+    const firstInvalid = (["name", "phone", "email"] as const).find((field) => errors[field]);
     if (firstInvalid) document.getElementById(getFieldId(firstInvalid))?.focus();
   }
 

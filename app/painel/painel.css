@@ -862,6 +862,50 @@
   min-width: 156px;
 }
 
+/* Pagamento do ciclo (tela Clientes): sempre visível, a forma marcada pode ser trocada. */
+.admin-cycle {
+  display: grid;
+  width: 166px;
+  gap: 6px;
+}
+
+.admin-cycle__label {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.admin-cycle__state--paid {
+  color: var(--admin-success);
+  font-weight: 600;
+}
+
+.admin-cycle__state--pending {
+  color: var(--admin-warning);
+  font-weight: 600;
+}
+
+.admin-cycle__methods {
+  display: flex;
+}
+
+/* .admin-segmented button vem depois no arquivo: a classe dupla vence o min-width dele. */
+.admin-segmented.admin-cycle__methods button {
+  min-width: 0;
+  min-height: 30px;
+  flex: 1 1 0;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.admin-cycle__methods button:disabled {
+  cursor: progress;
+}
+
+.admin-cycle__methods[aria-busy="true"] {
+  opacity: 0.7;
+}
+
 /* Select de profissional com a foto dentro, como o ícone do status. */
 .admin-person-select {
   position: relative;
@@ -1836,33 +1880,31 @@
     grid-area: payment;
   }
 
+  /* Pagamento do ciclo: legenda e Pix | Cartão | Dinheiro em largura total. */
   .admin-table.admin-table--clients tbody td.admin-clients__receive {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
     grid-area: receive;
-    margin-top: 8px;
+    margin-top: 10px;
   }
 
-  .admin-table.admin-table--clients tbody td.admin-clients__receive::before {
-    flex: 0 0 auto;
-    align-self: center;
-    padding-top: 0;
-    color: var(--muted);
-    content: attr(data-label);
-    font-size: 12px;
-    font-weight: 500;
-  }
-
-  .admin-table--clients .admin-clients__receive .admin-inline-select {
+  .admin-table.admin-table--clients tbody td.admin-clients__receive > * {
     display: block;
-    min-width: 0;
   }
 
-  .admin-table--clients .admin-clients__receive select {
-    max-width: 100%;
-    min-width: 0;
+  .admin-table.admin-table--clients tbody td.admin-clients__receive > * + *::before {
+    content: none;
+  }
+
+  .admin-table--clients .admin-cycle {
+    width: auto;
+  }
+
+  .admin-table--clients .admin-cycle__methods {
+    display: flex;
+    width: 100%;
+  }
+
+  .admin-table--clients .admin-segmented.admin-cycle__methods button {
+    min-height: 38px;
   }
 
   /* Assinantes: ações em ícones no canto, plano e status lado a lado. */
@@ -2561,6 +2603,11 @@
       "receive";
     grid-template-columns: minmax(0, 1fr);
     padding: 12px 16px 13px;
+  }
+
+  .admin-table--clients .admin-segmented.admin-cycle__methods button {
+    min-height: 40px;
+    font-size: 13px;
   }
 
   /* Assinantes no celular: ações em ícones no canto, plano e status lado a lado. */
