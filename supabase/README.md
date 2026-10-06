@@ -67,7 +67,7 @@ Depois de aplicar:
 ## Assinantes e login
 
 - **Planos:** Bronze (corte), Prata (corte) e Ouro (corte, barba e sobrancelha), cada benefício 1× por semana (`plan_services.weekly_limit`). Valores provisórios: R$ 99, R$ 129 e R$ 189. O catálogo do front é `app/data/plans.ts`; mantenha os dois iguais.
-- **Situação manual** (painel → Assinantes): cada linha de `customer_subscriptions` é um período com plano e situação fixos.
+- **Situação manual** (painel → Clientes → aba Assinantes): cada linha de `customer_subscriptions` é um período com plano e situação fixos.
 
   | painel | período | o plano cobre? | gera mensalidade? |
   | --- | --- | --- | --- |
@@ -84,7 +84,7 @@ Depois de aplicar:
   3. Redefinir senha: `auth.admin.updateUserById(user_id, { password })`.
   4. Identificador: com o provider **Phone** ligado, use `phone` (+55…) em `createUser` e `signInWithPassword({ phone, password })`. Sem provedor de SMS configurado, use um e-mail sintético derivado do telefone (ex.: `5531999999999@assinante.invalid`, com `email_confirm: true`) e faça o login com ele: para o cliente, o login continua sendo o telefone.
 - O painel lista os assinantes pela view `subscriber_accounts` (só equipe). As funções `save_subscriber` e `set_subscription` aceitam o admin logado ou a service role.
-- **Primeira mensalidade:** o cadastro gera a mensalidade do período como `pendente`; registre o pagamento feito no balcão em Clientes → Receber, ou o plano entra em atraso depois da tolerância.
+- **Primeira mensalidade:** o cadastro gera a mensalidade do período como `pendente`; registre o pagamento feito no balcão em Clientes → aba Clientes → Receber, ou o plano entra em atraso depois da tolerância.
 - Equivalência com o front: `app/lib/subscribers-api.ts` lista, função por função, a chamada que cada uma vira.
 
 ## Login do assinante

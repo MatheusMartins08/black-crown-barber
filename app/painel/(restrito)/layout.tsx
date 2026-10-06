@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
-import { getSupabaseServerClient } from "../lib/supabase/server";
-import AdminDashboard from "./components/admin-dashboard";
-import AdminHeader from "./components/admin-header";
-import SignOutButton from "./components/sign-out-button";
-import "./painel.css";
+import { getSupabaseServerClient } from "../../lib/supabase/server";
+import AdminHeader from "../components/admin-header";
+import SignOutButton from "../components/sign-out-button";
+import "../painel.css";
 
 export const metadata: Metadata = {
   title: "Painel | Black Crown Barber",
-  description: "Painel administrativo: agenda, produção da equipe e fechamento.",
+  description: "Painel administrativo: agenda, clientes e fechamento da equipe.",
   robots: {
     index: false,
     follow: false,
@@ -18,7 +18,9 @@ export const metadata: Metadata = {
 
 const roleLabels = { admin: "Administrador", barbeiro: "Barbeiro" } as const;
 
-export default async function PainelPage() {
+// Área logada do painel: Visão geral, Clientes e Fechamento compartilham o cabeçalho,
+// que continua montado ao trocar de tela.
+export default async function PainelLayout({ children }: { children: ReactNode }) {
   const supabase = await getSupabaseServerClient();
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
@@ -56,7 +58,7 @@ export default async function PainelPage() {
   return (
     <div className="admin">
       <AdminHeader userLabel={`${name} · ${roleLabels[role] ?? role}`} />
-      <AdminDashboard />
+      {children}
     </div>
   );
 }

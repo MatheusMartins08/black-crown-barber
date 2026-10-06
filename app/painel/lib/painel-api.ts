@@ -1,5 +1,6 @@
-import { formatPhone } from "../../data/booking";
+import { formatPhone, getTodayIso } from "../../data/booking";
 import {
+  addDays,
   type Appointment,
   type AppointmentStatus,
   type BarberName,
@@ -86,11 +87,17 @@ function toAppointment(row: AppointmentRow): Appointment {
   };
 }
 
-/** Atendimentos entre duas datas (inclusive), no fuso da barbearia. */
+/**
+ * Atendimentos entre duas datas (inclusive), no fuso da barbearia. O filtro exato é por
+ * local_date; o de starts_at, com um dia de folga para cada lado (cobre qualquer fuso),
+ * só deixa o banco usar o índice de starts_at antes de calcular as colunas da view.
+ */
 export async function fetchAppointments(range: { start: string; end: string }): Promise<Appointment[]> {
   const { data, error } = await getSupabaseBrowserClient()
     .from("appointment_details")
     .select(appointmentColumns)
+    .gte("starts_at", `${addDays(range.start, -1)}T00:00:00Z`)
+    .lt("starts_at", `${addDays(range.end, 2)}T00:00:00Z`)
     .gte("local_date", range.start)
     .lte("local_date", range.end)
     .order("starts_at");
@@ -162,6 +169,8 @@ type ProfileRow = {
   last_paid_at: string | null;
   last_payment_method: PaymentMethod | null;
   last_payment_amount: number | null;
+  last_visit_at: string | null;
+  visit_count: number;
 };
 
 type OpenPaymentRow = {
@@ -178,7 +187,7 @@ export async function fetchClientProfiles(): Promise<ClientProfile[]> {
     supabase
       .from("customer_profiles")
       .select(
-        "id, name, phone, whatsapp_opt_in, membership_status, plan_slug, plan_name, monthly_price, subscribed_since, last_subscription_ended_at, open_amount, oldest_due_date, days_overdue, last_paid_at, last_payment_method, last_payment_amount",
+        "id, name, phone, whatsapp_opt_in, membership_status, plan_slug, plan_name, monthly_price, subscribed_since, last_subscription_ended_at, open_amount, oldest_due_date, days_overdue, last_paid_at, last_payment_method, last_payment_amount, last_visit_at, visit_count",
       )
       .order("name"),
     supabase
@@ -217,6 +226,9 @@ export async function fetchClientProfiles(): Promise<ClientProfile[]> {
       lastPaidAt: row.last_paid_at ? row.last_paid_at.slice(0, 10) : null,
       lastPaymentMethod: row.last_payment_method,
       lastPaymentAmount: row.last_payment_amount === null ? null : Number(row.last_payment_amount),
+      // Data local do navegador, como o "hoje" do painel.
+      lastVisitAt: row.last_visit_at ? getTodayIso(new Date(row.last_visit_at)) : null,
+      visitCount: Number(row.visit_count ?? 0),
       nextToReceive: next,
     };
   });
