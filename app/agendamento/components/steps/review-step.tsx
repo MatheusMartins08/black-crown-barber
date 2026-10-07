@@ -9,9 +9,10 @@ import {
   type BookingDraft,
 } from "../../../data/booking";
 import { getPlan } from "../../../data/plans";
+import { formatDuration } from "../../../data/services";
 import type { PlanCoverage, SubscriberSession } from "../../../data/subscribers";
 import { formatWeek, getCoverageNote, getPriceLabel } from "../../lib/plan-pricing";
-import { useBookingProfessionals } from "../booking-catalog";
+import { useBookingProfessionals, useBookingServices } from "../booking-catalog";
 import ProfessionalAvatar from "../professional-avatar";
 import type { StepId } from "../use-booking-draft";
 
@@ -27,7 +28,7 @@ type ReviewStepProps = {
 };
 
 export default function ReviewStep({ draft, onEdit, error, session, coverage, checkingCoverage }: ReviewStepProps) {
-  const service = getService(draft.serviceId);
+  const service = getService(useBookingServices(), draft.serviceId);
   const assignee = getProfessional(useBookingProfessionals(), draft.assignedProfessionalId);
   if (!service || !draft.date || !draft.time) return null;
 
@@ -58,7 +59,7 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
     },
     { label: "Data", value: formatLongDate(draft.date), step: "horario" },
     { label: "Horário", value: draft.time, step: "horario" },
-    { label: "Duração", value: service.duration, step: "servico" },
+    { label: "Duração", value: formatDuration(service.durationMinutes), step: "servico" },
     session
       ? {
           label: "Assinante",

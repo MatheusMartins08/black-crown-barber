@@ -11,8 +11,9 @@ import {
   toTime,
   type Reservation,
 } from "../../data/booking";
+import { formatDuration } from "../../data/services";
 import { reservationActions, type ReservationActionId } from "../lib/booking-integrations";
-import { useBookingProfessionals } from "./booking-catalog";
+import { useBookingProfessionals, useBookingServices } from "./booking-catalog";
 import ProfessionalAvatar from "./professional-avatar";
 
 const actionIcons: Record<ReservationActionId, typeof MessageCircle> = {
@@ -29,7 +30,7 @@ type BookingSuccessProps = {
 };
 
 export default function BookingSuccess({ reservation, onBookAnother, headingRef }: BookingSuccessProps) {
-  const service = getService(reservation.serviceId);
+  const service = getService(useBookingServices(), reservation.serviceId);
   const professional = getProfessional(useBookingProfessionals(), reservation.professionalId);
   const endTime = toTime(toMinutes(reservation.time) + reservation.durationMinutes);
 
@@ -49,7 +50,7 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
     },
     { label: "Data", value: formatLongDate(reservation.date) },
     { label: "Horário", value: `${reservation.time} às ${endTime}` },
-    { label: "Duração", value: service?.duration },
+    { label: "Duração", value: service ? formatDuration(service.durationMinutes) : null },
     { label: "Local", value: `${siteConfig.address}, ${siteConfig.city}` },
     {
       label: reservation.plan ? "Assinante" : "Cliente",

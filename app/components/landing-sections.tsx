@@ -12,14 +12,15 @@ import {
 } from "lucide-react";
 import Reveal from "./reveal";
 import ImageComparison from "./image-comparison";
-import { serviceIcons } from "./service-icons";
+import { DefaultServiceIcon, serviceIcons } from "./service-icons";
+import { formatCurrency } from "../data/booking";
+import { formatDuration, type Service } from "../data/services";
 import { getFirstName, type Professional } from "../data/professionals";
 import { galleryLayouts, type SiteImage } from "../data/site-images";
 import {
   galleryComparison,
   galleryFeature,
   openingHours,
-  services,
   siteConfig,
   testimonials,
 } from "../data/site";
@@ -69,7 +70,8 @@ export function QuickInfo() {
   );
 }
 
-export function ServicesSection() {
+/** `services`: os serviços ativos do Supabase, na ordem de exibição. */
+export function ServicesSection({ services }: { services: Service[] }) {
   return (
     <section aria-labelledby="services-title" className="section services" id="servicos">
       <div className="section__inner">
@@ -81,28 +83,28 @@ export function ServicesSection() {
         />
         <div className="services__grid">
           {services.map((service, index) => {
-            const Icon = serviceIcons[service.icon];
+            const Icon = serviceIcons[service.icon] ?? DefaultServiceIcon;
 
             return (
               <Reveal
                 as="article"
-                className={`service-card${"popular" in service && service.popular ? " service-card--popular" : ""}`}
+                className={`service-card${service.isPopular ? " service-card--popular" : ""}`}
                 delay={1 + (index % 3)}
-                key={service.name}
+                key={service.id}
               >
                 <div className="service-card__topline">
                   <span className="service-card__icon">
                     <Icon aria-hidden="true" size={20} strokeWidth={1.6} />
                   </span>
-                  {"popular" in service && service.popular ? (
+                  {service.isPopular ? (
                     <span className="service-card__badge">Mais pedido</span>
                   ) : null}
                 </div>
                 <h3>{service.name}</h3>
                 <p className="service-card__description">{service.description}</p>
                 <div className="service-card__meta">
-                  <span>{service.duration}</span>
-                  <strong>{service.price}</strong>
+                  <span>{formatDuration(service.durationMinutes)}</span>
+                  <strong>{formatCurrency(service.price)}</strong>
                 </div>
               </Reveal>
             );

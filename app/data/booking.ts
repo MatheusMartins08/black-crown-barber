@@ -1,32 +1,31 @@
 import type { PlanId } from "./plans";
 import type { Professional } from "./professionals";
-import { openingHours, services } from "./site";
+import type { Service } from "./services";
+import { openingHours } from "./site";
 
 // Regras e dados do fluxo de agendamento. Tudo aqui é puro (sem React e sem rede)
 // para poder ser reaproveitado no servidor quando existir uma API de agenda.
 
-export type ServiceId = (typeof services)[number]["id"];
+/** Slug do serviço (services.slug), o mesmo que as RPCs do agendamento recebem. */
+export type ServiceId = string;
 /** Slug do profissional (professionals.slug), o mesmo que as RPCs do agendamento recebem. */
 export type ProfessionalId = string;
 
 export const ANY_PROFESSIONAL = "qualquer";
 export type ProfessionalChoice = ProfessionalId | typeof ANY_PROFESSIONAL;
 
-// Durações e valores numéricos usados no cálculo da agenda. Mantenha em sincronia
-// com os textos de `services` em site.ts.
-const servicePricing = {
-  corte: { durationMinutes: 30, price: 55 },
-  barba: { durationMinutes: 30, price: 45 },
-  "corte-barba": { durationMinutes: 50, price: 90 },
-  sobrancelha: { durationMinutes: 15, price: 25 },
-} satisfies Record<ServiceId, { durationMinutes: number; price: number }>;
+/** Serviço como o agendamento usa: o mesmo do catálogo (Supabase), só os ativos. */
+export type BookingService = Service;
 
-export const bookingServices = services.map((service) => ({
-  ...service,
-  ...servicePricing[service.id],
-}));
+// Serviços: vêm do Supabase (só os ativos) e chegam ao fluxo por props/contexto.
 
-export type BookingService = (typeof bookingServices)[number];
+export function getService(services: readonly Service[], slug: ServiceId | null) {
+  return services.find((service) => service.slug === slug) ?? null;
+}
+
+export function isServiceId(services: readonly Service[], value: unknown): value is ServiceId {
+  return services.some((service) => service.slug === value);
+}
 
 // Profissionais: vêm do Supabase (só os ativos) e chegam ao fluxo por props/contexto.
 // As funções abaixo recebem a lista em vez de ler um catálogo fixo.
@@ -66,14 +65,6 @@ export const dayPeriods = [
   { id: "tarde", label: "Tarde", from: 12 * 60, to: 18 * 60 },
   { id: "noite", label: "Noite", from: 18 * 60, to: 24 * 60 },
 ] as const;
-
-export function getService(id: ServiceId | null) {
-  return bookingServices.find((service) => service.id === id) ?? null;
-}
-
-export function isServiceId(value: unknown): value is ServiceId {
-  return bookingServices.some((service) => service.id === value);
-}
 
 // --- Tipos do rascunho e da reserva ---
 

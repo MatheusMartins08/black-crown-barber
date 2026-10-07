@@ -1,12 +1,8 @@
 import { Download } from "lucide-react";
-import {
-  commissionRules,
-  formatCurrency,
-  serviceNames,
-  type BarberSummary,
-  type Period,
-} from "../../data/painel";
+import { formatCurrency, type BarberSummary, type Period } from "../../data/painel";
+import type { Service } from "../../data/services";
 import BarberAvatar from "./barber-avatar";
+import { useWalkInRate } from "./painel-catalog";
 
 const periodOptions: { value: Period; label: string }[] = [
   { value: "dia", label: "Dia" },
@@ -18,14 +14,25 @@ type PayrollSummaryProps = {
   period: Period;
   periodLabel: string;
   summaries: BarberSummary[];
+  /** Colunas do período: serviços ativos e os que aparecem nos atendimentos (ver listServicesFor). */
+  services: Service[];
   onPeriodChange: (period: Period) => void;
 };
 
-function downloadCsv(summaries: BarberSummary[], periodLabel: string) {
-  const header = ["Profissional", ...serviceNames, "Atendidos", "Assinantes", "Repasse planos", "Avulsos", "Comissão avulsos", "Total"];
+function downloadCsv(summaries: BarberSummary[], services: Service[], periodLabel: string) {
+  const header = [
+    "Profissional",
+    ...services.map((service) => service.name),
+    "Atendidos",
+    "Assinantes",
+    "Repasse planos",
+    "Avulsos",
+    "Comissão avulsos",
+    "Total",
+  ];
   const rows = summaries.map((summary) => [
     summary.barberName,
-    ...serviceNames.map((name) => summary.byService[name]),
+    ...services.map((service) => summary.byService[service.id] ?? 0),
     summary.completed,
     summary.planCount,
     summary.planPayout.toFixed(2),
@@ -42,7 +49,10 @@ function downloadCsv(summaries: BarberSummary[], periodLabel: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function PayrollSummary({ period, periodLabel, summaries, onPeriodChange }: PayrollSummaryProps) {
+export default function PayrollSummary({ period, periodLabel, summaries, services, onPeriodChange }: PayrollSummaryProps) {
+  const walkInRate = useWalkInRate();
+  // Regras de repasse do rodapé: só serviços em uso (ativos), com o repasse do plano gravado no banco.
+  const payoutRules = services.filter((service) => service.isActive && !service.deletedAt);
   const totals = summaries.reduce(
     (sum, summary) => ({
       completed: sum.completed + summary.completed,
@@ -51,7 +61,7 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
       walkInCount: sum.walkInCount + summary.walkInCount,
       walkInPayout: sum.walkInPayout + summary.walkInPayout,
       total: sum.total + summary.total,
-      byService: serviceNames.map((name, index) => (sum.byService[index] ?? 0) + summary.byService[name]),
+      byService: services.map((service, index) => (sum.byService[index] ?? 0) + (summary.byService[service.id] ?? 0)),
     }),
     { completed: 0, planCount: 0, planPayout: 0, walkInCount: 0, walkInPayout: 0, total: 0, byService: [] as number[] },
   );
@@ -80,7 +90,7 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
           </div>
           <button
             className="button button--compact admin-export"
-            onClick={() => downloadCsv(summaries, periodLabel)}
+            onClick={() => downloadCsv(summaries, services, periodLabel)}
             type="button"
           >
             <Download aria-hidden="true" size={15} />
@@ -94,9 +104,9 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
           <thead>
             <tr>
               <th scope="col">Profissional</th>
-              {serviceNames.map((name) => (
-                <th className="is-numeric" key={name} scope="col">
-                  {name}
+              {services.map((service) => (
+                <th className="is-numeric" key={service.id} scope="col">
+                  {service.name}
                 </th>
               ))}
               <th className="is-numeric" scope="col">Atendidos</th>
@@ -114,9 +124,9 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
                     {summary.barberName}
                   </span>
                 </th>
-                {serviceNames.map((name) => (
-                  <td className="is-numeric admin-payroll__service" data-label={name} key={name}>
-                    {summary.byService[name]}
+                {services.map((service) => (
+                  <td className="is-numeric admin-payroll__service" data-label={service.name} key={service.id}>
+                    {summary.byService[service.id] ?? 0}
                   </td>
                 ))}
                 <td className="is-numeric is-strong admin-payroll__completed" data-label="Atendidos">
@@ -140,7 +150,11 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
             <tr>
               <th scope="row">Equipe</th>
               {totals.byService.map((count, index) => (
-                <td className="is-numeric admin-payroll__service" data-label={serviceNames[index]} key={serviceNames[index]}>
+                <td
+                  className="is-numeric admin-payroll__service"
+                  data-label={services[index]?.name}
+                  key={services[index]?.id ?? index}
+                >
                   {count}
                 </td>
               ))}
@@ -163,13 +177,12 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
         </table>
       </div>
 
-      {/* Valores de payroll_settings e service_payouts no Supabase (espelhados em commissionRules). */}
+      {/* Valores atuais de payroll_settings e service_payouts no Supabase. Atendimentos concluídos
+          guardam o repasse do momento: mudar estas regras não altera o fechamento já feito. */}
       <p className="admin-footnote">
-        Regras de repasse: avulsos rendem {commissionRules.walkInRate * 100}% do valor do serviço ao
-        profissional; atendimentos cobertos por plano têm repasse fixo (
-        {serviceNames
-          .map((name) => `${name} ${formatCurrency(commissionRules.planPayout[name])}`)
-          .join(" · ")}
+        Regras de repasse: avulsos rendem {Math.round(walkInRate * 100)}% do valor do serviço ao profissional;
+        atendimentos cobertos por plano têm repasse fixo (
+        {payoutRules.map((service) => `${service.name} ${formatCurrency(service.planPayout ?? 0)}`).join(" · ")}
         ).
       </p>
     </section>

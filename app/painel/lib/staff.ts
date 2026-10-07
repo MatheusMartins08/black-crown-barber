@@ -6,6 +6,7 @@ import {
   toProfessional,
   type ProfessionalRow,
 } from "../../data/professionals";
+import { sortServices, staffServiceColumns, toService, type ServiceRow } from "../../data/services";
 import { siteImageColumns, toSiteImage, type SiteImageRow } from "../../data/site-images";
 import { getSupabaseServerClient } from "../../lib/supabase/server";
 
@@ -90,4 +91,51 @@ export async function getEditableSiteImages() {
   const { data, error } = await supabase.from("site_images").select(siteImageColumns).order("sort_order");
   if (error) throw new Error(`Não foi possível carregar as imagens do site: ${error.message}`);
   return (data as SiteImageRow[]).map(toSiteImage);
+}
+
+/** Todos os serviços (inclusive inativos e excluídos, para o histórico) com o repasse do plano. */
+export const getStaffServices = cache(async () => {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("services").select(staffServiceColumns).order("sort_order");
+  if (error) throw new Error(`Não foi possível carregar os serviços: ${error.message}`);
+  return sortServices((data as unknown as ServiceRow[]).map(toService));
+});
+
+/** Comissão de avulso (payroll_settings), visível só para a equipe. */
+export const getWalkInRate = cache(async () => {
+  const supabase = await getSupabaseServerClient();
+  const { data } = await supabase.from("payroll_settings").select("walk_in_commission_rate").eq("id", 1).maybeSingle();
+  return data ? Number(data.walk_in_commission_rate) : 0;
+});
+
+export type ServiceUsage = {
+  /** Tem atendimentos: a exclusão mantém o cadastro só para o histórico. */
+  hasHistory: boolean;
+  /** Horários "agendado" daqui para frente (continuam na agenda se for inativado ou excluído). */
+  upcoming: number;
+  /** Nomes dos planos que incluem o serviço (não pode ser excluído enquanto estiver em algum). */
+  plans: string[];
+};
+
+/** Uso de cada serviço (id → uso), para a tela Edição do site > Serviços. */
+export async function getServiceUsage(): Promise<Record<string, ServiceUsage>> {
+  const supabase = await getSupabaseServerClient();
+  const [appointments, plans] = await Promise.all([
+    supabase.from("appointments").select("service_id, status, starts_at"),
+    supabase.from("plan_services").select("service_id, subscription_plans(name)"),
+  ]);
+  if (appointments.error || plans.error) throw new Error("Não foi possível carregar o uso dos serviços.");
+
+  const usage: Record<string, ServiceUsage> = {};
+  const entry = (id: string) => (usage[id] ??= { hasHistory: false, upcoming: 0, plans: [] });
+  const now = Date.now();
+
+  for (const row of appointments.data) {
+    entry(row.service_id).hasHistory = true;
+    if (row.status === "agendado" && new Date(row.starts_at).getTime() >= now) entry(row.service_id).upcoming += 1;
+  }
+  for (const row of plans.data as unknown as { service_id: string; subscription_plans: { name: string } | null }[]) {
+    if (row.subscription_plans) entry(row.service_id).plans.push(row.subscription_plans.name);
+  }
+  return usage;
 }

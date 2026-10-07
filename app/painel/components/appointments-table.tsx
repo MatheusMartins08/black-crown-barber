@@ -7,22 +7,22 @@ import {
   getPlanByName,
   isCoveredByPlan,
   listProfessionalsFor,
-  serviceNames,
+  listServicesFor,
   type Appointment,
   type AppointmentStatus,
-  type ServiceName,
 } from "../../data/painel";
 import { getFirstName, type Professional } from "../../data/professionals";
 import BarberAvatar from "./barber-avatar";
 import FilterToggle from "./filter-toggle";
 import MembershipTag, { isSubscriber } from "./membership-tag";
-import { usePainelProfessionals } from "./painel-catalog";
+import { usePainelProfessionals, usePainelServices } from "./painel-catalog";
 
 export type AgendaFilters = {
   /** Id do profissional (uuid) ou "todos". */
   barber: string | "todos";
   clientType: "todos" | "assinante" | "pendente" | "avulso";
-  service: ServiceName | "todos";
+  /** Id do serviço (uuid) ou "todos". */
+  service: string | "todos";
 };
 
 export const statusOptions: { value: AppointmentStatus; label: string; icon: typeof Clock3 }[] = [
@@ -42,7 +42,7 @@ type AppointmentsTableProps = {
 
 export function matchesFilters(appointment: Appointment, filters: AgendaFilters) {
   if (filters.barber !== "todos" && appointment.performedById !== filters.barber) return false;
-  if (filters.service !== "todos" && appointment.serviceName !== filters.service) return false;
+  if (filters.service !== "todos" && appointment.serviceId !== filters.service) return false;
   if (filters.clientType === "todos") return true;
 
   const membership = appointment.membership;
@@ -64,6 +64,7 @@ export default function AppointmentsTable({
   // Ativos e quem aparece no dia (um inativo com atendimento continua filtrável).
   const listed = listProfessionalsFor(professionals, appointments);
   const active = professionals.filter((professional) => professional.isActive);
+  const services = listServicesFor(usePainelServices(), appointments);
   const visible = appointments.filter((appointment) => matchesFilters(appointment, filters));
   const activeFilters = [filters.barber, filters.clientType, filters.service].filter((value) => value !== "todos").length;
 
@@ -136,9 +137,9 @@ export default function AppointmentsTable({
             value={filters.service}
           >
             <option value="todos">Todos</option>
-            {serviceNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {services.map((service) => (
+              <option key={service.id} value={service.id}>
+                {service.name}
               </option>
             ))}
           </select>
@@ -204,7 +205,9 @@ function getPriceNote(appointment: Appointment) {
   if (!appointment.planName) return price;
   if (appointment.membership === "congelado") return `Plano congelado · cobrar ${price}`;
   if (appointment.membership === "atrasado") return `Plano bloqueado por atraso · cobrar ${price}`;
-  if (plan?.covers.includes(appointment.serviceName)) return `Limite semanal do plano · cobrar ${price}`;
+  if (plan?.benefits.some((benefit) => benefit.serviceId === appointment.serviceSlug)) {
+    return `Limite semanal do plano · cobrar ${price}`;
+  }
   return `Fora do plano · ${price}`;
 }
 

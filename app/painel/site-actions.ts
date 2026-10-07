@@ -9,8 +9,10 @@ import {
   validateProfessional,
   type ProfessionalInput,
 } from "../data/professionals";
+import { createServiceSlug, validateService, type ServiceInput } from "../data/services";
 import { getSlotFolder, isSiteImageSlot, validateSiteImage, type SiteImageSlot } from "../data/site-images";
 import { getSiteMediaPath, siteMediaBucket } from "../data/site-media";
+import { serviceIconKeys } from "../components/service-icons";
 import { catalogTags } from "../lib/catalog";
 import { supabaseUrl } from "../lib/supabase/env";
 import { getSupabaseServerClient } from "../lib/supabase/server";
@@ -199,16 +201,20 @@ export async function setProfessionalActiveAction(id: string, active: boolean): 
   };
 }
 
-/** Troca a posição com o vizinho (na ordem de exibição). */
-export async function moveProfessionalAction(id: string, direction: -1 | 1): Promise<SiteActionResult> {
-  if (!isUuid(id) || (direction !== -1 && direction !== 1)) return failure("Profissional não encontrado.");
-  const auth = await requireAdmin();
-  if ("error" in auth) return auth.error;
-  const { supabase } = auth;
-
-  // Excluídos não entram na ordem de exibição.
+/**
+ * Troca a posição com o vizinho na ordem de exibição (professionals ou services). Renumera a
+ * lista inteira (1, 2, 3…) com os dois trocados: funciona mesmo com ordens repetidas.
+ * Excluídos não entram na ordem.
+ */
+async function reorder(
+  supabase: Supabase,
+  table: "professionals" | "services",
+  id: string,
+  direction: -1 | 1,
+  tag: string,
+): Promise<SiteActionResult> {
   const { data: list, error } = await supabase
-    .from("professionals")
+    .from(table)
     .select("id, name, sort_order")
     .is("deleted_at", null)
     .order("sort_order")
@@ -219,7 +225,6 @@ export async function moveProfessionalAction(id: string, direction: -1 | 1): Pro
   const neighbor = list[index + direction];
   if (index === -1 || !neighbor) return { ok: true, message: "" };
 
-  // Renumera a lista inteira (1, 2, 3…) com os dois trocados: funciona mesmo com ordens repetidas.
   const reordered = [...list];
   [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]];
   const changes = reordered
@@ -227,18 +232,22 @@ export async function moveProfessionalAction(id: string, direction: -1 | 1): Pro
     .filter((row) => row.sort_order !== row.previous);
 
   for (const change of changes) {
-    const { error: updateError } = await supabase
-      .from("professionals")
-      .update({ sort_order: change.sort_order })
-      .eq("id", change.id);
+    const { error: updateError } = await supabase.from(table).update({ sort_order: change.sort_order }).eq("id", change.id);
     if (updateError) {
-      refreshSite();
+      refreshSite(tag);
       return failure("A ordem foi salva só em parte. Confira a lista e tente de novo.");
     }
   }
 
-  refreshSite();
+  refreshSite(tag);
   return { ok: true, message: `${list[index].name} ${direction === -1 ? "subiu" : "desceu"} na ordem de exibição.` };
+}
+
+export async function moveProfessionalAction(id: string, direction: -1 | 1): Promise<SiteActionResult> {
+  if (!isUuid(id) || (direction !== -1 && direction !== 1)) return failure("Profissional não encontrado.");
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  return reorder(auth.supabase, "professionals", id, direction, catalogTags.professionals);
 }
 
 /**
@@ -385,4 +394,184 @@ export async function saveSiteImageAction(input: SaveSiteImageInput): Promise<Si
     return { ok: true, message: "Imagem substituída. O site já mostra a nova versão." };
   }
   return { ok: true, message: "Alterações da imagem salvas." };
+}
+
+// --- Edição do site > Serviços ---
+//
+// Preço e duração de cada atendimento são copiados na reserva (appointments.price, ends_at,
+// service_name): mudar o catálogo vale só para novos agendamentos. O repasse do plano
+// (service_payouts) é gravado em cada atendimento ao concluir.
+
+function refreshServices() {
+  // Serviços aparecem na landing e no agendamento; a lista de quem atende cada um fica no
+  // catálogo de profissionais.
+  updateTag(catalogTags.services);
+  updateTag(catalogTags.professionals);
+}
+
+export type SaveServiceInput = ServiceInput & { /** null = novo serviço. */ id: string | null };
+
+export async function saveServiceAction(input: SaveServiceInput): Promise<SiteActionResult> {
+  if (
+    typeof input?.name !== "string" ||
+    typeof input.description !== "string" ||
+    typeof input.durationMinutes !== "number" ||
+    typeof input.price !== "number" ||
+    typeof input.planPayout !== "number" ||
+    typeof input.icon !== "string" ||
+    typeof input.isPopular !== "boolean" ||
+    (input.id !== null && !isUuid(input.id)) ||
+    Object.keys(validateService(input, serviceIconKeys)).length
+  ) {
+    return failure("Revise os dados do serviço.");
+  }
+
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
+  const name = input.name.trim();
+  const fields = {
+    name,
+    description: input.description.trim() || null,
+    duration_minutes: input.durationMinutes,
+    price: input.price,
+    icon: input.icon,
+    is_popular: input.isPopular,
+  };
+
+  if (input.id === null) {
+    const { data: existing, error: listError } = await supabase.from("services").select("slug, sort_order");
+    if (listError) return failure("Não foi possível conferir os serviços. Tente novamente.");
+
+    const { data: created, error } = await supabase
+      .from("services")
+      .insert({
+        ...fields,
+        slug: createServiceSlug(name, existing.map((row) => row.slug)),
+        sort_order: Math.max(0, ...existing.map((row) => row.sort_order)) + 1,
+      })
+      .select("id")
+      .single();
+    if (error || !created) return failure("Não foi possível criar o serviço. Tente novamente.");
+
+    // Repasse do plano e, como os atuais, atendido por todos os profissionais em uso.
+    const { data: team, error: teamError } = await supabase
+      .from("professionals")
+      .select("id")
+      .eq("is_active", true)
+      .is("deleted_at", null);
+    const payout = await supabase
+      .from("service_payouts")
+      .insert({ service_id: created.id, plan_payout_amount: input.planPayout });
+    const links =
+      teamError || !team.length
+        ? { error: teamError }
+        : await supabase
+            .from("professional_services")
+            .insert(team.map((professional) => ({ professional_id: professional.id, service_id: created.id })));
+    if (payout.error || links.error) {
+      // Ainda sem histórico: desfaz o cadastro inteiro (repasse e vínculos caem em cascata).
+      await supabase.from("services").delete().eq("id", created.id);
+      return failure("Não foi possível concluir o cadastro do serviço. Nada foi salvo; tente novamente.");
+    }
+
+    refreshServices();
+    return { ok: true, message: `${name} foi adicionado aos serviços.` };
+  }
+
+  const { data: updated, error } = await supabase
+    .from("services")
+    .update(fields)
+    .eq("id", input.id)
+    .is("deleted_at", null)
+    .select("id");
+  if (error || !updated?.length) return failure("Não foi possível salvar o serviço. Tente novamente.");
+
+  const { error: payoutError } = await supabase
+    .from("service_payouts")
+    .upsert({ service_id: input.id, plan_payout_amount: input.planPayout }, { onConflict: "service_id" });
+
+  refreshServices();
+  if (payoutError) return { ok: true, message: `${name} salvo, mas o repasse do plano não foi atualizado. Tente de novo.` };
+  return { ok: true, message: `${name} salvo. Os novos agendamentos já usam os dados atualizados.` };
+}
+
+export async function setServiceActiveAction(id: string, active: boolean): Promise<SiteActionResult> {
+  if (!isUuid(id) || typeof active !== "boolean") return failure("Serviço não encontrado. Recarregue a página.");
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+
+  const { data, error } = await auth.supabase
+    .from("services")
+    .update({ is_active: active })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("name");
+  if (error || !data?.length) return failure("Não foi possível mudar o status. Tente novamente.");
+
+  refreshServices();
+  return {
+    ok: true,
+    message: active
+      ? `${data[0].name} voltou ao site e ao agendamento.`
+      : `${data[0].name} saiu do site e do agendamento. O histórico continua no painel.`,
+  };
+}
+
+export async function moveServiceAction(id: string, direction: -1 | 1): Promise<SiteActionResult> {
+  if (!isUuid(id) || (direction !== -1 && direction !== 1)) return failure("Serviço não encontrado.");
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  return reorder(auth.supabase, "services", id, direction, catalogTags.services);
+}
+
+/**
+ * Exclui um serviço. Enquanto fizer parte de algum plano, não pode ser excluído (tire do
+ * plano antes). Sem atendimentos, a linha é apagada (repasse e vínculos em cascata). Com
+ * histórico, a exclusão é lógica: deleted_at + inativo; atendimentos e fechamentos
+ * continuam com ele. Horários futuros não são cancelados.
+ */
+export async function deleteServiceAction(id: string): Promise<SiteActionResult> {
+  if (!isUuid(id)) return failure("Serviço não encontrado. Recarregue a página.");
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
+  const { data: service } = await supabase.from("services").select("name, deleted_at").eq("id", id).maybeSingle();
+  if (!service || service.deleted_at) return failure("Serviço não encontrado. Recarregue a página.");
+
+  const [appointments, plans] = await Promise.all([
+    supabase.from("appointments").select("id", { count: "exact", head: true }).eq("service_id", id),
+    supabase.from("plan_services").select("subscription_plans(name)").eq("service_id", id),
+  ]);
+  if (appointments.error || plans.error) return failure("Não foi possível conferir o uso do serviço. Nada foi excluído.");
+
+  const planNames = (plans.data as unknown as { subscription_plans: { name: string } | null }[])
+    .flatMap((row) => (row.subscription_plans ? [row.subscription_plans.name] : []));
+  if (planNames.length) {
+    return failure(
+      `${service.name} faz parte de: ${planNames.join(", ")}. Tire o serviço desses planos antes de excluir (ou só inative).`,
+    );
+  }
+
+  if (!appointments.count) {
+    const { data: deleted, error } = await supabase.from("services").delete().eq("id", id).select("id");
+    if (!error && deleted?.length) {
+      refreshServices();
+      return { ok: true, message: `${service.name} foi excluído.` };
+    }
+    // Atendimento criado entre a conferência e o delete (FK): cai na exclusão lógica.
+    if (error?.code !== "23503") return failure("Não foi possível excluir. Tente novamente.");
+  }
+
+  const { data: archived, error } = await supabase
+    .from("services")
+    .update({ is_active: false, deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (error || !archived?.length) return failure("Não foi possível excluir. Tente novamente.");
+
+  refreshServices();
+  return { ok: true, message: `${service.name} foi excluído. Os atendimentos e fechamentos com ele continuam no painel.` };
 }

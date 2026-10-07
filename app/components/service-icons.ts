@@ -1,4 +1,17 @@
-import { createLucideIcon, Scissors } from "lucide-react";
+import {
+  Baby,
+  Brush,
+  createLucideIcon,
+  Crown,
+  Droplets,
+  HandHeart,
+  Palette,
+  Scissors,
+  Sparkles,
+  SprayCan,
+  Wind,
+  type LucideIcon,
+} from "lucide-react";
 
 // Ícones extras no mesmo padrão do Lucide (grade 24×24, traço arredondado), registrados
 // com `createLucideIcon` para aceitar `size` e `strokeWidth` como os demais.
@@ -34,9 +47,31 @@ const Eyebrow = createLucideIcon("eyebrow", [
   ["path", { d: "M14 3c-3.5 0-9 1.75-10.5 3S3 9.5 4 9s7.6-2.9 10-3.5 5.83.42 7 1c-1.17-1-3.5-3.5-7-3.5Z", key: "brow" }],
 ]);
 
-export const serviceIcons = {
-  scissors: Scissors,
-  mustache: Mustache,
-  razor: StraightRazor,
-  eyebrow: Eyebrow,
-};
+/**
+ * Coleção fechada de ícones dos serviços (escolhidos no painel, nunca enviados como
+ * arquivo). A chave é o que fica em services.icon; os 4 primeiros são os originais.
+ */
+export const serviceIconOptions: readonly { key: string; label: string; Icon: LucideIcon }[] = [
+  { key: "scissors", label: "Tesoura", Icon: Scissors },
+  { key: "mustache", label: "Bigode", Icon: Mustache },
+  { key: "razor", label: "Navalha", Icon: StraightRazor },
+  { key: "eyebrow", label: "Sobrancelha", Icon: Eyebrow },
+  { key: "brush", label: "Pincel", Icon: Brush },
+  { key: "wind", label: "Secador", Icon: Wind },
+  { key: "spray-can", label: "Finalizador", Icon: SprayCan },
+  { key: "droplets", label: "Hidratação", Icon: Droplets },
+  { key: "sparkles", label: "Tratamento", Icon: Sparkles },
+  { key: "palette", label: "Coloração", Icon: Palette },
+  { key: "baby", label: "Infantil", Icon: Baby },
+  { key: "hand-heart", label: "Massagem", Icon: HandHeart },
+  { key: "crown", label: "Especial", Icon: Crown },
+];
+
+export const serviceIconKeys = serviceIconOptions.map((option) => option.key);
+
+/** Ícone por chave. Use `serviceIcons[key] ?? DefaultServiceIcon` (chave desconhecida = tesoura). */
+export const serviceIcons: Readonly<Record<string, LucideIcon>> = Object.fromEntries(
+  serviceIconOptions.map((option) => [option.key, option.Icon]),
+);
+
+export const DefaultServiceIcon = Scissors;

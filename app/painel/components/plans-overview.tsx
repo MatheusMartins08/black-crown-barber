@@ -18,6 +18,7 @@ import {
 import { formatPerWeek } from "../../data/plans";
 import { fetchAppointments, fetchMonthPayments, PainelApiError } from "../lib/painel-api";
 import { isSubscriber } from "./membership-tag";
+import { usePainelServices } from "./painel-catalog";
 
 function getErrorMessage(error: unknown) {
   return error instanceof PainelApiError ? error.message : "Não foi possível falar com o banco. Tente novamente.";
@@ -37,6 +38,8 @@ export default function PlansOverview({
   onMonthChange: (month: string) => void;
 }) {
   const months = listHistoryMonths(today);
+  const services = usePainelServices();
+  const serviceName = (slug: string) => services.find((service) => service.slug === slug)?.name ?? slug;
 
   // Mensalidades com vencimento no mês e atendimentos do mês (para os usos do plano).
   const loader = useCallback(async () => {
@@ -122,8 +125,8 @@ export default function PlansOverview({
                   <tr key={plan.id}>
                     <th scope="row">{plan.name}</th>
                     <td className="admin-plans__covers" data-label="Cobre">
-                      {plan.covers
-                        .map((serviceName, index) => `${serviceName} (${formatPerWeek(plan.benefits[index].perWeek)})`)
+                      {plan.benefits
+                        .map((benefit) => `${serviceName(benefit.serviceId)} (${formatPerWeek(benefit.perWeek)})`)
                         .join(", ")}
                     </td>
                     <td className="is-numeric admin-plans__price" data-label="Mensalidade">

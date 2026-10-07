@@ -2,21 +2,26 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 import type { Professional } from "../../data/professionals";
+import type { Service } from "../../data/services";
 
-// Profissionais ativos (do Supabase, lidos pela página no servidor) para todo o fluxo de
-// agendamento, sem passar a lista de componente em componente.
-const ProfessionalsContext = createContext<readonly Professional[]>([]);
+// Catálogo ativo (do Supabase, lido pela página no servidor) para todo o fluxo de
+// agendamento, sem passar listas de componente em componente.
+type BookingCatalog = { professionals: readonly Professional[]; services: readonly Service[] };
+
+const BookingCatalogContext = createContext<BookingCatalog>({ professionals: [], services: [] });
 
 export function BookingCatalogProvider({
   professionals,
+  services,
   children,
-}: {
-  professionals: readonly Professional[];
-  children: ReactNode;
-}) {
-  return <ProfessionalsContext.Provider value={professionals}>{children}</ProfessionalsContext.Provider>;
+}: BookingCatalog & { children: ReactNode }) {
+  return <BookingCatalogContext.Provider value={{ professionals, services }}>{children}</BookingCatalogContext.Provider>;
 }
 
 export function useBookingProfessionals() {
-  return useContext(ProfessionalsContext);
+  return useContext(BookingCatalogContext).professionals;
+}
+
+export function useBookingServices() {
+  return useContext(BookingCatalogContext).services;
 }

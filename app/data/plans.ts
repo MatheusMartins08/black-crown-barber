@@ -1,5 +1,4 @@
 import type { ServiceId } from "./booking";
-import { services } from "./site";
 
 // Catálogo dos planos de assinatura. É a única fonte para o site e para o painel, e
 // espelha subscription_plans + plan_services (weekly_limit) no Supabase. Para mudar
@@ -73,16 +72,23 @@ function joinNames(names: string[]) {
   return names.length > 1 ? `${names.slice(0, -1).join(", ")} e ${names.at(-1)}` : (names[0] ?? "");
 }
 
-/** Ex.: "Corte masculino · 1 por semana" ou "Corte masculino, Barba e Sobrancelha · 1 por semana cada". */
-export function describePlanBenefits(planId: string | null) {
+/**
+ * Ex.: "Corte masculino · 1 por semana" ou "Corte masculino, Barba e Sobrancelha · 1 por semana cada".
+ * `services` é o catálogo atual (Supabase): o nome de cada benefício acompanha o serviço.
+ */
+export function describePlanBenefits(planId: string | null, services: readonly { slug: string; name: string }[]) {
   const plan = getPlan(planId);
   if (!plan) return "";
-  const names = plan.benefits.map(
-    (benefit) => services.find((service) => service.id === benefit.serviceId)?.name ?? benefit.serviceId,
-  );
-  const sameQuantity = plan.benefits.every((benefit) => benefit.perWeek === plan.benefits[0].perWeek);
+  // Benefício de um serviço fora do catálogo recebido (ex.: inativado) não é listado.
+  const benefits = plan.benefits.flatMap((benefit) => {
+    const service = services.find((item) => item.slug === benefit.serviceId);
+    return service ? [{ name: service.name, perWeek: benefit.perWeek }] : [];
+  });
+  if (!benefits.length) return "";
+  const sameQuantity = benefits.every((benefit) => benefit.perWeek === benefits[0].perWeek);
   if (!sameQuantity) {
-    return plan.benefits.map((benefit, index) => `${names[index]} · ${formatPerWeek(benefit.perWeek)}`).join(", ");
+    return benefits.map((benefit) => `${benefit.name} · ${formatPerWeek(benefit.perWeek)}`).join(", ");
   }
-  return `${joinNames(names)} · ${formatPerWeek(plan.benefits[0].perWeek)}${plan.benefits.length > 1 ? " cada" : ""}`;
+  const names = benefits.map((benefit) => benefit.name);
+  return `${joinNames(names)} · ${formatPerWeek(benefits[0].perWeek)}${benefits.length > 1 ? " cada" : ""}`;
 }

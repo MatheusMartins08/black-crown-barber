@@ -19,6 +19,7 @@ import {
   SubscriberApiError,
 } from "../../lib/subscribers-api";
 import FilterToggle from "./filter-toggle";
+import { usePainelServices } from "./painel-catalog";
 import ShowMore, { listPageSize } from "./show-more";
 import { ResetPasswordDialog, SubscriberFormDialog } from "./subscriber-dialogs";
 
@@ -409,6 +410,7 @@ function SubscriberRow({
 }) {
   const StatusIcon = statusIcons[account.status];
   const isInactive = account.status === "inativo";
+  const services = usePainelServices();
 
   return (
     <tr
@@ -440,7 +442,7 @@ function SubscriberRow({
           </select>
         </label>
         <span className="admin-row__price admin-row__benefits">
-          {isInactive ? "Reative para trocar o plano" : describePlanBenefits(account.planId)}
+          {isInactive ? "Reative para trocar o plano" : describePlanBenefits(account.planId, services)}
         </span>
       </td>
       <td className="admin-subscribers__status" data-label="Status">

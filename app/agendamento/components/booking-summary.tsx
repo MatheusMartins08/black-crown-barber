@@ -13,8 +13,9 @@ import {
 import { getPlan } from "../../data/plans";
 import type { PlanCoverage, SubscriberSession } from "../../data/subscribers";
 import type { Professional } from "../../data/professionals";
+import { formatDuration, type Service } from "../../data/services";
 import { getPriceLabel } from "../lib/plan-pricing";
-import { useBookingProfessionals } from "./booking-catalog";
+import { useBookingProfessionals, useBookingServices } from "./booking-catalog";
 import PrimaryActionButton, { type PrimaryAction } from "./primary-action-button";
 import ProfessionalAvatar from "./professional-avatar";
 
@@ -28,14 +29,13 @@ function getProfessionalLabel(draft: BookingDraft, professionals: readonly Profe
 /** Assinante logado e a cobertura do plano para o serviço escolhido. */
 export type SummaryPlanInfo = { session: SubscriberSession | null; coverage: PlanCoverage | null };
 
-function getTotal(draft: BookingDraft, { session, coverage }: SummaryPlanInfo) {
-  const service = getService(draft.serviceId);
+function getTotal(service: Service | null, { session, coverage }: SummaryPlanInfo) {
   if (!service) return null;
   return session ? getPriceLabel(service.price, coverage) : formatCurrency(service.price);
 }
 
 function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: SummaryPlanInfo }) {
-  const service = getService(draft.serviceId);
+  const service = getService(useBookingServices(), draft.serviceId);
   const professionalLabel = getProfessionalLabel(draft, useBookingProfessionals());
   const professionalAvatarId =
     draft.professionalId === ANY_PROFESSIONAL ? draft.assignedProfessionalId : draft.professionalId;
@@ -58,7 +58,7 @@ function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: Summa
     },
     { label: "Data", value: draft.date ? formatLongDate(draft.date) : null },
     { label: "Horário", value: draft.time },
-    { label: "Duração", value: service?.duration },
+    { label: "Duração", value: service ? formatDuration(service.durationMinutes) : null },
   ];
 
   return (
@@ -75,7 +75,7 @@ function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: Summa
 }
 
 export function BookingSummaryPanel({ draft, planInfo }: { draft: BookingDraft; planInfo: SummaryPlanInfo }) {
-  const total = getTotal(draft, planInfo);
+  const total = getTotal(getService(useBookingServices(), draft.serviceId), planInfo);
 
   return (
     <aside aria-label="Resumo do agendamento" className="booking-summary">
@@ -99,8 +99,10 @@ export function BookingSummaryBar({
   planInfo: SummaryPlanInfo;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const service = getService(draft.serviceId);
-  const meta = [service?.duration, getTotal(draft, planInfo), draft.time].filter(Boolean).join(" · ");
+  const service = getService(useBookingServices(), draft.serviceId);
+  const meta = [service ? formatDuration(service.durationMinutes) : null, getTotal(service, planInfo), draft.time]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className={`booking-bar${isOpen ? " is-open" : ""}`}>

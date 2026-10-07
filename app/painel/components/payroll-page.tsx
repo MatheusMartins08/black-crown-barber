@@ -9,13 +9,14 @@ import {
   formatPeriodLabel,
   getHistoryStart,
   getPeriodRange,
+  listServicesFor,
   shiftPeriod,
   summarizeByBarber,
   type Period,
 } from "../../data/painel";
 import { fetchAppointments, PainelApiError } from "../lib/painel-api";
 import DateNav from "./date-nav";
-import { usePainelProfessionals } from "./painel-catalog";
+import { usePainelProfessionals, usePainelServices } from "./painel-catalog";
 import PayrollSummary from "./payroll-summary";
 
 const stepLabels: Record<Period, { previous: string; next: string }> = {
@@ -40,9 +41,11 @@ export default function PayrollPage() {
   const loaded = useAsyncData(loader);
   const appointments = loaded.status === "success" ? loaded.data : null;
   const professionals = usePainelProfessionals();
+  const services = usePainelServices();
+  const serviceColumns = useMemo(() => listServicesFor(services, appointments ?? []), [services, appointments]);
   const summaries = useMemo(
-    () => summarizeByBarber(appointments ?? [], professionals),
-    [appointments, professionals],
+    () => summarizeByBarber(appointments ?? [], professionals, services),
+    [appointments, professionals, services],
   );
   const periodLabel = formatPeriodLabel(selectedDate, period);
 
@@ -87,6 +90,7 @@ export default function PayrollPage() {
           onPeriodChange={setPeriod}
           period={period}
           periodLabel={periodLabel}
+          services={serviceColumns}
           summaries={summaries}
         />
       </div>

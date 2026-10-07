@@ -33,41 +33,8 @@ export const footerNavigationItems = [
   { label: "Perguntas frequentes", href: "#faq" },
 ];
 
-export const services = [
-  {
-    id: "corte",
-    name: "Corte masculino",
-    description: "Corte personalizado, acabamento e finalização.",
-    duration: "30 min",
-    price: "R$ 55",
-    icon: "scissors",
-  },
-  {
-    id: "barba",
-    name: "Barba",
-    description: "Modelagem, toalha quente e acabamento preciso.",
-    duration: "30 min",
-    price: "R$ 45",
-    icon: "mustache",
-  },
-  {
-    id: "corte-barba",
-    name: "Corte + barba",
-    description: "Cuidado completo para cabelo e barba.",
-    duration: "50 min",
-    price: "R$ 90",
-    icon: "razor",
-    popular: true,
-  },
-  {
-    id: "sobrancelha",
-    name: "Sobrancelha",
-    description: "Design e limpeza para um acabamento natural.",
-    duration: "15 min",
-    price: "R$ 25",
-    icon: "eyebrow",
-  },
-] as const;
+// Serviços: vêm da tabela services (app/lib/catalog.ts), editados no painel em
+// Edição do site > Serviços.
 
 export const galleryComparison = {
   title: "Cabelo e barba",

@@ -24,6 +24,7 @@ import {
   updateSubscriber,
 } from "../../lib/subscribers-api";
 import { DialogFrame, Field, FormAlert, SubmitButton, useDialogIds, type DialogIds } from "./admin-form";
+import { usePainelServices } from "./painel-catalog";
 
 const statusDescriptions: Record<SubscriptionStatus, string> = {
   ativo: "Benefícios do plano liberados no agendamento online.",
@@ -124,6 +125,7 @@ function SubscriberForm({
 }) {
   const ids = useId();
   const isCreate = mode.type === "create";
+  const services = usePainelServices();
   const [name, setName] = useState(isCreate ? "" : mode.account.name);
   const [phone, setPhone] = useState(isCreate ? "" : mode.account.phone);
   const [password, setPassword] = useState("");
@@ -259,7 +261,7 @@ function SubscriberForm({
               options={subscriptionPlans.map((plan) => ({ value: plan.id, label: plan.shortName }))}
               value={planId}
             />
-            <p className="admin-field__hint">{describePlanBenefits(planId)}</p>
+            <p className="admin-field__hint">{describePlanBenefits(planId, services)}</p>
           </div>
 
           <div className="admin-field admin-dialog__field">

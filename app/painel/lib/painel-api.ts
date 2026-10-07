@@ -8,10 +8,8 @@ import {
   type MonthPayment,
   type CyclePayment,
   type PaymentMethod,
-  type ServiceName,
 } from "../../data/painel";
 import { isPlanId } from "../../data/plans";
-import { services } from "../../data/site";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 
@@ -33,11 +31,6 @@ function fail(error: RpcError, fallback: string): never {
   throw new PainelApiError(error.code === "42501" ? "Seu usuário não tem permissão para esta ação." : getRpcMessage(error, fallback));
 }
 
-const serviceNameBySlug = Object.fromEntries(services.map((service) => [service.id, service.name])) as Record<
-  string,
-  ServiceName
->;
-
 type AppointmentRow = {
   id: string;
   code: string;
@@ -46,6 +39,7 @@ type AppointmentRow = {
   local_time: string;
   customer_id: string;
   customer_name: string;
+  service_id: string;
   service_slug: string;
   service_name: string;
   booked_professional_id: string;
@@ -62,7 +56,7 @@ type AppointmentRow = {
 };
 
 const appointmentColumns =
-  "id, code, status, local_date, local_time, customer_id, customer_name, service_slug, service_name, booked_professional_id, booked_professional_name, performed_by_id, performed_by_name, price, live_plan_name, covered_live, covered_by_plan, charged_amount, payout_amount, membership_status";
+  "id, code, status, local_date, local_time, customer_id, customer_name, service_id, service_slug, service_name, booked_professional_id, booked_professional_name, performed_by_id, performed_by_name, price, live_plan_name, covered_live, covered_by_plan, charged_amount, payout_amount, membership_status";
 
 function toAppointment(row: AppointmentRow): Appointment {
   return {
@@ -72,7 +66,9 @@ function toAppointment(row: AppointmentRow): Appointment {
     time: row.local_time,
     clientId: row.customer_id,
     clientName: row.customer_name,
-    serviceName: serviceNameBySlug[row.service_slug] ?? (row.service_name as ServiceName),
+    serviceId: row.service_id,
+    serviceSlug: row.service_slug,
+    serviceName: row.service_name,
     bookedWithId: row.booked_professional_id,
     bookedWith: row.booked_professional_name,
     performedById: row.performed_by_id,

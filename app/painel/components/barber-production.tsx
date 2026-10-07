@@ -1,11 +1,13 @@
 import type { CSSProperties } from "react";
-import { formatCurrency, serviceNames, type BarberSummary } from "../../data/painel";
+import { formatCurrency, type BarberSummary } from "../../data/painel";
+import type { Service } from "../../data/services";
 import BarberAvatar from "./barber-avatar";
 
-export default function BarberProduction({ summaries }: { summaries: BarberSummary[] }) {
+/** `services`: colunas do dia (ativos e os que aparecem nos atendimentos, ver listServicesFor). */
+export default function BarberProduction({ summaries, services }: { summaries: BarberSummary[]; services: Service[] }) {
   const maxServiceCount = Math.max(
     1,
-    ...summaries.flatMap((summary) => serviceNames.map((name) => summary.byService[name])),
+    ...summaries.flatMap((summary) => services.map((service) => summary.byService[service.id] ?? 0)),
   );
 
   return (
@@ -36,11 +38,11 @@ export default function BarberProduction({ summaries }: { summaries: BarberSumma
               </div>
 
               <dl className="admin-bars">
-                {serviceNames.map((name) => {
-                  const count = summary.byService[name];
+                {services.map((service) => {
+                  const count = summary.byService[service.id] ?? 0;
                   return (
-                    <div className="admin-bars__row" key={name}>
-                      <dt>{name}</dt>
+                    <div className="admin-bars__row" key={service.id}>
+                      <dt>{service.name}</dt>
                       <dd>
                         <span className="admin-bars__track" aria-hidden="true">
                           <span

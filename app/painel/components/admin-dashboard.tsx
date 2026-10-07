@@ -13,6 +13,7 @@ import {
   getPayout,
   getServicePrice,
   getWeekday,
+  listServicesFor,
   summarizeByBarber,
   type Appointment,
 } from "../../data/painel";
@@ -21,7 +22,7 @@ import AppointmentsTable, { type AgendaFilters } from "./appointments-table";
 import BarberProduction from "./barber-production";
 import DateNav from "./date-nav";
 import { isSubscriber } from "./membership-tag";
-import { findProfessional, usePainelProfessionals } from "./painel-catalog";
+import { findProfessional, usePainelProfessionals, usePainelServices } from "./painel-catalog";
 
 function getErrorMessage(error: unknown) {
   return error instanceof PainelApiError ? error.message : "Não foi possível falar com o banco. Tente novamente.";
@@ -51,8 +52,13 @@ export default function AdminDashboard() {
   const data = edits?.loader === loader ? edits.data : loaded.status === "success" ? loaded.data : null;
 
   const professionals = usePainelProfessionals();
+  const services = usePainelServices();
   const appointments = useMemo(() => data ?? [], [data]);
-  const summaries = useMemo(() => summarizeByBarber(appointments, professionals), [appointments, professionals]);
+  const serviceColumns = useMemo(() => listServicesFor(services, appointments), [services, appointments]);
+  const summaries = useMemo(
+    () => summarizeByBarber(appointments, professionals, services),
+    [appointments, professionals, services],
+  );
 
   const active = appointments.filter((appointment) => appointment.status !== "cancelado");
   const completed = appointments.filter((appointment) => appointment.status === "concluido");
@@ -149,7 +155,7 @@ export default function AdminDashboard() {
         </dl>
       </div>
 
-      <BarberProduction summaries={summaries} />
+      <BarberProduction services={serviceColumns} summaries={summaries} />
 
       <AppointmentsTable
         appointments={appointments}

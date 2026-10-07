@@ -21,6 +21,7 @@ import {
   type TimeSlot,
 } from "../../data/booking";
 import type { Professional } from "../../data/professionals";
+import type { Service } from "../../data/services";
 
 export type StepId = "perfil" | "servico" | "profissional" | "horario" | "dados" | "confirmacao";
 
@@ -157,6 +158,8 @@ function reducer(state: BookingState, action: Action, professionals: readonly Pr
 type InitOptions = {
   /** Profissionais ativos (Supabase). Um rascunho que cite alguém fora da lista é descartado. */
   professionals: readonly Professional[];
+  /** Serviços ativos (Supabase). Idem para um serviço que saiu do catálogo. */
+  services: readonly Service[];
   initialServiceId: ServiceId | null;
   initialProfessionalId: ProfessionalChoice | null;
   /** Lê o rascunho salvo ao montar (somente no cliente). */
@@ -190,9 +193,10 @@ function sanitizeDraft(
   value: Partial<BookingDraft> | undefined,
   today: string,
   professionals: readonly Professional[],
+  services: readonly Service[],
 ): BookingDraft {
   const customerType = value?.customerType === "assinante" || value?.customerType === "avulso" ? value.customerType : null;
-  const serviceId = isServiceId(value?.serviceId) ? value.serviceId : null;
+  const serviceId = isServiceId(services, value?.serviceId) ? value.serviceId : null;
   const professionalId =
     serviceId &&
     isProfessionalChoice(professionals, value?.professionalId) &&
@@ -220,7 +224,7 @@ function sanitizeDraft(
   };
 }
 
-function init({ professionals, initialServiceId, initialProfessionalId, restore }: InitOptions): BookingState {
+function init({ professionals, services, initialServiceId, initialProfessionalId, restore }: InitOptions): BookingState {
   const stored = restore ? readStoredState() : null;
   const hasLinkSelection = Boolean(initialServiceId || initialProfessionalId);
 
@@ -228,7 +232,7 @@ function init({ professionals, initialServiceId, initialProfessionalId, restore 
   // rascunho salvo e sempre começa pela pergunta de assinante; a resposta e os dados
   // de contato já informados são mantidos.
   if (hasLinkSelection || !stored) {
-    const kept = stored ? sanitizeDraft(stored.draft, getTodayIso(), professionals) : emptyDraft;
+    const kept = stored ? sanitizeDraft(stored.draft, getTodayIso(), professionals, services) : emptyDraft;
     const professionalId =
       initialProfessionalId &&
       (!initialServiceId || offersService(professionals, initialProfessionalId, initialServiceId))
@@ -246,7 +250,7 @@ function init({ professionals, initialServiceId, initialProfessionalId, restore 
     };
   }
 
-  const draft = sanitizeDraft(stored.draft, getTodayIso(), professionals);
+  const draft = sanitizeDraft(stored.draft, getTodayIso(), professionals, services);
   return { step: clampStep(draft, isStepId(stored.step) ? stored.step : "perfil"), draft };
 }
 

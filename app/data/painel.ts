@@ -1,13 +1,12 @@
 import { subscriptionPlans as planCatalog, type PlanBenefit, type PlanId } from "./plans";
 import type { Professional } from "./professionals";
-import { services } from "./site";
+import type { Service } from "./services";
 
 // Tipos, regras e formatação do painel. Puro (sem React e sem rede): os dados vêm do
 // Supabase por app/painel/lib/painel-api.ts. Cobertura do plano, valor cobrado e
 // repasse são calculados no banco (appointments_settle e private.plan_coverage) e
 // chegam prontos em cada atendimento.
 
-export type ServiceName = (typeof services)[number]["name"];
 export type AppointmentStatus = "agendado" | "concluido" | "faltou" | "cancelado";
 export type Period = "dia" | "semana" | "mes";
 
@@ -15,7 +14,7 @@ export type SubscriptionPlan = {
   id: PlanId;
   name: string;
   monthlyPrice: number;
-  covers: readonly ServiceName[];
+  /** Benefícios por slug de serviço; o nome vem do catálogo de serviços (Supabase). */
   benefits: readonly PlanBenefit[];
 };
 
@@ -40,7 +39,10 @@ export type Appointment = {
   time: string;
   clientId: string;
   clientName: string;
-  serviceName: ServiceName;
+  /** Serviço pelo id (uuid) e slug; o nome é o copiado na reserva (não muda se o serviço for renomeado). */
+  serviceId: string;
+  serviceSlug: string;
+  serviceName: string;
   /** Profissionais pelo id (uuid estável); os nomes vêm do cadastro atual, só para exibir. */
   bookedWithId: string;
   bookedWith: string;
@@ -114,23 +116,11 @@ export type ClientProfile = {
   currentCycle: CyclePayment | null;
 };
 
-export const serviceNames = services.map((service) => service.name) as ServiceName[];
-
-export const servicePrices = Object.fromEntries(
-  services.map((service) => [service.name, Number(service.price.replace(/\D/g, ""))]),
-) as Record<ServiceName, number>;
-
-const serviceNameById = Object.fromEntries(services.map((service) => [service.id, service.name])) as Record<
-  (typeof services)[number]["id"],
-  ServiceName
->;
-
 export const subscriptionPlans: SubscriptionPlan[] = planCatalog.map((plan) => ({
   id: plan.id,
   name: plan.name,
   monthlyPrice: plan.monthlyPrice,
   benefits: plan.benefits,
-  covers: plan.benefits.map((benefit) => serviceNameById[benefit.serviceId]),
 }));
 
 const plansById = new Map<string, SubscriptionPlan>(subscriptionPlans.map((plan) => [plan.id, plan]));
@@ -142,18 +132,6 @@ export function getPlan(planId: string | null) {
 export function getPlanByName(name: string | null) {
   return subscriptionPlans.find((plan) => plan.name === name) ?? null;
 }
-
-// Regras de repasse exibidas no rodapé do fechamento. O cálculo é do banco
-// (payroll_settings e service_payouts): mantenha estes valores iguais aos de lá.
-export const commissionRules = {
-  walkInRate: 0.5,
-  planPayout: {
-    "Corte masculino": 22,
-    Barba: 18,
-    "Corte + barba": 35,
-    Sobrancelha: 10,
-  } satisfies Record<ServiceName, number>,
-};
 
 /** Dias depois do vencimento em que o plano ainda cobre (shop_settings.subscription_grace_days). */
 export const billingRules = { graceDays: 5 };
@@ -305,7 +283,8 @@ export type BarberSummary = {
   specialty: string;
   completed: number;
   booked: number;
-  byService: Record<ServiceName, number>;
+  /** Atendimentos concluídos por serviço (id do serviço → quantidade). */
+  byService: Record<string, number>;
   planCount: number;
   walkInCount: number;
   planPayout: number;
@@ -323,21 +302,32 @@ export function listProfessionalsFor(professionals: readonly Professional[], app
   return professionals.filter((professional) => professional.isActive || performers.has(professional.id));
 }
 
+/**
+ * Serviços que entram como colunas da agenda e do fechamento: os ativos e, mesmo inativos
+ * ou excluídos, os que aparecem nos atendimentos da lista (o histórico continua visível).
+ */
+export function listServicesFor(services: readonly Service[], appointments: readonly Appointment[]) {
+  const used = new Set(appointments.map((appointment) => appointment.serviceId));
+  return services.filter((service) => (service.isActive && !service.deletedAt) || used.has(service.id));
+}
+
 /** Resumo por profissional considerando quem executou o serviço (não com quem foi marcado). */
 export function summarizeByBarber(
   appointments: Appointment[],
   professionals: readonly Professional[],
+  services: readonly Service[],
 ): BarberSummary[] {
+  const columns = listServicesFor(services, appointments);
   return listProfessionalsFor(professionals, appointments).map((professional) => {
     const own = appointments.filter((appointment) => appointment.performedById === professional.id);
     const completed = own.filter((appointment) => appointment.status === "concluido");
-    const byService = Object.fromEntries(serviceNames.map((name) => [name, 0])) as Record<ServiceName, number>;
+    const byService: Record<string, number> = Object.fromEntries(columns.map((service) => [service.id, 0]));
     let planCount = 0;
     let planPayout = 0;
     let walkInPayout = 0;
 
     for (const appointment of completed) {
-      byService[appointment.serviceName] += 1;
+      byService[appointment.serviceId] = (byService[appointment.serviceId] ?? 0) + 1;
       if (isCoveredByPlan(appointment)) {
         planCount += 1;
         planPayout += getPayout(appointment);

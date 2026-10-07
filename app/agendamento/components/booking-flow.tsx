@@ -19,7 +19,7 @@ import { getPlan } from "../../data/plans";
 import { evaluateCoverage, type SubscriberSession } from "../../data/subscribers";
 import { fetchPlanCoverage } from "../../lib/subscribers-api";
 import { BookingApiError, createReservation, createSubscriberReservation } from "../lib/booking-api";
-import { useBookingProfessionals } from "./booking-catalog";
+import { useBookingProfessionals, useBookingServices } from "./booking-catalog";
 import BookingProgress from "./booking-progress";
 import BookingSuccess from "./booking-success";
 import { BookingSummaryBar, BookingSummaryPanel } from "./booking-summary";
@@ -130,8 +130,10 @@ function BookingFlowContent({
   persist,
 }: BookingFlowProps & { restore: boolean; persist: boolean }) {
   const professionals = useBookingProfessionals();
+  const services = useBookingServices();
   const [{ step, draft }, dispatch] = useBookingDraft({
     professionals,
+    services,
     initialServiceId,
     initialProfessionalId,
     restore,
@@ -169,7 +171,7 @@ function BookingFlowContent({
   const stepIndex = steps.indexOf(step);
   const maxReachable = getMaxReachableStep(draft);
   const maxIndex = steps.indexOf(maxReachable);
-  const service = getService(draft.serviceId);
+  const service = getService(services, draft.serviceId);
   const professionalName =
     draft.professionalId && draft.professionalId !== ANY_PROFESSIONAL
       ? getProfessional(professionals, draft.professionalId)?.name

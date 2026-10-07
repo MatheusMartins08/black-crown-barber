@@ -19,6 +19,7 @@ Schema da Black Crown Barber: agenda, clientes, planos e repasse da equipe. As m
 | `20261007120000_site_media_storage` | bucket público `site-media` (fotos editáveis pelo painel) e políticas: só o admin envia, troca ou apaga, por enquanto na pasta `barbers/` |
 | `20261008120000_professionals_soft_delete` | `professionals.deleted_at` (exclusão lógica de quem tem histórico) |
 | `20261008130000_site_images` | `site_images` (8 posições da galeria e a foto da barbearia, editáveis pelo admin) e pastas `gallery/` e `barbershop/` no bucket |
+| `20261008140000_services_editing` | `services.deleted_at`, `appointments.service_name` (nome copiado na reserva, trigger `appointments_25_service_name`) e `appointment_details` lendo a cópia |
 
 ## Como aplicar
 
@@ -145,6 +146,7 @@ O PostgREST devolve `code` (SQLSTATE), `message` (chave) e `hint` (texto em pt-B
     - O excluído continua nos atendimentos e aparece no fechamento só nos períodos em que atendeu.
     - Login de barbeiro ligado a ele perde o acesso; admin ligado só perde o vínculo.
     - Horários futuros nunca são cancelados.
+- **Serviços** (`services`, `service_payouts`): editados no painel (nome, descrição, duração, preço, ícone de uma coleção fixa, selo "Mais pedido" e repasse do plano). Cada atendimento guarda preço (`price`), duração (`ends_at`), nome (`service_name`) e, ao concluir, cobrado e repasse: mudar o catálogo vale só para novos agendamentos. Serviço novo é atendido por todos os profissionais ativos. Inativar e excluir seguem a mesma regra dos profissionais; serviço que está em algum plano não pode ser excluído.
 - **Imagens do site** (`site_images`): uma linha por posição fixa (`gallery-1` … `gallery-8`, `about`). O admin troca imagem, legenda, descrição e enquadramento; não cria nem apaga posições. O formato de cada posição no layout fica em `app/data/site-images.ts`. Fundos (topo e agendamento) e o comparador Antes/Depois não são editáveis.
 - **Fotos** (`site-media`): o navegador reduz a imagem e envia como `<pasta>/<uuid>.<ext>` (`barbers/`, `gallery/` ou `barbershop/`) com a sessão do admin; a Server Action grava a URL e só depois apaga a foto antiga (se for do bucket). Fotos em `/public` nunca são apagadas.
 

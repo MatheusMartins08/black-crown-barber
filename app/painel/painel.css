@@ -1641,6 +1641,88 @@
   margin: 0 24px 14px;
 }
 
+/* Serviços: ícone no lugar da foto, campos lado a lado, seletor de ícone e destaque. */
+.admin-site-item__media--icon {
+  border-radius: 0;
+  background: rgb(var(--accent-rgb) / 8%);
+  color: var(--accent);
+}
+
+.admin-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-dialog .admin-field input[type="number"] {
+  appearance: textfield;
+}
+
+.admin-icon-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+}
+
+.admin-icon-picker button {
+  display: grid;
+  aspect-ratio: 1;
+  min-height: 44px;
+  place-items: center;
+  border: 1px solid rgb(var(--foreground-rgb) / 20%);
+  background: var(--admin-panel);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+.admin-icon-picker button:hover {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
+.admin-icon-picker button.is-active {
+  border-color: var(--accent);
+  background: rgb(var(--accent-rgb) / 8%);
+  color: var(--accent);
+}
+
+.admin-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.admin-check input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.admin-check span {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-check small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-dialog__alert--info {
+  border-left-color: var(--admin-walkin);
+  background: rgb(176 138 62 / 9%);
+  font-weight: 500;
+}
+
+.admin-dialog__alert--info svg {
+  color: var(--admin-walkin);
+}
+
 /* Imagens do site: cartões com a foto atual (toque abre a troca). */
 .admin-image-groups {
   display: grid;
