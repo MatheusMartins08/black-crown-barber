@@ -50,7 +50,8 @@ const unexpected = "Não foi possível falar com o servidor. Verifique a conexã
  */
 export default function SiteBarbers({ usage }: { usage: Record<string, ProfessionalUsage> }) {
   const router = useRouter();
-  const professionals = usePainelProfessionals();
+  // Excluídos ficam só no histórico (agenda e fechamento): não aparecem aqui.
+  const professionals = usePainelProfessionals().filter((professional) => professional.deletedAt === null);
   const [notice, setNotice] = useState<Notice>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, startRefresh] = useTransition();
@@ -213,13 +214,13 @@ export default function SiteBarbers({ usage }: { usage: Record<string, Professio
           profissional do site e de novos agendamentos sem apagar nada: atendimentos e fechamentos antigos continuam com ele.
         </p>
         <p>
-          Só é possível excluir de vez um cadastro que nunca teve atendimento, bloqueio de agenda ou login, como um
-          cadastro feito por engano.
+          Excluir (dentro de “Editar”) tira o profissional também desta lista. Quem já atendeu continua guardado só para o
+          histórico: aparece na agenda e no fechamento dos períodos em que atendeu. Um cadastro sem nenhum atendimento é
+          apagado de vez.
         </p>
       </details>
 
       <ProfessionalFormDialog
-        canDelete={formMode.type === "edit" && !usage[formMode.professional.id]?.hasHistory}
         mode={formMode}
         onClose={() => setFormOpen(false)}
         onDelete={(professional) => {
@@ -245,7 +246,7 @@ export default function SiteBarbers({ usage }: { usage: Record<string, Professio
         }}
         open={confirmOpen}
         openKey={openKey}
-        upcoming={confirm ? (usage[confirm.professional.id]?.upcoming ?? 0) : 0}
+        usage={confirm ? usage[confirm.professional.id] : undefined}
       />
     </section>
   );
@@ -255,7 +256,6 @@ export default function SiteBarbers({ usage }: { usage: Record<string, Professio
 
 function ProfessionalForm({
   mode,
-  canDelete,
   dialogIds,
   nameRef,
   onClose,
@@ -263,7 +263,6 @@ function ProfessionalForm({
   onSaved,
 }: {
   mode: FormMode;
-  canDelete: boolean;
   dialogIds: DialogIds;
   nameRef: RefObject<HTMLInputElement | null>;
   onClose: () => void;
@@ -370,7 +369,7 @@ function ProfessionalForm({
       descriptionId={dialogIds.descriptionId}
       footer={
         <>
-          {current && canDelete ? (
+          {current ? (
             <button
               className="admin-text-button admin-site-form__delete"
               disabled={busy !== null}
@@ -517,7 +516,6 @@ function ProfessionalFormDialog({
   open,
   openKey,
   mode,
-  canDelete,
   onClose,
   onDelete,
   onSaved,
@@ -525,7 +523,6 @@ function ProfessionalFormDialog({
   open: boolean;
   openKey: number;
   mode: FormMode;
-  canDelete: boolean;
   onClose: () => void;
   onDelete: (professional: Professional) => void;
   onSaved: (result: SiteActionResult) => void;
@@ -543,7 +540,6 @@ function ProfessionalFormDialog({
       open={open}
     >
       <ProfessionalForm
-        canDelete={canDelete}
         dialogIds={dialogIds}
         nameRef={nameRef}
         key={openKey}
@@ -560,13 +556,13 @@ function ProfessionalFormDialog({
 
 function ConfirmForm({
   confirm,
-  upcoming,
+  usage,
   dialogIds,
   onClose,
   onDone,
 }: {
   confirm: NonNullable<Confirm>;
-  upcoming: number;
+  usage: ProfessionalUsage | undefined;
   dialogIds: DialogIds;
   onClose: () => void;
   onDone: (result: SiteActionResult) => void;
@@ -575,6 +571,9 @@ function ConfirmForm({
   const [formError, setFormError] = useState<string | null>(null);
   const { professional } = confirm;
   const isDelete = confirm.type === "delete";
+  const upcoming = usage?.upcoming ?? 0;
+  // Com histórico, excluir mantém atendimentos e fechamentos; sem histórico, apaga de vez.
+  const keepsHistory = isDelete && Boolean(usage?.hasHistory);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -600,9 +599,11 @@ function ConfirmForm({
   return (
     <DialogFrame
       description={
-        isDelete
-          ? "O cadastro não tem atendimentos, bloqueios nem login. Esta ação não pode ser desfeita."
-          : "Sai da seção de equipe do site e do agendamento online. Nada é apagado: o histórico continua no painel e dá para ativar de novo."
+        !isDelete
+          ? "Sai da seção de equipe do site e do agendamento online. Nada é apagado: o histórico continua no painel e dá para ativar de novo."
+          : keepsHistory
+            ? "Sai do site, do agendamento e desta lista, e não pode ser reativado. Os atendimentos dele continuam guardados e ele segue no fechamento dos períodos em que atendeu."
+            : "O cadastro não tem atendimentos, bloqueios nem login e será apagado de vez. Esta ação não pode ser desfeita."
       }
       descriptionId={dialogIds.descriptionId}
       footer={
@@ -613,7 +614,7 @@ function ConfirmForm({
           <SubmitButton
             busy={busy}
             busyLabel={isDelete ? "Excluindo…" : "Inativando…"}
-            label={isDelete ? "Excluir de vez" : "Inativar"}
+            label={isDelete ? (keepsHistory ? "Excluir" : "Excluir de vez") : "Inativar"}
           />
         </>
       }
@@ -622,13 +623,21 @@ function ConfirmForm({
       title={isDelete ? `Excluir ${professional.name}?` : `Inativar ${professional.name}?`}
       titleId={dialogIds.titleId}
     >
-      {!isDelete && upcoming > 0 ? (
+      {upcoming > 0 ? (
         <p className="admin-dialog__alert">
           <CircleAlert aria-hidden="true" size={15} />
           {upcoming === 1
             ? "Há 1 horário agendado daqui para frente com este profissional."
             : `Há ${upcoming} horários agendados daqui para frente com este profissional.`}{" "}
-          Eles não são cancelados nem remarcados: continuam na agenda para você decidir o que fazer.
+          {isDelete
+            ? "Eles não são cancelados: continuam na agenda para você trocar o profissional em “Executado por” ou falar com o cliente."
+            : "Eles não são cancelados nem remarcados: continuam na agenda para você decidir o que fazer."}
+        </p>
+      ) : null}
+      {isDelete && usage?.hasLogin ? (
+        <p className="admin-dialog__alert">
+          <CircleAlert aria-hidden="true" size={15} />
+          O login de barbeiro ligado a este profissional perde o acesso ao painel.
         </p>
       ) : null}
       <FormAlert message={formError} />
@@ -640,14 +649,14 @@ function ConfirmDialog({
   open,
   openKey,
   confirm,
-  upcoming,
+  usage,
   onClose,
   onDone,
 }: {
   open: boolean;
   openKey: number;
   confirm: Confirm;
-  upcoming: number;
+  usage: ProfessionalUsage | undefined;
   onClose: () => void;
   onDone: (result: SiteActionResult) => void;
 }) {
@@ -667,7 +676,7 @@ function ConfirmDialog({
           key={openKey}
           onClose={onClose}
           onDone={onDone}
-          upcoming={upcoming}
+          usage={usage}
         />
       ) : null}
     </Dialog>

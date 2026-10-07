@@ -34,9 +34,11 @@ export const getCurrentStaff = cache(async () => {
 });
 
 export type ProfessionalUsage = {
-  /** Tem atendimentos, bloqueios de agenda ou login de barbeiro: não pode ser excluído. */
+  /** Tem atendimentos, bloqueios de agenda ou login: a exclusão mantém o cadastro só para o histórico. */
   hasHistory: boolean;
-  /** Horários "agendado" daqui para frente (continuam valendo se o profissional for inativado). */
+  /** Tem login de barbeiro no painel (é removido junto com a exclusão). */
+  hasLogin: boolean;
+  /** Horários "agendado" daqui para frente (continuam na agenda se for inativado ou excluído). */
   upcoming: number;
 };
 
@@ -53,7 +55,7 @@ export async function getProfessionalUsage(): Promise<Record<string, Professiona
   }
 
   const usage: Record<string, ProfessionalUsage> = {};
-  const entry = (id: string) => (usage[id] ??= { hasHistory: false, upcoming: 0 });
+  const entry = (id: string) => (usage[id] ??= { hasHistory: false, hasLogin: false, upcoming: 0 });
   const now = Date.now();
 
   for (const row of appointments.data) {
@@ -61,8 +63,11 @@ export async function getProfessionalUsage(): Promise<Record<string, Professiona
     entry(row.performed_by_id).hasHistory = true;
     if (row.status === "agendado" && new Date(row.starts_at).getTime() >= now) entry(row.performed_by_id).upcoming += 1;
   }
-  for (const row of [...blocks.data, ...logins.data]) {
-    if (row.professional_id) entry(row.professional_id).hasHistory = true;
+  for (const row of blocks.data) entry(row.professional_id).hasHistory = true;
+  for (const row of logins.data) {
+    if (!row.professional_id) continue;
+    entry(row.professional_id).hasHistory = true;
+    entry(row.professional_id).hasLogin = true;
   }
   return usage;
 }

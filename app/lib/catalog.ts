@@ -25,6 +25,7 @@ export const getPublicProfessionals = unstable_cache(
       .from("professionals")
       .select(professionalColumns)
       .eq("is_active", true)
+      .is("deleted_at", null)
       .order("sort_order")
       .order("name");
     if (error) throw new Error(`Não foi possível carregar a equipe: ${error.message}`);

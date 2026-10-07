@@ -17,6 +17,7 @@ Schema da Black Crown Barber: agenda, clientes, planos e repasse da equipe. As m
 | `…121000_subscriber_accounts` | planos Bronze/Prata/Ouro com limite semanal, situação manual (ativo, congelado, inativo), login do assinante e RPCs do assinante e do painel |
 | `20261006120000_history_retention` | prazo de 6 meses do histórico e limpeza diária (pg_cron) |
 | `20261007120000_site_media_storage` | bucket público `site-media` (fotos editáveis pelo painel) e políticas: só o admin envia, troca ou apaga, por enquanto na pasta `barbers/` |
+| `20261008120000_professionals_soft_delete` | `professionals.deleted_at` (exclusão lógica de quem tem histórico) |
 
 ## Como aplicar
 
@@ -135,7 +136,14 @@ O PostgREST devolve `code` (SQLSTATE), `message` (chave) e `hint` (texto em pt-B
 ## Edição do site (painel)
 
 - **Barbeiros:** a landing, o agendamento e o painel leem `professionals` (nada fixo no front). O site lê como visitante e só vê os ativos; o painel lê todos com a sessão da equipe. Identificador: `id` (uuid) no painel e nas FKs; `slug` nos links públicos e nas RPCs, fixo depois de criado.
-- **Inativar, não apagar:** inativo sai do site e de novos agendamentos, e continua nos atendimentos e fechamentos antigos. Excluir de vez só é oferecido sem atendimentos, bloqueios ou login (as FKs `restrict` de `appointments` seguram o resto).
+- **Inativar × excluir:**
+  - **Inativar:** sai do site e de novos agendamentos, continua na lista do painel e pode voltar.
+  - **Excluir:** sai também do painel.
+    - Sem histórico, a linha é apagada.
+    - Com histórico (as FKs `restrict` de `appointments` impedem apagar), a exclusão é lógica: `deleted_at` preenchido e `is_active = false`. O check `professionals_deleted_inactive_check` impede reativar.
+    - O excluído continua nos atendimentos e aparece no fechamento só nos períodos em que atendeu.
+    - Login de barbeiro ligado a ele perde o acesso; admin ligado só perde o vínculo.
+    - Horários futuros nunca são cancelados.
 - **Fotos** (`site-media`): o navegador reduz a imagem e envia como `barbers/<uuid>.<ext>` com a sessão do admin; a Server Action grava a URL e só depois apaga a foto antiga (se for do bucket). Fotos em `/public` nunca são apagadas.
 
 ## Ao criar novas tabelas

@@ -16,6 +16,11 @@ export type Professional = {
   /** object-position da foto, ex.: "50% 36%". */
   imagePosition: string;
   isActive: boolean;
+  /**
+   * Excluído pelo painel com histórico (ISO). Some do site, do agendamento e das listas do
+   * painel; continua nos atendimentos e no fechamento dos períodos em que atendeu.
+   */
+  deletedAt: string | null;
   sortOrder: number;
   /** Slugs dos serviços que o profissional atende (professional_services). */
   serviceIds: string[];
@@ -31,12 +36,13 @@ export type ProfessionalRow = {
   image_alt: string | null;
   image_position: string | null;
   is_active: boolean;
+  deleted_at: string | null;
   sort_order: number;
   professional_services?: { services: { slug: string } | null }[];
 };
 
 export const professionalColumns =
-  "id, slug, name, specialty, description, image_url, image_alt, image_position, is_active, sort_order, professional_services(services(slug))";
+  "id, slug, name, specialty, description, image_url, image_alt, image_position, is_active, deleted_at, sort_order, professional_services(services(slug))";
 
 export const defaultImagePosition = "50% 50%";
 
@@ -51,6 +57,7 @@ export function toProfessional(row: ProfessionalRow): Professional {
     imageAlt: row.image_alt ?? "",
     imagePosition: row.image_position || defaultImagePosition,
     isActive: row.is_active,
+    deletedAt: row.deleted_at,
     sortOrder: row.sort_order,
     serviceIds: (row.professional_services ?? []).flatMap((item) => (item.services ? [item.services.slug] : [])),
   };

@@ -146,6 +146,7 @@ export async function saveProfessionalAction(input: SaveProfessionalInput): Prom
     .from("professionals")
     .select("name, image_url, image_alt")
     .eq("id", input.id)
+    .is("deleted_at", null)
     .maybeSingle();
   if (currentError || !current) return abort("Profissional não encontrado. Recarregue a página.");
 
@@ -184,6 +185,7 @@ export async function setProfessionalActiveAction(id: string, active: boolean): 
     .from("professionals")
     .update({ is_active: active })
     .eq("id", id)
+    .is("deleted_at", null)
     .select("name");
   if (error || !data?.length) return failure("Não foi possível mudar o status. Tente novamente.");
 
@@ -203,9 +205,11 @@ export async function moveProfessionalAction(id: string, direction: -1 | 1): Pro
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
+  // Excluídos não entram na ordem de exibição.
   const { data: list, error } = await supabase
     .from("professionals")
     .select("id, name, sort_order")
+    .is("deleted_at", null)
     .order("sort_order")
     .order("name");
   if (error) return failure("Não foi possível carregar a ordem. Tente novamente.");
@@ -237,9 +241,12 @@ export async function moveProfessionalAction(id: string, direction: -1 | 1): Pro
 }
 
 /**
- * Apaga de vez um cadastro sem nenhuma ligação: sem atendimentos, bloqueios de agenda nem
- * login de barbeiro. Quem tem histórico só pode ser inativado. A FK "restrict" de
- * appointments segura qualquer corrida entre a conferência e o delete.
+ * Exclui um profissional. Sem nenhuma ligação (atendimentos, bloqueios de agenda, login),
+ * a linha é apagada de vez. Com histórico, a exclusão é lógica: deleted_at + inativo. Some
+ * do site, do agendamento e das listas do painel, mas atendimentos, bloqueios e fechamentos
+ * continuam apontando para ele (a FK "restrict" de appointments impede apagar a linha). O
+ * login de barbeiro ligado a ele perde o acesso ao painel. Horários futuros não são
+ * cancelados: ficam na agenda para o admin decidir.
  */
 export async function deleteProfessionalAction(id: string): Promise<SiteActionResult> {
   if (!isUuid(id)) return failure("Profissional não encontrado. Recarregue a página.");
@@ -249,10 +256,10 @@ export async function deleteProfessionalAction(id: string): Promise<SiteActionRe
 
   const { data: professional } = await supabase
     .from("professionals")
-    .select("name, image_url")
+    .select("name, image_url, deleted_at")
     .eq("id", id)
     .maybeSingle();
-  if (!professional) return failure("Profissional não encontrado. Recarregue a página.");
+  if (!professional || professional.deleted_at) return failure("Profissional não encontrado. Recarregue a página.");
 
   const [appointments, blocks, logins] = await Promise.all([
     supabase
@@ -263,22 +270,45 @@ export async function deleteProfessionalAction(id: string): Promise<SiteActionRe
     supabase.from("staff_members").select("user_id", { count: "exact", head: true }).eq("professional_id", id),
   ]);
   if (appointments.error || blocks.error || logins.error) {
-    return failure("Não foi possível conferir o histórico. Nada foi apagado.");
+    return failure("Não foi possível conferir o histórico. Nada foi excluído.");
   }
-  if ((appointments.count ?? 0) + (blocks.count ?? 0) + (logins.count ?? 0) > 0) {
-    return failure(`${professional.name} tem histórico na agenda. Use “Inativar” para tirar do site.`);
+  const hasHistory = (appointments.count ?? 0) + (blocks.count ?? 0) + (logins.count ?? 0) > 0;
+
+  if (!hasHistory) {
+    const { data: deleted, error } = await supabase.from("professionals").delete().eq("id", id).select("id");
+    // Histórico criado entre a conferência e o delete (FK): cai na exclusão lógica abaixo.
+    if (!error && deleted?.length) {
+      refreshSite();
+      await removeObject(supabase, getSiteMediaPath(professional.image_url, supabaseUrl, "barbers"));
+      return { ok: true, message: `${professional.name} foi excluído.` };
+    }
+    if (error?.code !== "23503") return failure("Não foi possível excluir. Tente novamente.");
   }
 
-  const { data: deleted, error } = await supabase.from("professionals").delete().eq("id", id).select("id");
-  if (error || !deleted?.length) {
-    return failure(
-      error?.code === "23503"
-        ? `${professional.name} tem histórico na agenda. Use “Inativar” para tirar do site.`
-        : "Não foi possível excluir. Tente novamente.",
-    );
+  // Primeiro tira o acesso ao painel (se houver); só então marca como excluído. Login de
+  // barbeiro perde o acesso; um admin ligado ao profissional só perde o vínculo (nunca o
+  // próprio acesso de administrador).
+  if ((logins.count ?? 0) > 0) {
+    const [barberLogins, adminLinks] = await Promise.all([
+      supabase.from("staff_members").delete().eq("professional_id", id).eq("role", "barbeiro"),
+      supabase.from("staff_members").update({ professional_id: null }).eq("professional_id", id).eq("role", "admin"),
+    ]);
+    if (barberLogins.error || adminLinks.error) {
+      return failure("Não foi possível remover o acesso ao painel. Nada foi excluído.");
+    }
   }
 
+  const { data: archived, error } = await supabase
+    .from("professionals")
+    .update({ is_active: false, deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (error || !archived?.length) return failure("Não foi possível excluir. Tente novamente.");
+
+  // A foto fica: o fechamento dos períodos em que ele atendeu ainda mostra o avatar.
   refreshSite();
-  await removeObject(supabase, getSiteMediaPath(professional.image_url, supabaseUrl, "barbers"));
-  return { ok: true, message: `${professional.name} foi excluído.` };
+  return {
+    ok: true,
+    message: `${professional.name} foi excluído. Os atendimentos e fechamentos dele continuam no painel.`,
+  };
 }

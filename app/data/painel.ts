@@ -314,8 +314,9 @@ export type BarberSummary = {
 };
 
 /**
- * Profissionais que entram na agenda e no fechamento: os ativos e, mesmo inativos, os que
- * executaram algum atendimento da lista (o histórico continua aparecendo).
+ * Profissionais que entram na agenda e no fechamento: os ativos e, mesmo inativos ou
+ * excluídos, os que executaram algum atendimento da lista. Como a lista é a do período
+ * consultado (dia, semana ou mês), um excluído aparece só nos períodos em que atendeu.
  */
 export function listProfessionalsFor(professionals: readonly Professional[], appointments: readonly Appointment[]) {
   const performers = new Set(appointments.map((appointment) => appointment.performedById));
