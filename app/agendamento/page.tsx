@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { isProfessionalChoice, isServiceId } from "../data/booking";
 import { openingHours, siteConfig } from "../data/site";
+import { getPublicProfessionals } from "../lib/catalog";
+import { BookingCatalogProvider } from "./components/booking-catalog";
 import BookingFlow from "./components/booking-flow";
 import BookingHeader from "./components/booking-header";
 import "./agendamento.css";
@@ -19,7 +21,7 @@ function firstValue(value: string | string[] | undefined) {
 }
 
 export default async function AgendamentoPage({ searchParams }: PageProps<"/agendamento">) {
-  const params = await searchParams;
+  const [params, professionals] = await Promise.all([searchParams, getPublicProfessionals()]);
   const serviceParam = firstValue(params.servico);
   const professionalParam = firstValue(params.profissional);
   const openDays = openingHours.filter((item) => item.hours !== "Fechado");
@@ -28,10 +30,12 @@ export default async function AgendamentoPage({ searchParams }: PageProps<"/agen
     <div className="booking-page">
       <BookingHeader />
       <main className="booking-page__main">
-        <BookingFlow
-          initialProfessionalId={isProfessionalChoice(professionalParam) ? professionalParam : null}
-          initialServiceId={isServiceId(serviceParam) ? serviceParam : null}
-        />
+        <BookingCatalogProvider professionals={professionals}>
+          <BookingFlow
+            initialProfessionalId={isProfessionalChoice(professionals, professionalParam) ? professionalParam : null}
+            initialServiceId={isServiceId(serviceParam) ? serviceParam : null}
+          />
+        </BookingCatalogProvider>
       </main>
       <footer className="booking-footer">
         <div className="booking-footer__inner">

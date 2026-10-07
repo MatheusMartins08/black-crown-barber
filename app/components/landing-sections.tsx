@@ -13,8 +13,8 @@ import {
 import Reveal from "./reveal";
 import ImageComparison from "./image-comparison";
 import { serviceIcons } from "./service-icons";
+import { getFirstName, type Professional } from "../data/professionals";
 import {
-  barbers,
   galleryComparison,
   galleryFeature,
   galleryItems,
@@ -200,7 +200,7 @@ export function AboutSection() {
   );
 }
 
-export function TeamSection() {
+export function TeamSection({ professionals }: { professionals: Professional[] }) {
   return (
     <section aria-labelledby="team-title" className="section team" id="equipe">
       <div className="section__inner">
@@ -211,17 +211,19 @@ export function TeamSection() {
           title="Técnica em cada detalhe."
         />
         <div className="team__grid">
-          {barbers.map((barber, index) => (
-            <Reveal as="article" className="barber-card" delay={1 + (index % 3)} key={barber.name}>
+          {professionals.map((barber, index) => (
+            <Reveal as="article" className="barber-card" delay={1 + (index % 3)} key={barber.id}>
               <div className="barber-card__image-wrap">
-                <Image
-                  alt={barber.imageAlt}
-                  className="barber-card__image"
-                  fill
-                  sizes="(max-width: 600px) 85vw, (max-width: 900px) 45vw, 30vw"
-                  src={barber.image}
-                  style={{ objectPosition: barber.imagePosition }}
-                />
+                {barber.imageUrl ? (
+                  <Image
+                    alt={barber.imageAlt}
+                    className="barber-card__image"
+                    fill
+                    sizes="(max-width: 600px) 85vw, (max-width: 900px) 45vw, 30vw"
+                    src={barber.imageUrl}
+                    style={{ objectPosition: barber.imagePosition }}
+                  />
+                ) : null}
                 <span className="barber-card__index">0{index + 1}</span>
               </div>
               <div className="barber-card__body">
@@ -230,8 +232,8 @@ export function TeamSection() {
                   <h3>{barber.name}</h3>
                 </div>
                 <p>{barber.description}</p>
-                <Link href={`${siteConfig.bookingUrl}?profissional=${barber.id}`}>
-                  Agendar com {barber.name.split(" ")[0]} <ArrowUpRight aria-hidden="true" size={15} />
+                <Link href={`${siteConfig.bookingUrl}?profissional=${barber.slug}`}>
+                  Agendar com {getFirstName(barber.name)} <ArrowUpRight aria-hidden="true" size={15} />
                 </Link>
               </div>
             </Reveal>

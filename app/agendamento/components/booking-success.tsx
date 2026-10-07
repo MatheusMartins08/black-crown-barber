@@ -12,6 +12,7 @@ import {
   type Reservation,
 } from "../../data/booking";
 import { reservationActions, type ReservationActionId } from "../lib/booking-integrations";
+import { useBookingProfessionals } from "./booking-catalog";
 import ProfessionalAvatar from "./professional-avatar";
 
 const actionIcons: Record<ReservationActionId, typeof MessageCircle> = {
@@ -29,7 +30,7 @@ type BookingSuccessProps = {
 
 export default function BookingSuccess({ reservation, onBookAnother, headingRef }: BookingSuccessProps) {
   const service = getService(reservation.serviceId);
-  const professional = getProfessional(reservation.professionalId);
+  const professional = getProfessional(useBookingProfessionals(), reservation.professionalId);
   const endTime = toTime(toMinutes(reservation.time) + reservation.durationMinutes);
 
   const rows = [

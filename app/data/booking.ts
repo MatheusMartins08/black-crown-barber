@@ -1,11 +1,13 @@
 import type { PlanId } from "./plans";
-import { barbers, openingHours, services } from "./site";
+import type { Professional } from "./professionals";
+import { openingHours, services } from "./site";
 
 // Regras e dados do fluxo de agendamento. Tudo aqui é puro (sem React e sem rede)
 // para poder ser reaproveitado no servidor quando existir uma API de agenda.
 
 export type ServiceId = (typeof services)[number]["id"];
-export type ProfessionalId = (typeof barbers)[number]["id"];
+/** Slug do profissional (professionals.slug), o mesmo que as RPCs do agendamento recebem. */
+export type ProfessionalId = string;
 
 export const ANY_PROFESSIONAL = "qualquer";
 export type ProfessionalChoice = ProfessionalId | typeof ANY_PROFESSIONAL;
@@ -26,22 +28,32 @@ export const bookingServices = services.map((service) => ({
 
 export type BookingService = (typeof bookingServices)[number];
 
-const allServiceIds = services.map((service) => service.id);
+// Profissionais: vêm do Supabase (só os ativos) e chegam ao fluxo por props/contexto.
+// As funções abaixo recebem a lista em vez de ler um catálogo fixo.
 
-// Hoje todos os profissionais atendem todos os serviços. Restrinja aqui quando a
-// barbearia definir especialidades exclusivas.
-const servicesByProfessional: Record<ProfessionalId, readonly ServiceId[]> = {
-  julia: allServiceIds,
-  rafael: allServiceIds,
-  joao: allServiceIds,
-};
+export function getProfessional(professionals: readonly Professional[], slug: string | null) {
+  return professionals.find((professional) => professional.slug === slug) ?? null;
+}
 
-export const bookingProfessionals = barbers.map((barber) => ({
-  ...barber,
-  serviceIds: servicesByProfessional[barber.id],
-}));
+export function getProfessionalsForService(professionals: readonly Professional[], serviceId: ServiceId) {
+  return professionals.filter((professional) => professional.serviceIds.includes(serviceId));
+}
 
-export type BookingProfessional = (typeof bookingProfessionals)[number];
+export function isProfessionalChoice(
+  professionals: readonly Professional[],
+  value: unknown,
+): value is ProfessionalChoice {
+  return value === ANY_PROFESSIONAL || professionals.some((professional) => professional.slug === value);
+}
+
+export function offersService(
+  professionals: readonly Professional[],
+  professionalId: ProfessionalChoice,
+  serviceId: ServiceId,
+) {
+  if (professionalId === ANY_PROFESSIONAL) return true;
+  return getProfessional(professionals, professionalId)?.serviceIds.includes(serviceId) ?? false;
+}
 
 export const bookingRules = {
   windowDays: 21,
@@ -59,25 +71,8 @@ export function getService(id: ServiceId | null) {
   return bookingServices.find((service) => service.id === id) ?? null;
 }
 
-export function getProfessional(id: string | null) {
-  return bookingProfessionals.find((professional) => professional.id === id) ?? null;
-}
-
-export function getProfessionalsForService(serviceId: ServiceId) {
-  return bookingProfessionals.filter((professional) => professional.serviceIds.includes(serviceId));
-}
-
 export function isServiceId(value: unknown): value is ServiceId {
   return bookingServices.some((service) => service.id === value);
-}
-
-export function isProfessionalChoice(value: unknown): value is ProfessionalChoice {
-  return value === ANY_PROFESSIONAL || bookingProfessionals.some((professional) => professional.id === value);
-}
-
-export function offersService(professionalId: ProfessionalChoice, serviceId: ServiceId) {
-  if (professionalId === ANY_PROFESSIONAL) return true;
-  return servicesByProfessional[professionalId].includes(serviceId);
 }
 
 // --- Tipos do rascunho e da reserva ---

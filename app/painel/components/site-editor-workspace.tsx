@@ -2,6 +2,8 @@
 
 import { useRef, useState, type KeyboardEvent } from "react";
 import { BadgePercent, CalendarClock, Images, Scissors, UsersRound, type LucideIcon } from "lucide-react";
+import type { ProfessionalUsage } from "../lib/staff";
+import SiteBarbers from "./site-barbers";
 
 type Section = {
   value: string;
@@ -65,7 +67,13 @@ function isTab(value: unknown): value is Tab {
  * Tela Edição do site: conteúdo variável do site em abas (mesmo padrão da tela Clientes).
  * A troca de aba fica na URL (?aba=) sem criar entrada no histórico.
  */
-export default function SiteEditorWorkspace({ initialTab }: { initialTab?: string }) {
+export default function SiteEditorWorkspace({
+  initialTab,
+  professionalUsage,
+}: {
+  initialTab?: string;
+  professionalUsage: Record<string, ProfessionalUsage>;
+}) {
   const [tab, setTab] = useState<Tab>(isTab(initialTab) ? initialTab : "imagens");
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
@@ -146,19 +154,23 @@ export default function SiteEditorWorkspace({ initialTab }: { initialTab?: strin
             key={item.value}
             role="tabpanel"
           >
-            <section aria-labelledby={`${item.value}-title`} className="admin-panel">
-              <div className="admin-panel__heading">
-                <div>
-                  <h2 id={`${item.value}-title`}>{item.title}</h2>
-                  <p>{item.description}</p>
+            {item.value === "barbeiros" ? (
+              <SiteBarbers usage={professionalUsage} />
+            ) : (
+              <section aria-labelledby={`${item.value}-title`} className="admin-panel">
+                <div className="admin-panel__heading">
+                  <div>
+                    <h2 id={`${item.value}-title`}>{item.title}</h2>
+                    <p>{item.description}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="admin-empty">
-                <Icon aria-hidden="true" size={22} strokeWidth={1.6} />
-                <p className="admin-empty__title">Em breve</p>
-                <p>{item.upcoming}</p>
-              </div>
-            </section>
+                <div className="admin-empty">
+                  <Icon aria-hidden="true" size={22} strokeWidth={1.6} />
+                  <p className="admin-empty__title">Em breve</p>
+                  <p>{item.upcoming}</p>
+                </div>
+              </section>
+            )}
           </div>
         );
       })}

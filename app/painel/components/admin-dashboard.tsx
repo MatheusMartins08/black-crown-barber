@@ -21,6 +21,7 @@ import AppointmentsTable, { type AgendaFilters } from "./appointments-table";
 import BarberProduction from "./barber-production";
 import DateNav from "./date-nav";
 import { isSubscriber } from "./membership-tag";
+import { findProfessional, usePainelProfessionals } from "./painel-catalog";
 
 function getErrorMessage(error: unknown) {
   return error instanceof PainelApiError ? error.message : "Não foi possível falar com o banco. Tente novamente.";
@@ -49,8 +50,9 @@ export default function AdminDashboard() {
   const loaded = useAsyncData(loader);
   const data = edits?.loader === loader ? edits.data : loaded.status === "success" ? loaded.data : null;
 
+  const professionals = usePainelProfessionals();
   const appointments = useMemo(() => data ?? [], [data]);
-  const summaries = useMemo(() => summarizeByBarber(appointments), [appointments]);
+  const summaries = useMemo(() => summarizeByBarber(appointments, professionals), [appointments, professionals]);
 
   const active = appointments.filter((appointment) => appointment.status !== "cancelado");
   const completed = appointments.filter((appointment) => appointment.status === "concluido");
@@ -64,11 +66,14 @@ export default function AdminDashboard() {
     );
   }
 
-  async function updateAppointment(id: string, changes: Partial<Pick<Appointment, "status" | "performedBy">>) {
+  async function updateAppointment(id: string, changes: Partial<Pick<Appointment, "status" | "performedById">>) {
     const previous = appointments.find((appointment) => appointment.id === id);
     if (!data || !previous) return;
     setActionError(null);
-    setEdits({ loader, data: data.map((item) => (item.id === id ? { ...item, ...changes } : item)) });
+    // Mostra a troca na hora (com o nome do novo executor) enquanto o banco grava.
+    const performer = changes.performedById ? findProfessional(professionals, changes.performedById) : null;
+    const optimistic = { ...changes, ...(performer ? { performedBy: performer.name } : {}) };
+    setEdits({ loader, data: data.map((item) => (item.id === id ? { ...item, ...optimistic } : item)) });
 
     try {
       const saved = await saveAppointment(id, changes);

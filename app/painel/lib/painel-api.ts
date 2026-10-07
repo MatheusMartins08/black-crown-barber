@@ -3,7 +3,6 @@ import {
   addDays,
   type Appointment,
   type AppointmentStatus,
-  type BarberName,
   type ClientProfile,
   type MembershipStatus,
   type MonthPayment,
@@ -12,7 +11,7 @@ import {
   type ServiceName,
 } from "../../data/painel";
 import { isPlanId } from "../../data/plans";
-import { barbers, services } from "../../data/site";
+import { services } from "../../data/site";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 
@@ -34,7 +33,6 @@ function fail(error: RpcError, fallback: string): never {
   throw new PainelApiError(error.code === "42501" ? "Seu usuário não tem permissão para esta ação." : getRpcMessage(error, fallback));
 }
 
-const barberNameBySlug = Object.fromEntries(barbers.map((barber) => [barber.id, barber.name])) as Record<string, BarberName>;
 const serviceNameBySlug = Object.fromEntries(services.map((service) => [service.id, service.name])) as Record<
   string,
   ServiceName
@@ -50,9 +48,9 @@ type AppointmentRow = {
   customer_name: string;
   service_slug: string;
   service_name: string;
-  booked_professional_slug: string;
+  booked_professional_id: string;
   booked_professional_name: string;
-  performed_by_slug: string;
+  performed_by_id: string;
   performed_by_name: string;
   price: number;
   live_plan_name: string | null;
@@ -64,7 +62,7 @@ type AppointmentRow = {
 };
 
 const appointmentColumns =
-  "id, code, status, local_date, local_time, customer_id, customer_name, service_slug, service_name, booked_professional_slug, booked_professional_name, performed_by_slug, performed_by_name, price, live_plan_name, covered_live, covered_by_plan, charged_amount, payout_amount, membership_status";
+  "id, code, status, local_date, local_time, customer_id, customer_name, service_slug, service_name, booked_professional_id, booked_professional_name, performed_by_id, performed_by_name, price, live_plan_name, covered_live, covered_by_plan, charged_amount, payout_amount, membership_status";
 
 function toAppointment(row: AppointmentRow): Appointment {
   return {
@@ -75,8 +73,10 @@ function toAppointment(row: AppointmentRow): Appointment {
     clientId: row.customer_id,
     clientName: row.customer_name,
     serviceName: serviceNameBySlug[row.service_slug] ?? (row.service_name as ServiceName),
-    bookedWith: barberNameBySlug[row.booked_professional_slug] ?? (row.booked_professional_name as BarberName),
-    performedBy: barberNameBySlug[row.performed_by_slug] ?? (row.performed_by_name as BarberName),
+    bookedWithId: row.booked_professional_id,
+    bookedWith: row.booked_professional_name,
+    performedById: row.performed_by_id,
+    performedBy: row.performed_by_name,
     status: row.status,
     price: Number(row.price),
     membership: row.membership_status,
@@ -115,33 +115,14 @@ async function fetchAppointment(id: string) {
   return toAppointment(data as AppointmentRow);
 }
 
-let professionalIds: Promise<Record<string, string>> | null = null;
-
-function getProfessionalIds() {
-  professionalIds ??= (async () => {
-    const { data, error } = await getSupabaseBrowserClient().from("professionals").select("id, slug");
-    if (error) {
-      professionalIds = null;
-      fail(error, "Não foi possível carregar a equipe.");
-    }
-    return Object.fromEntries(data.map((row) => [row.slug, row.id]));
-  })();
-  return professionalIds;
-}
-
 /** Altera status e/ou quem executou. Devolve o atendimento como o banco gravou (com cobrado e repasse). */
 export async function updateAppointment(
   id: string,
-  changes: Partial<Pick<Appointment, "status" | "performedBy">>,
+  changes: Partial<Pick<Appointment, "status" | "performedById">>,
 ): Promise<Appointment> {
   const patch: { status?: AppointmentStatus; performed_by_id?: string } = {};
   if (changes.status) patch.status = changes.status;
-  if (changes.performedBy) {
-    const slug = barbers.find((barber) => barber.name === changes.performedBy)?.id;
-    const professionalId = slug ? (await getProfessionalIds())[slug] : undefined;
-    if (!professionalId) throw new PainelApiError("Profissional não encontrado.");
-    patch.performed_by_id = professionalId;
-  }
+  if (changes.performedById) patch.performed_by_id = changes.performedById;
 
   const { data, error } = await getSupabaseBrowserClient().from("appointments").update(patch).eq("id", id).select("id");
   if (error) {

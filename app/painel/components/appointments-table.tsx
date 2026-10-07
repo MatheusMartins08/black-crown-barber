@@ -3,22 +3,24 @@
 import { useState } from "react";
 import { CalendarX2, CheckCircle2, Clock3, UserX, XCircle } from "lucide-react";
 import {
-  barberNames,
   formatCurrency,
   getPlanByName,
   isCoveredByPlan,
+  listProfessionalsFor,
   serviceNames,
   type Appointment,
   type AppointmentStatus,
-  type BarberName,
   type ServiceName,
 } from "../../data/painel";
+import { getFirstName, type Professional } from "../../data/professionals";
 import BarberAvatar from "./barber-avatar";
 import FilterToggle from "./filter-toggle";
 import MembershipTag, { isSubscriber } from "./membership-tag";
+import { usePainelProfessionals } from "./painel-catalog";
 
 export type AgendaFilters = {
-  barber: BarberName | "todos";
+  /** Id do profissional (uuid) ou "todos". */
+  barber: string | "todos";
   clientType: "todos" | "assinante" | "pendente" | "avulso";
   service: ServiceName | "todos";
 };
@@ -35,11 +37,11 @@ type AppointmentsTableProps = {
   filters: AgendaFilters;
   isClosed: boolean;
   onFiltersChange: (filters: AgendaFilters) => void;
-  onUpdate: (id: string, changes: Partial<Pick<Appointment, "status" | "performedBy">>) => void;
+  onUpdate: (id: string, changes: Partial<Pick<Appointment, "status" | "performedById">>) => void;
 };
 
 export function matchesFilters(appointment: Appointment, filters: AgendaFilters) {
-  if (filters.barber !== "todos" && appointment.performedBy !== filters.barber) return false;
+  if (filters.barber !== "todos" && appointment.performedById !== filters.barber) return false;
   if (filters.service !== "todos" && appointment.serviceName !== filters.service) return false;
   if (filters.clientType === "todos") return true;
 
@@ -58,6 +60,10 @@ export default function AppointmentsTable({
   onUpdate,
 }: AppointmentsTableProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const professionals = usePainelProfessionals();
+  // Ativos e quem aparece no dia (um inativo com atendimento continua filtrável).
+  const listed = listProfessionalsFor(professionals, appointments);
+  const active = professionals.filter((professional) => professional.isActive);
   const visible = appointments.filter((appointment) => matchesFilters(appointment, filters));
   const activeFilters = [filters.barber, filters.clientType, filters.service].filter((value) => value !== "todos").length;
 
@@ -97,9 +103,9 @@ export default function AppointmentsTable({
             value={filters.barber}
           >
             <option value="todos">Todos</option>
-            {barberNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
+            {listed.map((professional) => (
+              <option key={professional.id} value={professional.id}>
+                {professional.name}
               </option>
             ))}
           </select>
@@ -174,7 +180,12 @@ export default function AppointmentsTable({
             </thead>
             <tbody>
               {visible.map((appointment) => (
-                <AppointmentRow appointment={appointment} key={appointment.id} onUpdate={onUpdate} />
+                <AppointmentRow
+                  activeProfessionals={active}
+                  appointment={appointment}
+                  key={appointment.id}
+                  onUpdate={onUpdate}
+                />
               ))}
             </tbody>
           </table>
@@ -198,15 +209,21 @@ function getPriceNote(appointment: Appointment) {
 }
 
 function AppointmentRow({
+  activeProfessionals,
   appointment,
   onUpdate,
 }: {
+  activeProfessionals: readonly Professional[];
   appointment: Appointment;
   onUpdate: AppointmentsTableProps["onUpdate"];
 }) {
   const status = statusOptions.find((option) => option.value === appointment.status)!;
   const StatusIcon = status.icon;
-  const reassigned = appointment.performedBy !== appointment.bookedWith;
+  const reassigned = appointment.performedById !== appointment.bookedWithId;
+  // Só profissionais ativos recebem atendimentos; o atual fica na lista mesmo se inativo.
+  const performerOptions = activeProfessionals.some((professional) => professional.id === appointment.performedById)
+    ? activeProfessionals
+    : [{ id: appointment.performedById, name: appointment.performedBy }, ...activeProfessionals];
 
   return (
     <tr className={`admin-row admin-row--${appointment.status}`}>
@@ -223,24 +240,24 @@ function AppointmentRow({
       </td>
       <td className="admin-row__booked" data-label="Marcado com">
         <span className="admin-person">
-          <BarberAvatar name={appointment.bookedWith} />
+          <BarberAvatar professionalId={appointment.bookedWithId} />
           {appointment.bookedWith}
         </span>
       </td>
       <td className="admin-row__performed" data-label="Executado por">
         <label className="admin-inline-select admin-person-select">
-          <BarberAvatar name={appointment.performedBy} size={20} />
+          <BarberAvatar professionalId={appointment.performedById} size={20} />
           <span className="sr-only">Profissional que executou o atendimento das {appointment.time}</span>
           <select
             onChange={(event) =>
-              onUpdate(appointment.id, { performedBy: event.target.value as BarberName })
+              onUpdate(appointment.id, { performedById: event.target.value })
             }
-            value={appointment.performedBy}
+            value={appointment.performedById}
           >
             {/* Primeiro nome: cabe ao lado do status no celular (a foto identifica). */}
-            {barberNames.map((name) => (
-              <option key={name} value={name}>
-                {name.split(" ")[0]}
+            {performerOptions.map((professional) => (
+              <option key={professional.id} value={professional.id}>
+                {getFirstName(professional.name)}
               </option>
             ))}
           </select>

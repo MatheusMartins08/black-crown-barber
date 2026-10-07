@@ -1522,6 +1522,206 @@
   opacity: 0.7;
 }
 
+.admin-field textarea {
+  min-height: 84px;
+  border: 1px solid rgb(var(--foreground-rgb) / 20%);
+  border-radius: 0;
+  background: var(--admin-panel);
+  color: var(--foreground);
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 160ms ease;
+}
+
+.admin-field textarea:hover {
+  border-color: rgb(var(--foreground-rgb) / 42%);
+}
+
+.admin-field textarea[aria-invalid="true"] {
+  border-color: var(--accent);
+  background: rgb(var(--accent-rgb) / 3%);
+}
+
+/* Edição do site: listas de itens editáveis (barbeiros…) */
+
+.admin-site-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-site-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding: 14px 24px;
+}
+
+.admin-site-item.is-inactive .admin-site-item__media,
+.admin-site-item.is-inactive .admin-site-item__body {
+  opacity: 0.6;
+}
+
+.admin-site-item__media {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-wood);
+}
+
+.admin-site-item__body {
+  min-width: 0;
+}
+
+.admin-site-item__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.admin-site-item__title .admin-tag {
+  margin-top: 0;
+}
+
+.admin-site-item__meta {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-site-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 16px;
+}
+
+.admin-site-item__actions .admin-text-button {
+  padding: 0;
+  white-space: nowrap;
+}
+
+.admin-site-item__order {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.admin-site-item__order .admin-icon-button {
+  width: 36px;
+  height: 36px;
+}
+
+.admin-site-list[aria-busy="true"] {
+  opacity: 0.6;
+  transition: opacity 160ms ease;
+}
+
+.admin-alert--success {
+  border-color: rgb(61 107 75 / 35%);
+  background: rgb(61 107 75 / 7%);
+  color: var(--admin-success);
+}
+
+.admin-site .admin-alert {
+  margin: 0 24px 14px;
+}
+
+/* Foto no formulário: prévia no mesmo recorte do cartão do site. */
+.admin-photo {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-photo__frame {
+  position: relative;
+  display: grid;
+  aspect-ratio: 1.1;
+  max-height: 260px;
+  place-items: center;
+  overflow: hidden;
+  background: var(--admin-sunken);
+}
+
+.admin-photo__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-photo__empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-photo__badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: var(--accent);
+  color: var(--admin-panel);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-photo__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.admin-photo__controls .admin-text-button {
+  padding: 0;
+}
+
+.admin-photo__pick {
+  position: relative;
+}
+
+.admin-photo__pick:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.admin-photo__position {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-photo__position input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.admin-site-form__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  padding-left: 0;
+}
+
 /* Responsivo */
 
 @media (max-width: 960px) {
@@ -2830,5 +3030,42 @@
 @media (max-width: 760px) {
   .admin-header__user {
     display: none;
+  }
+}
+
+/* Edição do site no celular: ações numa segunda linha, alvos de toque confortáveis. */
+@media (max-width: 760px) {
+  .admin-site-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px 12px;
+    padding: 12px 16px;
+  }
+
+  .admin-site-item__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    gap: 4px 18px;
+  }
+
+  .admin-site-item__order {
+    order: 3;
+    margin-left: auto;
+  }
+
+  .admin-site-item__order .admin-icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .admin-site .admin-alert {
+    margin-inline: 16px;
+  }
+
+  .admin-dialog .admin-field textarea {
+    font-size: 16px;
+  }
+
+  .admin-photo__frame {
+    max-height: 200px;
   }
 }

@@ -1,6 +1,6 @@
 import {
+  ANY_PROFESSIONAL,
   hasErrors,
-  isProfessionalChoice,
   validateCustomer,
   type BookingDraft,
   type DaySummary,
@@ -46,9 +46,8 @@ type SlotRow = { slot_time: string; professional_slugs: string[] };
 function toSlot(row: SlotRow): TimeSlot {
   return {
     time: row.slot_time,
-    professionalIds: row.professional_slugs.filter(
-      (slug): slug is ProfessionalId => isProfessionalChoice(slug) && slug !== "qualquer",
-    ),
+    // O banco só devolve profissionais ativos que atendem o serviço.
+    professionalIds: row.professional_slugs.filter((slug): slug is ProfessionalId => slug !== ANY_PROFESSIONAL),
   };
 }
 

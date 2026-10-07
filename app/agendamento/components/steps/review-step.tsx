@@ -11,6 +11,7 @@ import {
 import { getPlan } from "../../../data/plans";
 import type { PlanCoverage, SubscriberSession } from "../../../data/subscribers";
 import { formatWeek, getCoverageNote, getPriceLabel } from "../../lib/plan-pricing";
+import { useBookingProfessionals } from "../booking-catalog";
 import ProfessionalAvatar from "../professional-avatar";
 import type { StepId } from "../use-booking-draft";
 
@@ -27,7 +28,7 @@ type ReviewStepProps = {
 
 export default function ReviewStep({ draft, onEdit, error, session, coverage, checkingCoverage }: ReviewStepProps) {
   const service = getService(draft.serviceId);
-  const assignee = getProfessional(draft.assignedProfessionalId);
+  const assignee = getProfessional(useBookingProfessionals(), draft.assignedProfessionalId);
   if (!service || !draft.date || !draft.time) return null;
 
   const coverageNote = session ? getCoverageNote(coverage) : null;
@@ -46,7 +47,7 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
       label: "Profissional",
       value: (
         <span className="booking-review__person">
-          <ProfessionalAvatar professionalId={assignee?.id ?? null} size={26} />
+          <ProfessionalAvatar professionalId={assignee?.slug ?? null} size={26} />
           <span>
             {assignee?.name ?? "Qualquer profissional"}
             {draft.professionalId === ANY_PROFESSIONAL ? <small>Primeiro profissional livre</small> : null}

@@ -1,5 +1,11 @@
 import "server-only";
 import { cache } from "react";
+import {
+  professionalColumns,
+  sortProfessionals,
+  toProfessional,
+  type ProfessionalRow,
+} from "../../data/professionals";
 import { getSupabaseServerClient } from "../../lib/supabase/server";
 
 export type StaffRole = "admin" | "barbeiro";
@@ -25,4 +31,49 @@ export const getCurrentStaff = cache(async () => {
     email: typeof data.claims.email === "string" ? data.claims.email : "",
     staff: staff as { role: StaffRole; display_name: string | null } | null,
   };
+});
+
+export type ProfessionalUsage = {
+  /** Tem atendimentos, bloqueios de agenda ou login de barbeiro: não pode ser excluído. */
+  hasHistory: boolean;
+  /** Horários "agendado" daqui para frente (continuam valendo se o profissional for inativado). */
+  upcoming: number;
+};
+
+/** Uso de cada profissional (id → uso), para a tela Edição do site > Barbeiros. */
+export async function getProfessionalUsage(): Promise<Record<string, ProfessionalUsage>> {
+  const supabase = await getSupabaseServerClient();
+  const [appointments, blocks, logins] = await Promise.all([
+    supabase.from("appointments").select("booked_professional_id, performed_by_id, status, starts_at"),
+    supabase.from("schedule_blocks").select("professional_id"),
+    supabase.from("staff_members").select("professional_id").not("professional_id", "is", null),
+  ]);
+  if (appointments.error || blocks.error || logins.error) {
+    throw new Error("Não foi possível carregar o histórico da equipe.");
+  }
+
+  const usage: Record<string, ProfessionalUsage> = {};
+  const entry = (id: string) => (usage[id] ??= { hasHistory: false, upcoming: 0 });
+  const now = Date.now();
+
+  for (const row of appointments.data) {
+    entry(row.booked_professional_id).hasHistory = true;
+    entry(row.performed_by_id).hasHistory = true;
+    if (row.status === "agendado" && new Date(row.starts_at).getTime() >= now) entry(row.performed_by_id).upcoming += 1;
+  }
+  for (const row of [...blocks.data, ...logins.data]) {
+    if (row.professional_id) entry(row.professional_id).hasHistory = true;
+  }
+  return usage;
+}
+
+/**
+ * Todos os profissionais, inclusive inativos (a RLS mostra os inativos só para a equipe):
+ * o histórico da agenda e do fechamento continua apontando para eles.
+ */
+export const getStaffProfessionals = cache(async () => {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("professionals").select(professionalColumns).order("sort_order");
+  if (error) throw new Error(`Não foi possível carregar a equipe: ${error.message}`);
+  return sortProfessionals((data as unknown as ProfessionalRow[]).map(toProfessional));
 });

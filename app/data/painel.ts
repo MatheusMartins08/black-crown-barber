@@ -1,12 +1,12 @@
 import { subscriptionPlans as planCatalog, type PlanBenefit, type PlanId } from "./plans";
-import { barbers, services } from "./site";
+import type { Professional } from "./professionals";
+import { services } from "./site";
 
 // Tipos, regras e formatação do painel. Puro (sem React e sem rede): os dados vêm do
 // Supabase por app/painel/lib/painel-api.ts. Cobertura do plano, valor cobrado e
 // repasse são calculados no banco (appointments_settle e private.plan_coverage) e
 // chegam prontos em cada atendimento.
 
-export type BarberName = (typeof barbers)[number]["name"];
 export type ServiceName = (typeof services)[number]["name"];
 export type AppointmentStatus = "agendado" | "concluido" | "faltou" | "cancelado";
 export type Period = "dia" | "semana" | "mes";
@@ -41,8 +41,11 @@ export type Appointment = {
   clientId: string;
   clientName: string;
   serviceName: ServiceName;
-  bookedWith: BarberName;
-  performedBy: BarberName;
+  /** Profissionais pelo id (uuid estável); os nomes vêm do cadastro atual, só para exibir. */
+  bookedWithId: string;
+  bookedWith: string;
+  performedById: string;
+  performedBy: string;
   status: AppointmentStatus;
   /** Preço do serviço copiado na reserva. */
   price: number;
@@ -111,7 +114,6 @@ export type ClientProfile = {
   currentCycle: CyclePayment | null;
 };
 
-export const barberNames = barbers.map((barber) => barber.name) as BarberName[];
 export const serviceNames = services.map((service) => service.name) as ServiceName[];
 
 export const servicePrices = Object.fromEntries(
@@ -298,7 +300,9 @@ export function formatCurrency(value: number) {
 }
 
 export type BarberSummary = {
-  barberName: BarberName;
+  professionalId: string;
+  barberName: string;
+  specialty: string;
   completed: number;
   booked: number;
   byService: Record<ServiceName, number>;
@@ -309,10 +313,22 @@ export type BarberSummary = {
   total: number;
 };
 
+/**
+ * Profissionais que entram na agenda e no fechamento: os ativos e, mesmo inativos, os que
+ * executaram algum atendimento da lista (o histórico continua aparecendo).
+ */
+export function listProfessionalsFor(professionals: readonly Professional[], appointments: readonly Appointment[]) {
+  const performers = new Set(appointments.map((appointment) => appointment.performedById));
+  return professionals.filter((professional) => professional.isActive || performers.has(professional.id));
+}
+
 /** Resumo por profissional considerando quem executou o serviço (não com quem foi marcado). */
-export function summarizeByBarber(appointments: Appointment[]): BarberSummary[] {
-  return barberNames.map((barberName) => {
-    const own = appointments.filter((appointment) => appointment.performedBy === barberName);
+export function summarizeByBarber(
+  appointments: Appointment[],
+  professionals: readonly Professional[],
+): BarberSummary[] {
+  return listProfessionalsFor(professionals, appointments).map((professional) => {
+    const own = appointments.filter((appointment) => appointment.performedById === professional.id);
     const completed = own.filter((appointment) => appointment.status === "concluido");
     const byService = Object.fromEntries(serviceNames.map((name) => [name, 0])) as Record<ServiceName, number>;
     let planCount = 0;
@@ -330,7 +346,9 @@ export function summarizeByBarber(appointments: Appointment[]): BarberSummary[] 
     }
 
     return {
-      barberName,
+      professionalId: professional.id,
+      barberName: professional.name,
+      specialty: professional.specialty,
       completed: completed.length,
       booked: own.filter((appointment) => appointment.status !== "cancelado").length,
       byService,

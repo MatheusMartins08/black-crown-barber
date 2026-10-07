@@ -19,6 +19,7 @@ import { getPlan } from "../../data/plans";
 import { evaluateCoverage, type SubscriberSession } from "../../data/subscribers";
 import { fetchPlanCoverage } from "../../lib/subscribers-api";
 import { BookingApiError, createReservation, createSubscriberReservation } from "../lib/booking-api";
+import { useBookingProfessionals } from "./booking-catalog";
 import BookingProgress from "./booking-progress";
 import BookingSuccess from "./booking-success";
 import { BookingSummaryBar, BookingSummaryPanel } from "./booking-summary";
@@ -128,7 +129,14 @@ function BookingFlowContent({
   restore,
   persist,
 }: BookingFlowProps & { restore: boolean; persist: boolean }) {
-  const [{ step, draft }, dispatch] = useBookingDraft({ initialServiceId, initialProfessionalId, restore, persist });
+  const professionals = useBookingProfessionals();
+  const [{ step, draft }, dispatch] = useBookingDraft({
+    professionals,
+    initialServiceId,
+    initialProfessionalId,
+    restore,
+    persist,
+  });
   const [detailsAttempted, setDetailsAttempted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<SubmissionError | null>(null);
@@ -164,7 +172,7 @@ function BookingFlowContent({
   const service = getService(draft.serviceId);
   const professionalName =
     draft.professionalId && draft.professionalId !== ANY_PROFESSIONAL
-      ? getProfessional(draft.professionalId)?.name
+      ? getProfessional(professionals, draft.professionalId)?.name
       : undefined;
   const copy = getStepCopy(step, { serviceName: service?.name, professionalName, session });
 

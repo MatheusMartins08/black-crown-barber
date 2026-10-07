@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import { formatCurrency, serviceNames, type BarberSummary } from "../../data/painel";
-import { barbers } from "../../data/site";
 import BarberAvatar from "./barber-avatar";
 
 export default function BarberProduction({ summaries }: { summaries: BarberSummary[] }) {
@@ -20,16 +19,15 @@ export default function BarberProduction({ summaries }: { summaries: BarberSumma
 
       <ol className="admin-production__list">
         {summaries.map((summary) => {
-          const specialty = barbers.find((barber) => barber.name === summary.barberName)?.specialty;
           const planShare = summary.completed ? (summary.planCount / summary.completed) * 100 : 0;
 
           return (
-            <li className="admin-barber" key={summary.barberName}>
+            <li className="admin-barber" key={summary.professionalId}>
               <div className="admin-barber__identity">
-                <BarberAvatar name={summary.barberName} size={44} />
+                <BarberAvatar professionalId={summary.professionalId} size={44} />
                 <div>
                   <h3>{summary.barberName}</h3>
-                  <p>{specialty}</p>
+                  <p>{summary.specialty}</p>
                 </div>
                 <p className="admin-barber__count">
                   <strong>{summary.completed}</strong>

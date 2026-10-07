@@ -15,6 +15,7 @@ import {
 } from "../../data/painel";
 import { fetchAppointments, PainelApiError } from "../lib/painel-api";
 import DateNav from "./date-nav";
+import { usePainelProfessionals } from "./painel-catalog";
 import PayrollSummary from "./payroll-summary";
 
 const stepLabels: Record<Period, { previous: string; next: string }> = {
@@ -38,7 +39,11 @@ export default function PayrollPage() {
   const loader = useCallback(() => fetchAppointments({ start, end }), [start, end]);
   const loaded = useAsyncData(loader);
   const appointments = loaded.status === "success" ? loaded.data : null;
-  const summaries = useMemo(() => summarizeByBarber(appointments ?? []), [appointments]);
+  const professionals = usePainelProfessionals();
+  const summaries = useMemo(
+    () => summarizeByBarber(appointments ?? [], professionals),
+    [appointments, professionals],
+  );
   const periodLabel = formatPeriodLabel(selectedDate, period);
 
   return (

@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import AdminHeader from "../components/admin-header";
 import NoAccess from "../components/no-access";
-import { getCurrentStaff } from "../lib/staff";
+import { PainelCatalogProvider } from "../components/painel-catalog";
+import { getCurrentStaff, getStaffProfessionals } from "../lib/staff";
 import "../painel.css";
 
 export const metadata: Metadata = {
@@ -38,11 +39,12 @@ export default async function PainelLayout({ children }: { children: ReactNode }
   }
 
   const name = staff.display_name || email;
+  const professionals = await getStaffProfessionals();
 
   return (
     <div className="admin">
       <AdminHeader role={staff.role} userLabel={`${name} · ${roleLabels[staff.role] ?? staff.role}`} />
-      {children}
+      <PainelCatalogProvider professionals={professionals}>{children}</PainelCatalogProvider>
     </div>
   );
 }

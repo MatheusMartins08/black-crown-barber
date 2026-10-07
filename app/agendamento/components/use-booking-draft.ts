@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import {
   ANY_PROFESSIONAL,
   emptyDraft,
@@ -20,6 +20,7 @@ import {
   type ServiceId,
   type TimeSlot,
 } from "../../data/booking";
+import type { Professional } from "../../data/professionals";
 
 export type StepId = "perfil" | "servico" | "profissional" | "horario" | "dados" | "confirmacao";
 
@@ -87,7 +88,12 @@ function pickAssignee(draft: BookingDraft, slot: TimeSlot): ProfessionalId | nul
 
 const clearedTime = { time: null, assignedProfessionalId: null };
 
-function reducer(state: BookingState, action: Action): BookingState {
+/** Reducer do fluxo. Recebe os profissionais ativos para saber quem atende cada serviço. */
+function createReducer(professionals: readonly Professional[]) {
+  return (state: BookingState, action: Action) => reducer(state, action, professionals);
+}
+
+function reducer(state: BookingState, action: Action, professionals: readonly Professional[]): BookingState {
   const { draft } = state;
 
   switch (action.type) {
@@ -98,7 +104,8 @@ function reducer(state: BookingState, action: Action): BookingState {
     }
     case "selectService": {
       if (draft.serviceId === action.serviceId) return state;
-      const keepsProfessional = draft.professionalId && offersService(draft.professionalId, action.serviceId);
+      const keepsProfessional =
+        draft.professionalId && offersService(professionals, draft.professionalId, action.serviceId);
       return {
         ...state,
         draft: {
@@ -148,6 +155,8 @@ function reducer(state: BookingState, action: Action): BookingState {
 }
 
 type InitOptions = {
+  /** Profissionais ativos (Supabase). Um rascunho que cite alguém fora da lista é descartado. */
+  professionals: readonly Professional[];
   initialServiceId: ServiceId | null;
   initialProfessionalId: ProfessionalChoice | null;
   /** Lê o rascunho salvo ao montar (somente no cliente). */
@@ -177,16 +186,22 @@ function isStepId(value: unknown): value is StepId {
   return allSteps.includes(value as StepId);
 }
 
-function sanitizeDraft(value: Partial<BookingDraft> | undefined, today: string): BookingDraft {
+function sanitizeDraft(
+  value: Partial<BookingDraft> | undefined,
+  today: string,
+  professionals: readonly Professional[],
+): BookingDraft {
   const customerType = value?.customerType === "assinante" || value?.customerType === "avulso" ? value.customerType : null;
   const serviceId = isServiceId(value?.serviceId) ? value.serviceId : null;
   const professionalId =
-    serviceId && isProfessionalChoice(value?.professionalId) && offersService(value.professionalId, serviceId)
+    serviceId &&
+    isProfessionalChoice(professionals, value?.professionalId) &&
+    offersService(professionals, value.professionalId, serviceId)
       ? value.professionalId
       : null;
   const date = typeof value?.date === "string" && isWithinBookingWindow(value.date, today) ? value.date : null;
   const time = date && professionalId && typeof value?.time === "string" ? value.time : null;
-  const assigned = getProfessional(value?.assignedProfessionalId ?? null)?.id ?? null;
+  const assigned = getProfessional(professionals, value?.assignedProfessionalId ?? null)?.slug ?? null;
   const customer = value?.customer;
 
   return {
@@ -205,7 +220,7 @@ function sanitizeDraft(value: Partial<BookingDraft> | undefined, today: string):
   };
 }
 
-function init({ initialServiceId, initialProfessionalId, restore }: InitOptions): BookingState {
+function init({ professionals, initialServiceId, initialProfessionalId, restore }: InitOptions): BookingState {
   const stored = restore ? readStoredState() : null;
   const hasLinkSelection = Boolean(initialServiceId || initialProfessionalId);
 
@@ -213,9 +228,10 @@ function init({ initialServiceId, initialProfessionalId, restore }: InitOptions)
   // rascunho salvo e sempre começa pela pergunta de assinante; a resposta e os dados
   // de contato já informados são mantidos.
   if (hasLinkSelection || !stored) {
-    const kept = stored ? sanitizeDraft(stored.draft, getTodayIso()) : emptyDraft;
+    const kept = stored ? sanitizeDraft(stored.draft, getTodayIso(), professionals) : emptyDraft;
     const professionalId =
-      initialProfessionalId && (!initialServiceId || offersService(initialProfessionalId, initialServiceId))
+      initialProfessionalId &&
+      (!initialServiceId || offersService(professionals, initialProfessionalId, initialServiceId))
         ? initialProfessionalId
         : null;
     return {
@@ -230,12 +246,13 @@ function init({ initialServiceId, initialProfessionalId, restore }: InitOptions)
     };
   }
 
-  const draft = sanitizeDraft(stored.draft, getTodayIso());
+  const draft = sanitizeDraft(stored.draft, getTodayIso(), professionals);
   return { step: clampStep(draft, isStepId(stored.step) ? stored.step : "perfil"), draft };
 }
 
 export default function useBookingDraft(options: InitOptions) {
-  const [state, dispatch] = useReducer(reducer, options, init);
+  const reducerWithCatalog = useMemo(() => createReducer(options.professionals), [options.professionals]);
+  const [state, dispatch] = useReducer(reducerWithCatalog, options, init);
 
   useEffect(() => {
     if (!options.persist) return;

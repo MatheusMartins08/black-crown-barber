@@ -14,8 +14,10 @@ import {
 import SiteFooter from "./components/site-footer";
 import SiteHeader from "./components/site-header";
 import { localBusinessDetails, siteConfig } from "./data/site";
+import { getPublicProfessionals } from "./lib/catalog";
 
-export default function Home() {
+export default async function Home() {
+  const professionals = await getPublicProfessionals();
   const businessSchema = localBusinessDetails
     ? {
         "@context": "https://schema.org",
@@ -56,7 +58,7 @@ export default function Home() {
         <ServicesSection />
         <GallerySection />
         <AboutSection />
-        <TeamSection />
+        <TeamSection professionals={professionals} />
         <TestimonialsSection />
         <BookingSection />
         <LocationSection />

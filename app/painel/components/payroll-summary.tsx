@@ -107,10 +107,10 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
           </thead>
           <tbody>
             {summaries.map((summary) => (
-              <tr key={summary.barberName}>
+              <tr key={summary.professionalId}>
                 <th scope="row">
                   <span className="admin-person">
-                    <BarberAvatar name={summary.barberName} />
+                    <BarberAvatar professionalId={summary.professionalId} />
                     {summary.barberName}
                   </span>
                 </th>

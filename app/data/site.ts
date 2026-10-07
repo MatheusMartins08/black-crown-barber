@@ -1,6 +1,3 @@
-import juliaPhoto from "../../public/barber-julia.jpg";
-import rafaelPhoto from "../../public/barber-rafael.jpg";
-
 const address = "Rua Exemplo, 123";
 const city = "Belo Horizonte - MG";
 
@@ -144,35 +141,8 @@ export const galleryItems = [
   },
 ] as const;
 
-export const barbers = [
-  {
-    id: "julia",
-    name: "Júlia Andrade",
-    specialty: "Fades e cortes modernos",
-    description: "Transições suaves, texturas e cortes atuais pensados para o seu tipo de cabelo.",
-    image: juliaPhoto,
-    imageAlt: "Retrato da barbeira Júlia Andrade, de avental, no salão",
-    imagePosition: "50% 43%",
-  },
-  {
-    id: "rafael",
-    name: "Rafael Martins",
-    specialty: "Barba e acabamento clássico",
-    description: "Navalha, toalha quente e contornos precisos para uma barba sempre alinhada.",
-    image: rafaelPhoto,
-    imageAlt: "Barbeiro Rafael Martins segurando máquina e pente na barbearia",
-    imagePosition: "50% 32%",
-  },
-  {
-    id: "joao",
-    name: "João Almeida",
-    specialty: "Cortes tradicionais e tesoura",
-    description: "Cortes clássicos feitos na tesoura, com atenção ao caimento e ao acabamento.",
-    image: "/barber-joao.jpg",
-    imageAlt: "Retrato do barbeiro João Almeida",
-    imagePosition: "50% 36%",
-  },
-] as const;
+// Barbeiros: vêm da tabela professionals (app/lib/catalog.ts), editados no painel em
+// Edição do site > Barbeiros.
 
 export const testimonials = [
   {

@@ -6,6 +6,7 @@ import {
   type ProfessionalChoice,
   type ServiceId,
 } from "../../../data/booking";
+import { useBookingProfessionals } from "../booking-catalog";
 import ChoiceCard from "../choice-card";
 
 type ProfessionalStepProps = {
@@ -15,7 +16,7 @@ type ProfessionalStepProps = {
 };
 
 export default function ProfessionalStep({ serviceId, selectedId, onSelect }: ProfessionalStepProps) {
-  const professionals = getProfessionalsForService(serviceId);
+  const professionals = getProfessionalsForService(useBookingProfessionals(), serviceId);
 
   return (
     <ul className="choice-grid choice-grid--professionals">
@@ -41,22 +42,24 @@ export default function ProfessionalStep({ serviceId, selectedId, onSelect }: Pr
       </li>
 
       {professionals.map((professional, index) => (
-        <li key={professional.id}>
+        <li key={professional.slug}>
           <ChoiceCard
             className="professional-choice"
             index={index + 1}
-            onSelect={() => onSelect(professional.id)}
-            selected={selectedId === professional.id}
+            onSelect={() => onSelect(professional.slug)}
+            selected={selectedId === professional.slug}
           >
             <span className="professional-choice__media">
-              <Image
-                alt=""
-                className="professional-choice__image"
-                fill
-                sizes="(max-width: 700px) 104px, (max-width: 1000px) 45vw, 360px"
-                src={professional.image}
-                style={{ objectPosition: professional.imagePosition }}
-              />
+              {professional.imageUrl ? (
+                <Image
+                  alt=""
+                  className="professional-choice__image"
+                  fill
+                  sizes="(max-width: 700px) 104px, (max-width: 1000px) 45vw, 360px"
+                  src={professional.imageUrl}
+                  style={{ objectPosition: professional.imagePosition }}
+                />
+              ) : null}
             </span>
             <span className="professional-choice__body">
               <span className="choice-card__eyebrow">{professional.specialty}</span>

@@ -12,15 +12,17 @@ import {
 } from "../../data/booking";
 import { getPlan } from "../../data/plans";
 import type { PlanCoverage, SubscriberSession } from "../../data/subscribers";
+import type { Professional } from "../../data/professionals";
 import { getPriceLabel } from "../lib/plan-pricing";
+import { useBookingProfessionals } from "./booking-catalog";
 import PrimaryActionButton, { type PrimaryAction } from "./primary-action-button";
 import ProfessionalAvatar from "./professional-avatar";
 
-function getProfessionalLabel(draft: BookingDraft) {
+function getProfessionalLabel(draft: BookingDraft, professionals: readonly Professional[]) {
   if (!draft.professionalId) return null;
-  const assignee = getProfessional(draft.assignedProfessionalId);
+  const assignee = getProfessional(professionals, draft.assignedProfessionalId);
   if (draft.professionalId === ANY_PROFESSIONAL) return assignee ? assignee.name : "Qualquer profissional";
-  return getProfessional(draft.professionalId)?.name ?? null;
+  return getProfessional(professionals, draft.professionalId)?.name ?? null;
 }
 
 /** Assinante logado e a cobertura do plano para o serviço escolhido. */
@@ -34,7 +36,7 @@ function getTotal(draft: BookingDraft, { session, coverage }: SummaryPlanInfo) {
 
 function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: SummaryPlanInfo }) {
   const service = getService(draft.serviceId);
-  const professionalLabel = getProfessionalLabel(draft);
+  const professionalLabel = getProfessionalLabel(draft, useBookingProfessionals());
   const professionalAvatarId =
     draft.professionalId === ANY_PROFESSIONAL ? draft.assignedProfessionalId : draft.professionalId;
 

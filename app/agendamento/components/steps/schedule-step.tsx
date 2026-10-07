@@ -17,6 +17,7 @@ import {
   type TimeSlot,
 } from "../../../data/booking";
 import { fetchDayAvailability, fetchDaySummaries, findNextAvailable } from "../../lib/booking-api";
+import { useBookingProfessionals } from "../booking-catalog";
 import ProfessionalAvatar from "../professional-avatar";
 import useAsyncData from "../../../components/use-async-data";
 import DateStrip from "./date-strip";
@@ -84,8 +85,12 @@ export default function ScheduleStep({
   );
   const next = useAsyncData(nextLoader);
 
-  const professional = professionalId === ANY_PROFESSIONAL ? null : getProfessional(professionalId);
-  const assignee = professionalId === ANY_PROFESSIONAL && date === activeDate && time ? getProfessional(assignedProfessionalId) : null;
+  const professionals = useBookingProfessionals();
+  const professional = professionalId === ANY_PROFESSIONAL ? null : getProfessional(professionals, professionalId);
+  const assignee =
+    professionalId === ANY_PROFESSIONAL && date === activeDate && time
+      ? getProfessional(professionals, assignedProfessionalId)
+      : null;
 
   return (
     <div className="schedule">
@@ -163,7 +168,7 @@ export default function ScheduleStep({
             />
             {assignee ? (
               <p className="slot-panel__assignee">
-                <ProfessionalAvatar professionalId={assignee.id} size={32} />
+                <ProfessionalAvatar professionalId={assignee.slug} size={32} />
                 <span>
                   Atendimento com <strong>{assignee.name}</strong>
                   <small>Primeiro profissional livre neste horário.</small>

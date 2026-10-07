@@ -1,9 +1,11 @@
-import Image from "next/image";
-import { barbers } from "../../data/site";
+"use client";
 
-export default function BarberAvatar({ name, size = 28 }: { name: string; size?: number }) {
-  const barber = barbers.find((item) => item.name === name);
-  if (!barber) return null;
+import Image from "next/image";
+import { findProfessional, usePainelProfessionals } from "./painel-catalog";
+
+export default function BarberAvatar({ professionalId, size = 28 }: { professionalId: string; size?: number }) {
+  const barber = findProfessional(usePainelProfessionals(), professionalId);
+  if (!barber?.imageUrl) return null;
 
   return (
     <span className="admin-avatar" style={{ width: size, height: size }}>
@@ -12,7 +14,7 @@ export default function BarberAvatar({ name, size = 28 }: { name: string; size?:
         className="admin-avatar__image"
         fill
         sizes={`${size * 2}px`}
-        src={barber.image}
+        src={barber.imageUrl}
         style={{ objectPosition: barber.imagePosition }}
       />
     </span>
