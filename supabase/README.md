@@ -18,6 +18,7 @@ Schema da Black Crown Barber: agenda, clientes, planos e repasse da equipe. As m
 | `20261006120000_history_retention` | prazo de 6 meses do histórico e limpeza diária (pg_cron) |
 | `20261007120000_site_media_storage` | bucket público `site-media` (fotos editáveis pelo painel) e políticas: só o admin envia, troca ou apaga, por enquanto na pasta `barbers/` |
 | `20261008120000_professionals_soft_delete` | `professionals.deleted_at` (exclusão lógica de quem tem histórico) |
+| `20261008130000_site_images` | `site_images` (8 posições da galeria e a foto da barbearia, editáveis pelo admin) e pastas `gallery/` e `barbershop/` no bucket |
 
 ## Como aplicar
 
@@ -144,7 +145,8 @@ O PostgREST devolve `code` (SQLSTATE), `message` (chave) e `hint` (texto em pt-B
     - O excluído continua nos atendimentos e aparece no fechamento só nos períodos em que atendeu.
     - Login de barbeiro ligado a ele perde o acesso; admin ligado só perde o vínculo.
     - Horários futuros nunca são cancelados.
-- **Fotos** (`site-media`): o navegador reduz a imagem e envia como `barbers/<uuid>.<ext>` com a sessão do admin; a Server Action grava a URL e só depois apaga a foto antiga (se for do bucket). Fotos em `/public` nunca são apagadas.
+- **Imagens do site** (`site_images`): uma linha por posição fixa (`gallery-1` … `gallery-8`, `about`). O admin troca imagem, legenda, descrição e enquadramento; não cria nem apaga posições. O formato de cada posição no layout fica em `app/data/site-images.ts`. Fundos (topo e agendamento) e o comparador Antes/Depois não são editáveis.
+- **Fotos** (`site-media`): o navegador reduz a imagem e envia como `<pasta>/<uuid>.<ext>` (`barbers/`, `gallery/` ou `barbershop/`) com a sessão do admin; a Server Action grava a URL e só depois apaga a foto antiga (se for do bucket). Fotos em `/public` nunca são apagadas.
 
 ## Ao criar novas tabelas
 

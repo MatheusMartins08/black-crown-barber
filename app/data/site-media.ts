@@ -5,7 +5,7 @@
 export const siteMediaBucket = "site-media";
 
 /** Pastas liberadas pelas políticas do bucket. */
-export type SiteMediaFolder = "barbers";
+export type SiteMediaFolder = "barbers" | "gallery" | "barbershop";
 
 /** Mesmos tipos e limite do bucket; o Storage também recusa o que passar daqui. */
 export const imageRules = {

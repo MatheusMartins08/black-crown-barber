@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
+import { useId, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -9,10 +9,8 @@ import {
   CircleCheck,
   Eye,
   EyeOff,
-  ImageUp,
   Pencil,
   Trash2,
-  Undo2,
   UserPlus,
   UsersRound,
 } from "lucide-react";
@@ -24,7 +22,6 @@ import {
   type Professional,
   type ProfessionalErrors,
 } from "../../data/professionals";
-import { formatBytes, imageRules, validateImageFile } from "../../data/site-media";
 import { uploadSiteImage } from "../lib/image-upload";
 import type { ProfessionalUsage } from "../lib/staff";
 import {
@@ -35,6 +32,7 @@ import {
   type SiteActionResult,
 } from "../site-actions";
 import { DialogFrame, Field, FormAlert, SubmitButton, useDialogIds, type DialogIds } from "./admin-form";
+import { PhotoField, usePhotoDraft } from "./admin-photo-field";
 import BarberAvatar from "./barber-avatar";
 import { usePainelProfessionals } from "./painel-catalog";
 
@@ -274,45 +272,16 @@ function ProfessionalForm({
   const [name, setName] = useState(current?.name ?? "");
   const [specialty, setSpecialty] = useState(current?.specialty ?? "");
   const [description, setDescription] = useState(current?.description ?? "");
-  const [positionY, setPositionY] = useState(current ? getPositionY(current.imagePosition) : 50);
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
+  const photo = usePhotoDraft(current ? getPositionY(current.imagePosition) : 50);
+  const positionY = photo.positionY;
   const [attempted, setAttempted] = useState(false);
   const [busy, setBusy] = useState<"upload" | "save" | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const fieldId = (field: string) => `${ids}-${field}`;
-
-  // Libera a prévia da memória ao trocar de arquivo ou fechar.
-  useEffect(() => () => (preview ? URL.revokeObjectURL(preview) : undefined), [preview]);
 
   const errors: ProfessionalErrors = attempted
     ? validateProfessional({ name, specialty, description, imagePositionY: positionY })
     : {};
-  const imageSrc = preview ?? current?.imageUrl ?? null;
-
-  function chooseFile(next: File | undefined) {
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (!next) return;
-    const problem = validateImageFile(next);
-    if (problem) {
-      setFileError(problem);
-      return;
-    }
-    setFileError(null);
-    setFile(next);
-    setPreview(URL.createObjectURL(next));
-    // Foto nova começa centralizada; a atual mantém o enquadramento salvo.
-    setPositionY(50);
-  }
-
-  function undoFile() {
-    setFile(null);
-    setPreview(null);
-    setFileError(null);
-    setPositionY(current ? getPositionY(current.imagePosition) : 50);
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -330,9 +299,9 @@ function ProfessionalForm({
     let stage: "upload" | "save" = "upload";
     try {
       let uploaded: { path: string; url: string } | null = null;
-      if (file) {
+      if (photo.file) {
         setBusy("upload");
-        uploaded = await uploadSiteImage("barbers", file);
+        uploaded = await uploadSiteImage("barbers", photo.file);
       }
       stage = "save";
       setBusy("save");
@@ -395,68 +364,12 @@ function ProfessionalForm({
       title={current ? `Editar ${current.name}` : "Novo barbeiro"}
       titleId={dialogIds.titleId}
     >
-      <div className="admin-field admin-dialog__field">
-        <span>Foto</span>
-        <div className="admin-photo">
-          <div className="admin-photo__frame">
-            {imageSrc ? (
-              // Prévia local (blob:) ou a foto atual; o site usa next/image com o mesmo enquadramento.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img alt="" className="admin-photo__image" src={imageSrc} style={{ objectPosition: `50% ${positionY}%` }} />
-            ) : (
-              <span className="admin-photo__empty">
-                <ImageUp aria-hidden="true" size={22} strokeWidth={1.6} />
-                Sem foto
-              </span>
-            )}
-            {file ? <span className="admin-photo__badge">Nova foto · ainda não salva</span> : null}
-          </div>
-          <div className="admin-photo__controls">
-            <label className="admin-toggle-button admin-photo__pick">
-              <ImageUp aria-hidden="true" size={15} />
-              {imageSrc ? "Trocar foto" : "Escolher foto"}
-              <input
-                accept={imageRules.accept}
-                className="sr-only"
-                disabled={busy !== null}
-                onChange={(event) => chooseFile(event.target.files?.[0])}
-                ref={fileInputRef}
-                type="file"
-              />
-            </label>
-            {file ? (
-              <button className="admin-text-button admin-row__action" disabled={busy !== null} onClick={undoFile} type="button">
-                <Undo2 aria-hidden="true" size={15} />
-                Desfazer troca
-              </button>
-            ) : null}
-          </div>
-          {fileError ? (
-            <p className="admin-field__error" role="alert">
-              <CircleAlert aria-hidden="true" size={13} />
-              {fileError}
-            </p>
-          ) : (
-            <p className="admin-field__hint">
-              JPEG, PNG, WebP ou AVIF, até {formatBytes(imageRules.maxBytes)}. A foto antiga só é substituída ao salvar.
-            </p>
-          )}
-          {imageSrc ? (
-            <label className="admin-photo__position">
-              <span>Enquadramento</span>
-              <input
-                aria-valuetext={`${positionY}% da altura`}
-                disabled={busy !== null}
-                max={100}
-                min={0}
-                onChange={(event) => setPositionY(Number(event.target.value))}
-                type="range"
-                value={positionY}
-              />
-            </label>
-          ) : null}
-        </div>
-      </div>
+      <PhotoField
+        currentSrc={current?.imageUrl ?? null}
+        disabled={busy !== null}
+        draft={photo}
+        hint="A foto antiga só é substituída ao salvar."
+      />
 
       <Field error={errors.name} id={fieldId("name")} label="Nome">
         <input

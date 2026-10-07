@@ -6,6 +6,7 @@ import {
   toProfessional,
   type ProfessionalRow,
 } from "../../data/professionals";
+import { siteImageColumns, toSiteImage, type SiteImageRow } from "../../data/site-images";
 import { getSupabaseServerClient } from "../../lib/supabase/server";
 
 export type StaffRole = "admin" | "barbeiro";
@@ -82,3 +83,11 @@ export const getStaffProfessionals = cache(async () => {
   if (error) throw new Error(`Não foi possível carregar a equipe: ${error.message}`);
   return sortProfessionals((data as unknown as ProfessionalRow[]).map(toProfessional));
 });
+
+/** Imagens editáveis do site (galeria e foto da barbearia), sem cache: o painel vê o que acabou de salvar. */
+export async function getEditableSiteImages() {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("site_images").select(siteImageColumns).order("sort_order");
+  if (error) throw new Error(`Não foi possível carregar as imagens do site: ${error.message}`);
+  return (data as SiteImageRow[]).map(toSiteImage);
+}

@@ -2,13 +2,17 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
 import { professionalColumns, sortProfessionals, toProfessional, type ProfessionalRow } from "../data/professionals";
+import { siteImageColumns, toSiteImage, type SiteImageRow } from "../data/site-images";
 import { assertSupabaseEnv, supabasePublishableKey, supabaseUrl } from "./supabase/env";
 
 // Catálogo público do site (landing e agendamento), lido como visitante: a RLS só
 // devolve o que está ativo. Fica em cache entre requisições; o painel invalida a tag ao
 // salvar (updateTag em app/painel/site-actions.ts) e a hora é só uma rede de segurança.
 
-export const catalogTags = { professionals: "catalog:professionals" } as const;
+export const catalogTags = {
+  professionals: "catalog:professionals",
+  siteImages: "catalog:site-images",
+} as const;
 
 function getPublicClient() {
   assertSupabaseEnv();
@@ -33,4 +37,15 @@ export const getPublicProfessionals = unstable_cache(
   },
   ["catalog-professionals"],
   { tags: [catalogTags.professionals], revalidate: 3600 },
+);
+
+/** Imagens editáveis da landing (galeria e foto da barbearia), na ordem do site. */
+export const getPublicSiteImages = unstable_cache(
+  async () => {
+    const { data, error } = await getPublicClient().from("site_images").select(siteImageColumns).order("sort_order");
+    if (error) throw new Error(`Não foi possível carregar as imagens do site: ${error.message}`);
+    return (data as SiteImageRow[]).map(toSiteImage);
+  },
+  ["catalog-site-images"],
+  { tags: [catalogTags.siteImages], revalidate: 3600 },
 );

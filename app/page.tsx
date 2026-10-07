@@ -14,10 +14,12 @@ import {
 import SiteFooter from "./components/site-footer";
 import SiteHeader from "./components/site-header";
 import { localBusinessDetails, siteConfig } from "./data/site";
-import { getPublicProfessionals } from "./lib/catalog";
+import { getPublicProfessionals, getPublicSiteImages } from "./lib/catalog";
 
 export default async function Home() {
-  const professionals = await getPublicProfessionals();
+  const [professionals, siteImages] = await Promise.all([getPublicProfessionals(), getPublicSiteImages()]);
+  const galleryImages = siteImages.filter((image) => image.slot !== "about");
+  const aboutImage = siteImages.find((image) => image.slot === "about") ?? null;
   const businessSchema = localBusinessDetails
     ? {
         "@context": "https://schema.org",
@@ -56,8 +58,8 @@ export default async function Home() {
         <Hero />
         <QuickInfo />
         <ServicesSection />
-        <GallerySection />
-        <AboutSection />
+        <GallerySection images={galleryImages} />
+        <AboutSection image={aboutImage} />
         <TeamSection professionals={professionals} />
         <TestimonialsSection />
         <BookingSection />

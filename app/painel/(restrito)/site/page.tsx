@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import NoAccess from "../../components/no-access";
 import SiteEditorWorkspace from "../../components/site-editor-workspace";
-import { getCurrentStaff, getProfessionalUsage } from "../../lib/staff";
+import { getCurrentStaff, getEditableSiteImages, getProfessionalUsage } from "../../lib/staff";
 
 export const metadata: Metadata = {
   title: "Edição do site | Painel Black Crown Barber",
@@ -20,6 +20,16 @@ export default async function SiteEditorPage({
   }
 
   // ?aba=barbeiros (ou servicos, horarios, planos) abre direto na aba; o componente valida.
-  const [{ aba }, usage] = await Promise.all([searchParams, getProfessionalUsage()]);
-  return <SiteEditorWorkspace initialTab={typeof aba === "string" ? aba : undefined} professionalUsage={usage} />;
+  const [{ aba }, usage, siteImages] = await Promise.all([
+    searchParams,
+    getProfessionalUsage(),
+    getEditableSiteImages(),
+  ]);
+  return (
+    <SiteEditorWorkspace
+      initialTab={typeof aba === "string" ? aba : undefined}
+      professionalUsage={usage}
+      siteImages={siteImages}
+    />
+  );
 }

@@ -9,6 +9,7 @@ import {
   validateProfessional,
   type ProfessionalInput,
 } from "../data/professionals";
+import { getSlotFolder, isSiteImageSlot, validateSiteImage, type SiteImageSlot } from "../data/site-images";
 import { getSiteMediaPath, siteMediaBucket } from "../data/site-media";
 import { catalogTags } from "../lib/catalog";
 import { supabaseUrl } from "../lib/supabase/env";
@@ -55,9 +56,9 @@ async function removeObject(supabase: Supabase, path: string | null) {
   return !error;
 }
 
-function refreshSite() {
+function refreshSite(tag: string = catalogTags.professionals) {
   // Landing e agendamento (cache por tag); o painel recarrega pelo router.refresh() do cliente.
-  updateTag(catalogTags.professionals);
+  updateTag(tag);
 }
 
 export type SaveProfessionalInput = ProfessionalInput & {
@@ -311,4 +312,77 @@ export async function deleteProfessionalAction(id: string): Promise<SiteActionRe
     ok: true,
     message: `${professional.name} foi excluído. Os atendimentos e fechamentos dele continuam no painel.`,
   };
+}
+
+// --- Edição do site > Imagens (galeria e foto da barbearia) ---
+
+export type SaveSiteImageInput = {
+  slot: SiteImageSlot;
+  label: string;
+  alt: string;
+  imagePositionY: number;
+  /** URL pública da imagem recém-enviada ao bucket, ou null para manter a atual. */
+  newImageUrl: string | null;
+};
+
+/**
+ * Grava imagem, legenda, texto alternativo e enquadramento de uma posição fixa. Mesmo
+ * fluxo dos barbeiros: a imagem nova já está no bucket; se o banco recusar, ela é apagada e
+ * a antiga continua valendo; se gravar, a antiga é apagada (só se for nossa no bucket —
+ * as imagens originais em /public nunca são apagadas).
+ */
+export async function saveSiteImageAction(input: SaveSiteImageInput): Promise<SiteActionResult> {
+  if (
+    !isSiteImageSlot(input?.slot) ||
+    typeof input.label !== "string" ||
+    typeof input.alt !== "string" ||
+    typeof input.imagePositionY !== "number" ||
+    (input.newImageUrl !== null && typeof input.newImageUrl !== "string")
+  ) {
+    return failure("Revise os dados da imagem.");
+  }
+  const folder = getSlotFolder(input.slot);
+  const newImagePath = getSiteMediaPath(input.newImageUrl, supabaseUrl, folder);
+
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
+  async function abort(message: string) {
+    await removeObject(supabase, newImagePath);
+    return failure(message);
+  }
+
+  if (input.newImageUrl && !newImagePath) return abort("A imagem enviada não é válida. Escolha o arquivo de novo.");
+  if (Object.keys(validateSiteImage(input)).length) return abort("Revise a legenda e a descrição da imagem.");
+
+  const { data: current, error: currentError } = await supabase
+    .from("site_images")
+    .select("image_url")
+    .eq("slot", input.slot)
+    .maybeSingle();
+  if (currentError || !current) return abort("Imagem não encontrada. Recarregue a página.");
+
+  const { data: updated, error } = await supabase
+    .from("site_images")
+    .update({
+      label: input.label.trim(),
+      alt: input.alt.trim(),
+      image_position: toImagePosition(input.imagePositionY),
+      ...(input.newImageUrl ? { image_url: input.newImageUrl } : {}),
+    })
+    .eq("slot", input.slot)
+    .select("slot");
+  if (error || !updated?.length) return abort("Não foi possível salvar a imagem. A imagem atual continua no site.");
+
+  refreshSite(catalogTags.siteImages);
+
+  if (input.newImageUrl) {
+    const oldPath = getSiteMediaPath(current.image_url, supabaseUrl, folder);
+    if (!(await removeObject(supabase, oldPath))) {
+      return { ok: true, message: "Imagem salva. A versão antiga não pôde ser removida do armazenamento." };
+    }
+    return { ok: true, message: "Imagem substituída. O site já mostra a nova versão." };
+  }
+  return { ok: true, message: "Alterações da imagem salvas." };
 }

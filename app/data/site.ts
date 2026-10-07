@@ -90,56 +90,9 @@ export const galleryFeature = {
   description: "Um corte preciso. Uma barba alinhada. Uma nova presença.",
 } as const;
 
-export const galleryItems = [
-  {
-    src: "/gallery-corte-01.jpg",
-    alt: "Barbeiro refinando um corte masculino com tesoura e pente",
-    label: "Acabamento",
-    layout: "gallery-item--large",
-  },
-  {
-    src: "/gallery-barba-01.jpg",
-    alt: "Barbeiro aparando o cabelo e a barba de um cliente com navalha",
-    label: "Barba",
-    layout: "gallery-item--portrait",
-  },
-  {
-    src: "/gallery-corte-02.jpg",
-    alt: "Barbeiro trabalhando o corte de um cliente na cadeira com tesoura",
-    label: "Corte",
-    layout: "",
-  },
-  {
-    src: "/gallery-interior-01.jpg",
-    alt: "Barbearia com cadeiras de barbeiro e quadros nas paredes",
-    label: "Ambiente",
-    layout: "gallery-item--wide",
-  },
-  {
-    src: "/gallery-corte-03.jpg",
-    alt: "Barbeiro finalizando o penteado de um cliente com secador",
-    label: "Estilo",
-    layout: "",
-  },
-  {
-    src: "/gallery-corte-04.jpg",
-    alt: "Barbeiro aparando o cabelo de um cliente com máquina",
-    label: "Precisão",
-    layout: "",
-  },
-  {
-    src: "/gallery-interior-02.jpg",
-    alt: "Interior de barbearia com clientes sendo atendidos nas cadeiras",
-    label: "Barbearia",
-    layout: "gallery-item--portrait",
-  },
-  {
-    src: "/gallery-corte-05.jpg",
-    alt: "Barbeiros atendendo clientes em uma barbearia contemporânea",
-    label: "Finalização",
-    layout: "",
-  },
-] as const;
+// Fotos da galeria e da seção "A barbearia": vêm da tabela site_images
+// (app/lib/catalog.ts), editadas no painel em Edição do site > Imagens. O formato de cada
+// posição no grid fica em app/data/site-images.ts.
 
 // Barbeiros: vêm da tabela professionals (app/lib/catalog.ts), editados no painel em
 // Edição do site > Barbeiros.

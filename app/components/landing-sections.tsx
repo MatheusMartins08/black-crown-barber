@@ -14,10 +14,10 @@ import Reveal from "./reveal";
 import ImageComparison from "./image-comparison";
 import { serviceIcons } from "./service-icons";
 import { getFirstName, type Professional } from "../data/professionals";
+import { galleryLayouts, type SiteImage } from "../data/site-images";
 import {
   galleryComparison,
   galleryFeature,
-  galleryItems,
   openingHours,
   services,
   siteConfig,
@@ -119,7 +119,8 @@ export function ServicesSection() {
   );
 }
 
-export function GallerySection() {
+/** `images`: as posições gallery-1 … gallery-8 de site_images, na ordem do site. */
+export function GallerySection({ images }: { images: SiteImage[] }) {
   return (
     <section aria-labelledby="gallery-title" className="section gallery" id="galeria">
       <div className="section__inner">
@@ -141,14 +142,20 @@ export function GallerySection() {
         </div>
 
         <div className="gallery__grid">
-          {galleryItems.map((item, index) => (
-            <Reveal as="figure" className={`gallery-item ${item.layout}`} delay={1 + (index % 3)} key={item.src}>
+          {images.map((item, index) => (
+            <Reveal
+              as="figure"
+              className={`gallery-item ${galleryLayouts[item.slot] ?? ""}`}
+              delay={1 + (index % 3)}
+              key={item.slot}
+            >
               <Image
                 alt={item.alt}
                 className="gallery-item__image"
                 fill
                 sizes="(max-width: 600px) 50vw, (max-width: 900px) 33vw, 25vw"
-                src={item.src}
+                src={item.imageUrl}
+                style={{ objectPosition: item.imagePosition }}
               />
               <figcaption>
                 <span>{item.label}</span>
@@ -162,7 +169,8 @@ export function GallerySection() {
   );
 }
 
-export function AboutSection() {
+/** `image`: a posição "about" de site_images (null se não houver: a seção fica sem foto). */
+export function AboutSection({ image }: { image: SiteImage | null }) {
   const values = ["Técnica", "Cuidado", "Estilo"];
 
   return (
@@ -187,13 +195,16 @@ export function AboutSection() {
           </ul>
         </Reveal>
         <Reveal as="figure" className="about__image-wrap" from="right">
-          <Image
-            alt="Interior de barbearia com cadeiras de barbeiro e quadros nas paredes"
-            className="about__image"
-            fill
-            sizes="(max-width: 800px) 100vw, 50vw"
-            src="/gallery-interior-01.jpg"
-          />
+          {image ? (
+            <Image
+              alt={image.alt}
+              className="about__image"
+              fill
+              sizes="(max-width: 800px) 100vw, 50vw"
+              src={image.imageUrl}
+              style={{ objectPosition: image.imagePosition }}
+            />
+          ) : null}
         </Reveal>
       </div>
     </section>
