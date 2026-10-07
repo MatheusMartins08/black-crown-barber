@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { CalendarX2, CheckCircle2, Clock3, UserX, XCircle } from "lucide-react";
 import {
   barberNames,
@@ -11,6 +14,7 @@ import {
   type ServiceName,
 } from "../../data/painel";
 import BarberAvatar from "./barber-avatar";
+import FilterToggle from "./filter-toggle";
 import MembershipTag, { isSubscriber } from "./membership-tag";
 
 export type AgendaFilters = {
@@ -53,23 +57,37 @@ export default function AppointmentsTable({
   onFiltersChange,
   onUpdate,
 }: AppointmentsTableProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const visible = appointments.filter((appointment) => matchesFilters(appointment, filters));
-  const hasFilters =
-    filters.barber !== "todos" || filters.clientType !== "todos" || filters.service !== "todos";
+  const activeFilters = [filters.barber, filters.clientType, filters.service].filter((value) => value !== "todos").length;
 
   return (
     <section aria-labelledby="agenda-title" className="admin-panel admin-agenda" id="agenda">
-      <div className="admin-panel__heading">
+      <div className="admin-panel__heading admin-panel__heading--action">
         <div>
           <h2 id="agenda-title">Agenda do dia</h2>
           <p>
-            {visible.length} de {appointments.length} horários. Altere quem executou e o status ao
-            longo do dia.
+            {visible.length} de {appointments.length} horários.
+            <span className="admin-hide-mobile">
+              {" "}
+              Altere quem executou e o status ao longo do dia.
+            </span>
           </p>
         </div>
+        <FilterToggle
+          activeCount={activeFilters}
+          controls="agenda-filters"
+          onToggle={() => setFiltersOpen((current) => !current)}
+          open={filtersOpen}
+        />
       </div>
 
-      <div className="admin-filters" role="group" aria-label="Filtrar agenda">
+      <div
+        aria-label="Filtrar agenda"
+        className={`admin-filters admin-filters--collapsible${filtersOpen ? " is-open" : ""}`}
+        id="agenda-filters"
+        role="group"
+      >
         <label className="admin-field">
           <span>Profissional</span>
           <select
@@ -119,7 +137,7 @@ export default function AppointmentsTable({
             ))}
           </select>
         </label>
-        {hasFilters ? (
+        {activeFilters ? (
           <button className="admin-text-button" onClick={() => onFiltersChange(defaultFilters)} type="button">
             Limpar filtros
           </button>
@@ -195,22 +213,23 @@ function AppointmentRow({
       <td className="admin-row__time" data-label="Horário">
         {appointment.time}
       </td>
-      <td data-label="Cliente">
+      <td className="admin-row__who" data-label="Cliente">
         <span className="admin-row__client">{appointment.clientName}</span>
         <MembershipTag planName={appointment.planName ?? undefined} status={appointment.membership} />
       </td>
-      <td data-label="Serviço">
+      <td className="admin-row__what" data-label="Serviço">
         <span className="admin-row__service">{appointment.serviceName}</span>
         <span className="admin-row__price">{getPriceNote(appointment)}</span>
       </td>
-      <td data-label="Marcado com">
+      <td className="admin-row__booked" data-label="Marcado com">
         <span className="admin-person">
           <BarberAvatar name={appointment.bookedWith} />
           {appointment.bookedWith}
         </span>
       </td>
-      <td data-label="Executado por">
-        <label className="admin-inline-select">
+      <td className="admin-row__performed" data-label="Executado por">
+        <label className="admin-inline-select admin-person-select">
+          <BarberAvatar name={appointment.performedBy} size={20} />
           <span className="sr-only">Profissional que executou o atendimento das {appointment.time}</span>
           <select
             onChange={(event) =>
@@ -218,16 +237,23 @@ function AppointmentRow({
             }
             value={appointment.performedBy}
           >
+            {/* Primeiro nome: cabe ao lado do status no celular (a foto identifica). */}
             {barberNames.map((name) => (
               <option key={name} value={name}>
-                {name}
+                {name.split(" ")[0]}
               </option>
             ))}
           </select>
         </label>
-        {reassigned ? <span className="admin-row__note">Trocado na agenda</span> : null}
+        {/* Até 960px a coluna "Marcado com" some: a troca diz com quem foi marcado. */}
+        {reassigned ? (
+          <span className="admin-row__note">
+            <span className="admin-hide-compact">Trocado na agenda</span>
+            <span className="admin-show-compact">Marcado com {appointment.bookedWith}</span>
+          </span>
+        ) : null}
       </td>
-      <td data-label="Status">
+      <td className="admin-row__state" data-label="Status">
         <label className={`admin-status admin-status--${appointment.status}`}>
           <StatusIcon aria-hidden="true" size={15} strokeWidth={1.8} />
           <span className="sr-only">Status do atendimento das {appointment.time}</span>

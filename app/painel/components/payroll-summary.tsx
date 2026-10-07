@@ -61,7 +61,7 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
       <div className="admin-panel__heading admin-panel__heading--split">
         <div>
           <h2 id="fechamento-title">Fechamento para salários</h2>
-          <p>{periodLabel}. Base de cálculo: atendimentos concluídos por quem executou.</p>
+          <p>Base de cálculo: atendimentos concluídos por quem executou.</p>
         </div>
         <div className="admin-payroll__actions">
           <div className="admin-segmented" role="radiogroup" aria-label="Período do fechamento">
@@ -115,18 +115,18 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
                   </span>
                 </th>
                 {serviceNames.map((name) => (
-                  <td className="is-numeric" data-label={name} key={name}>
+                  <td className="is-numeric admin-payroll__service" data-label={name} key={name}>
                     {summary.byService[name]}
                   </td>
                 ))}
-                <td className="is-numeric is-strong" data-label="Atendidos">
+                <td className="is-numeric is-strong admin-payroll__completed" data-label="Atendidos">
                   {summary.completed}
                 </td>
-                <td className="is-numeric" data-label="Planos">
+                <td className="is-numeric admin-payroll__plans" data-label="Planos">
                   <span className="admin-money">{formatCurrency(summary.planPayout)}</span>
                   <span className="admin-money__detail">{summary.planCount} atend.</span>
                 </td>
-                <td className="is-numeric" data-label="Avulsos">
+                <td className="is-numeric admin-payroll__walkin" data-label="Avulsos">
                   <span className="admin-money">{formatCurrency(summary.walkInPayout)}</span>
                   <span className="admin-money__detail">{summary.walkInCount} atend.</span>
                 </td>
@@ -140,18 +140,18 @@ export default function PayrollSummary({ period, periodLabel, summaries, onPerio
             <tr>
               <th scope="row">Equipe</th>
               {totals.byService.map((count, index) => (
-                <td className="is-numeric" data-label={serviceNames[index]} key={serviceNames[index]}>
+                <td className="is-numeric admin-payroll__service" data-label={serviceNames[index]} key={serviceNames[index]}>
                   {count}
                 </td>
               ))}
-              <td className="is-numeric is-strong" data-label="Atendidos">
+              <td className="is-numeric is-strong admin-payroll__completed" data-label="Atendidos">
                 {totals.completed}
               </td>
-              <td className="is-numeric" data-label="Planos">
+              <td className="is-numeric admin-payroll__plans" data-label="Planos">
                 <span className="admin-money">{formatCurrency(totals.planPayout)}</span>
                 <span className="admin-money__detail">{totals.planCount} atend.</span>
               </td>
-              <td className="is-numeric" data-label="Avulsos">
+              <td className="is-numeric admin-payroll__walkin" data-label="Avulsos">
                 <span className="admin-money">{formatCurrency(totals.walkInPayout)}</span>
                 <span className="admin-money__detail">{totals.walkInCount} atend.</span>
               </td>

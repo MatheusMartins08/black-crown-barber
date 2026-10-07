@@ -101,6 +101,10 @@ export type ClientProfile = {
   lastPaidAt: string | null;
   lastPaymentMethod: PaymentMethod | null;
   lastPaymentAmount: number | null;
+  /** Data do último atendimento concluído (YYYY-MM-DD). */
+  lastVisitAt: string | null;
+  /** Atendimentos concluídos guardados no banco. */
+  visitCount: number;
   /** Mensalidade em aberto mais antiga, a próxima a receber. */
   nextToReceive: CyclePayment | null;
   /** Mensalidade do ciclo que contém hoje (paga ou não). */
@@ -152,6 +156,9 @@ export const commissionRules = {
 /** Dias depois do vencimento em que o plano ainda cobre (shop_settings.subscription_grace_days). */
 export const billingRules = { graceDays: 5 };
 
+/** Meses de histórico que o painel consulta (shop_settings.history_retention_months). */
+export const historyRules = { months: 6 };
+
 /** O atendimento entrou no plano do cliente? */
 export function isCoveredByPlan(appointment: Appointment) {
   return appointment.covered;
@@ -182,6 +189,43 @@ export function addDays(isoDate: string, amount: number) {
   const date = toDate(isoDate);
   date.setUTCDate(date.getUTCDate() + amount);
   return toIsoDate(date);
+}
+
+/** Soma meses como o Postgres (`date + interval`): 31/08 − 6 meses = 28/02. */
+export function addMonths(isoDate: string, amount: number) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + amount, 1));
+  const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDay));
+  return toIsoDate(date);
+}
+
+/** Primeira data consultável: hoje menos historyRules.months (06/10 → 06/04). */
+export function getHistoryStart(today: string) {
+  return addMonths(today, -historyRules.months);
+}
+
+export function clampDate(isoDate: string, min: string, max: string) {
+  return isoDate < min ? min : isoDate > max ? max : isoDate;
+}
+
+/** Meses do histórico (YYYY-MM), do atual para o mais antigo. */
+export function listHistoryMonths(today: string) {
+  const first = getHistoryStart(today).slice(0, 7);
+  const months: string[] = [];
+  for (let offset = 0; ; offset -= 1) {
+    const month = addMonths(`${today.slice(0, 7)}-01`, offset).slice(0, 7);
+    if (month < first) break;
+    months.push(month);
+  }
+  return months;
+}
+
+/** Mesma data um período antes ou depois (dia, semana ou mês). */
+export function shiftPeriod(isoDate: string, period: Period, direction: -1 | 1) {
+  if (period === "dia") return addDays(isoDate, direction);
+  if (period === "semana") return addDays(isoDate, direction * 7);
+  return addMonths(isoDate, direction);
 }
 
 export function daysBetween(from: string, to: string) {
@@ -223,14 +267,34 @@ export function formatShortDate(isoDate: string) {
   return `${day}/${month}`;
 }
 
+export function formatFullDate(isoDate: string) {
+  return isoDate.split("-").reverse().join("/");
+}
+
 export function formatMonth(isoDate: string) {
   const date = toDate(isoDate);
   return `${monthNames[date.getUTCMonth()]} de ${date.getUTCFullYear()}`;
 }
 
+/** "Outubro de 2026" para um mês YYYY-MM. */
+export function formatMonthTitle(month: string) {
+  const label = formatMonth(`${month}-01`);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Rótulo do período: "Dia 06/10", "Semana de 05/10 a 11/10" ou "Outubro de 2026". */
+export function formatPeriodLabel(isoDate: string, period: Period) {
+  if (period === "dia") return `Dia ${formatShortDate(isoDate)}`;
+
+  const range = getPeriodRange(isoDate, period);
+  if (period === "semana") return `Semana de ${formatShortDate(range.start)} a ${formatShortDate(range.end)}`;
+  return formatMonthTitle(isoDate.slice(0, 7));
+}
+
 export function formatCurrency(value: number) {
   const [integer, cents] = value.toFixed(2).split(".");
-  return `R$ ${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${cents}`;
+  // Espaço não separável: "R$" nunca fica sozinho no fim da linha.
+  return `R$\u00a0${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${cents}`;
 }
 
 export type BarberSummary = {
