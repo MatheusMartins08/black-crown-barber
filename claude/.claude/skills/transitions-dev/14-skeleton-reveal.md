@@ -1,4 +1,4 @@
-# Skeleton loader and reveal
+git restore app/painel/components/show-more.tsx# Skeleton loader and reveal
 
 ## When to use
 
