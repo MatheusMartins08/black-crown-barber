@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
-import { getSupabaseServerClient } from "../../lib/supabase/server";
 import AdminHeader from "../components/admin-header";
-import SignOutButton from "../components/sign-out-button";
+import NoAccess from "../components/no-access";
+import { getCurrentStaff } from "../lib/staff";
 import "../painel.css";
 
 export const metadata: Metadata = {
@@ -18,46 +17,31 @@ export const metadata: Metadata = {
 
 const roleLabels = { admin: "Administrador", barbeiro: "Barbeiro" } as const;
 
-// Área logada do painel: Visão geral, Clientes e Fechamento compartilham o cabeçalho,
-// que continua montado ao trocar de tela.
+// Área logada do painel: Visão geral, Clientes, Fechamento e Edição do site compartilham
+// o cabeçalho, que continua montado ao trocar de tela.
 export default async function PainelLayout({ children }: { children: ReactNode }) {
-  const supabase = await getSupabaseServerClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-  if (!userId) redirect("/painel/entrar");
+  const current = await getCurrentStaff();
+  if (!current) redirect("/painel/entrar");
 
-  // A própria linha em staff_members (a RLS deixa cada um ler a sua). Os dados do painel
-  // continuam protegidos pela RLS no banco; isto só decide o que mostrar.
-  const { data: staff } = await supabase
-    .from("staff_members")
-    .select("role, display_name")
-    .eq("user_id", userId)
-    .maybeSingle();
-
+  const { staff, email } = current;
   if (!staff) {
     return (
       <div className="admin">
         <AdminHeader showSections={false} />
-        <main className="admin-main admin-auth">
-          <div className="admin-panel admin-auth__card">
-            <div className="admin-empty">
-              <ShieldAlert aria-hidden="true" size={22} strokeWidth={1.6} />
-              <p className="admin-empty__title">Sem acesso ao painel</p>
-              <p>Este login não faz parte da equipe. Peça ao administrador para liberar o seu acesso.</p>
-              <SignOutButton />
-            </div>
-          </div>
-        </main>
+        <NoAccess
+          title="Sem acesso ao painel"
+          message="Este login não faz parte da equipe. Peça ao administrador para liberar o seu acesso."
+          signOut
+        />
       </div>
     );
   }
 
-  const role = staff.role as keyof typeof roleLabels;
-  const name = staff.display_name || (typeof data.claims.email === "string" ? data.claims.email : "");
+  const name = staff.display_name || email;
 
   return (
     <div className="admin">
-      <AdminHeader userLabel={`${name} · ${roleLabels[role] ?? role}`} />
+      <AdminHeader role={staff.role} userLabel={`${name} · ${roleLabels[staff.role] ?? staff.role}`} />
       {children}
     </div>
   );

@@ -65,6 +65,7 @@
   padding: 0 12px;
   color: var(--muted);
   font-size: 13px;
+  white-space: nowrap;
   transition: color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -2436,6 +2437,24 @@
     padding-inline: 6px;
   }
 
+  /* Muitas abas (Edição do site): rolam na horizontal em vez de espremer os rótulos. */
+  .admin-tabs--scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 3px;
+    scrollbar-width: none;
+  }
+
+  .admin-tabs--scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-tabs--scroll button {
+    flex: 1 0 auto;
+    padding-inline: 14px;
+    white-space: nowrap;
+  }
+
   /* Produção: barras em grade 2×2 */
 
   .admin-barber {
@@ -2721,9 +2740,17 @@
 
 /* Login da equipe, avisos e carregamento */
 
+/* Em telas médias o nome do usuário cede espaço aos links (corta com reticências). */
+.admin-header__meta--account {
+  min-width: 0;
+}
+
 .admin-header__user {
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: 13px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

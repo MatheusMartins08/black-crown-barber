@@ -1,8 +1,17 @@
 import Link from "next/link";
 import { ArrowUpRight, Crown } from "lucide-react";
+import type { StaffRole } from "../lib/staff";
 import AdminNav from "./admin-nav";
 
-export default function AdminHeader({ showSections = true, userLabel }: { showSections?: boolean; userLabel?: string }) {
+export default function AdminHeader({
+  showSections = true,
+  role = "barbeiro",
+  userLabel,
+}: {
+  showSections?: boolean;
+  role?: StaffRole;
+  userLabel?: string;
+}) {
   return (
     <header className="admin-header">
       <div className="admin-header__inner">
@@ -15,7 +24,7 @@ export default function AdminHeader({ showSections = true, userLabel }: { showSe
         </Link>
 
         {showSections ? (
-          <AdminNav userLabel={userLabel ?? ""} />
+          <AdminNav role={role} userLabel={userLabel ?? ""} />
         ) : (
           <div className="admin-header__meta">
             <Link className="admin-header__site-link" href="/">
