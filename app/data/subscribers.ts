@@ -1,5 +1,5 @@
 import { addDays, getWeekday, type ServiceId } from "./booking";
-import { getPlanBenefit, type PlanId } from "./plans";
+import { getPlanBenefit, type PlanId, type SubscriptionPlan } from "./plans";
 
 // Regras e tipos dos assinantes. Puro (sem React e sem rede), usado pelo agendamento,
 // pelo painel e pelo adaptador app/lib/subscribers-api.ts. Os formatos espelham o que
@@ -41,14 +41,17 @@ export type SubscriberSession = {
   blockedReason: BlockedReason | null;
 };
 
-export type CoverageReason = "incluido" | "fora_do_plano" | "limite_semanal" | BlockedReason;
+export type CoverageReason = "incluido" | "fora_do_plano" | "limite_semanal" | "limite_mensal" | BlockedReason;
 
 /** O plano cobre o serviço na data? (RPC get_plan_coverage) */
 export type PlanCoverage = {
   covered: boolean;
   reason: CoverageReason;
   planId: PlanId;
-  /** Semana do benefício, de segunda a domingo. */
+  /**
+   * Janela do benefício: a semana (segunda a domingo) ou, em benefício mensal, o ciclo da
+   * mensalidade. Os nomes vêm da RPC get_plan_coverage.
+   */
   weekStart: string;
   weekEnd: string;
 };
@@ -114,7 +117,7 @@ export function hasSubscriberErrors(errors: SubscriberErrors) {
   return Object.values(errors).some(Boolean);
 }
 
-// --- Benefícios por semana ---
+// --- Benefícios por período ---
 
 /** Semana de segunda a domingo que contém a data, como getPeriodRange("semana") do painel. */
 export function getWeekRange(isoDate: string) {
@@ -123,20 +126,24 @@ export function getWeekRange(isoDate: string) {
 }
 
 /**
- * Mesma regra de private.plan_coverage: o plano precisa estar liberado, incluir o
- * serviço e ainda ter uso disponível na semana da data.
+ * Prévia da regra de private.plan_coverage (antes de escolher a data): o plano precisa estar
+ * liberado, incluir o serviço e ainda ter uso disponível no período. A janela devolvida é a
+ * semana da data; a janela exata (inclusive o ciclo mensal) vem da RPC get_plan_coverage.
  */
 export function evaluateCoverage(
+  plans: readonly SubscriptionPlan[],
   session: Pick<SubscriberSession, "planId" | "blockedReason">,
   serviceId: ServiceId,
   date: string,
-  usedThisWeek: number,
+  used: number,
 ): PlanCoverage {
   const base = { planId: session.planId, ...getWeekRange(date) };
-  const benefit = getPlanBenefit(session.planId, serviceId);
+  const benefit = getPlanBenefit(plans, session.planId, serviceId);
 
   if (session.blockedReason) return { ...base, covered: false, reason: session.blockedReason };
   if (!benefit) return { ...base, covered: false, reason: "fora_do_plano" };
-  if (usedThisWeek >= benefit.perWeek) return { ...base, covered: false, reason: "limite_semanal" };
+  if (used >= benefit.quantity) {
+    return { ...base, covered: false, reason: benefit.period === "mes" ? "limite_mensal" : "limite_semanal" };
+  }
   return { ...base, covered: true, reason: "incluido" };
 }

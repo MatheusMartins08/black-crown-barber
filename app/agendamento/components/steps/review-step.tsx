@@ -12,7 +12,7 @@ import { getPlan } from "../../../data/plans";
 import { formatDuration } from "../../../data/services";
 import type { PlanCoverage, SubscriberSession } from "../../../data/subscribers";
 import { formatWeek, getCoverageNote, getPriceLabel } from "../../lib/plan-pricing";
-import { useBookingProfessionals, useBookingServices } from "../booking-catalog";
+import { useBookingPlans, useBookingProfessionals, useBookingServices } from "../booking-catalog";
 import ProfessionalAvatar from "../professional-avatar";
 import type { StepId } from "../use-booking-draft";
 
@@ -29,10 +29,11 @@ type ReviewStepProps = {
 
 export default function ReviewStep({ draft, onEdit, error, session, coverage, checkingCoverage }: ReviewStepProps) {
   const service = getService(useBookingServices(), draft.serviceId);
+  const plans = useBookingPlans();
   const assignee = getProfessional(useBookingProfessionals(), draft.assignedProfessionalId);
   if (!service || !draft.date || !draft.time) return null;
 
-  const coverageNote = session ? getCoverageNote(coverage) : null;
+  const coverageNote = session ? getCoverageNote(coverage, plans) : null;
   const rows: { label: string; value: ReactNode; step: StepId }[] = [
     {
       label: "Serviço",
@@ -67,7 +68,7 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
             <span className="booking-review__stack">
               {session.name}
               <small>{session.phone}</small>
-              <small>{getPlan(session.planId)?.name}</small>
+              <small>{getPlan(plans, session.planId)?.name}</small>
             </span>
           ),
           step: "perfil",
@@ -86,7 +87,9 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
         },
   ];
 
-  const showLimitNotice = session && coverage?.reason === "limite_semanal" && !checkingCoverage;
+  const isMonthlyLimit = coverage?.reason === "limite_mensal";
+  const showLimitNotice =
+    session && (coverage?.reason === "limite_semanal" || isMonthlyLimit) && !checkingCoverage;
 
   return (
     <div className="booking-review-wrap">
@@ -126,8 +129,12 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
           <p>
             <Info aria-hidden="true" size={16} />
             <span>
-              <strong>O benefício de {service.name.toLowerCase()} desta semana já foi usado.</strong> Na semana de{" "}
-              {formatWeek(coverage)}, este horário será cobrado como avulso ({formatCurrency(service.price)}).
+              <strong>
+                O benefício de {service.name.toLowerCase()} {isMonthlyLimit ? "deste mês do plano" : "desta semana"} já
+                foi usado.
+              </strong>{" "}
+              {isMonthlyLimit ? "No período de" : "Na semana de"} {formatWeek(coverage)}, este horário será cobrado como
+              avulso ({formatCurrency(service.price)}).
             </span>
           </p>
           <button className="booking-text-button" onClick={() => onEdit("horario")} type="button">

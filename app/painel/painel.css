@@ -1723,6 +1723,49 @@
   color: var(--admin-walkin);
 }
 
+/* Planos: descrição dos benefícios quebra linha; linhas de serviço incluído no formulário. */
+.admin-site-item__meta--wrap {
+  white-space: normal;
+}
+
+.admin-benefits {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-benefit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 118px 40px;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-benefit select,
+.admin-benefit input {
+  width: 100%;
+  min-height: 40px;
+}
+
+.admin-benefit input {
+  border: 1px solid rgb(var(--foreground-rgb) / 20%);
+  border-radius: 0;
+  background: var(--admin-panel);
+  color: var(--foreground);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 14px;
+  text-align: center;
+  appearance: textfield;
+}
+
+.admin-benefits__add {
+  justify-self: start;
+  padding-left: 0;
+}
+
 /* Imagens do site: cartões com a foto atual (toque abre a troca). */
 .admin-image-groups {
   display: grid;
@@ -3268,6 +3311,22 @@
 
   .admin-image-groups {
     padding: 16px;
+  }
+
+  /* Benefício do plano no celular: serviço numa linha; quantidade, frequência e remover abaixo. */
+  .admin-benefit {
+    grid-template-columns: 64px minmax(0, 1fr) 40px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+
+  .admin-benefit__service {
+    grid-column: 1 / -1;
+  }
+
+  .admin-benefit select,
+  .admin-benefit input {
+    font-size: 16px;
   }
 
   .admin-image-grid {

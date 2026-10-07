@@ -16,6 +16,7 @@ import {
 import Dialog from "../../components/dialog";
 import { formatPhone } from "../../data/booking";
 import { getPlan } from "../../data/plans";
+import { useBookingPlans } from "./booking-catalog";
 import { blockedMessages, validateSubscriberPhone, type BlockedReason, type SubscriberSession } from "../../data/subscribers";
 import { SubscriberApiError } from "../../lib/subscribers-api";
 
@@ -223,6 +224,7 @@ function BlockedNotice({
 }) {
   const Icon = blockedIcons[reason];
   const message = blockedMessages[reason];
+  const plans = useBookingPlans();
   const continueRef = useRef<HTMLButtonElement>(null);
 
   // O formulário some ao trocar para este aviso: o foco vai para a ação principal.
@@ -249,7 +251,7 @@ function BlockedNotice({
           <span>
             <strong>{session.name}</strong>
             <small>
-              {getPlan(session.planId)?.name} · {session.phone}
+              {getPlan(plans, session.planId)?.name} · {session.phone}
             </small>
           </span>
         </div>

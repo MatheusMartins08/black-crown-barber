@@ -3,9 +3,10 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { BadgePercent, CalendarClock, Images, Scissors, UsersRound, type LucideIcon } from "lucide-react";
 import type { SiteImage } from "../../data/site-images";
-import type { ProfessionalUsage, ServiceUsage } from "../lib/staff";
+import type { PlanUsage, ProfessionalUsage, ServiceUsage } from "../lib/staff";
 import SiteBarbers from "./site-barbers";
 import SiteImages from "./site-images";
+import SitePlans from "./site-plans";
 import SiteServices from "./site-services";
 
 type Section = {
@@ -72,11 +73,13 @@ function isTab(value: unknown): value is Tab {
  */
 export default function SiteEditorWorkspace({
   initialTab,
+  planUsage,
   professionalUsage,
   serviceUsage,
   siteImages,
 }: {
   initialTab?: string;
+  planUsage: Record<string, PlanUsage>;
   professionalUsage: Record<string, ProfessionalUsage>;
   serviceUsage: Record<string, ServiceUsage>;
   siteImages: SiteImage[];
@@ -167,6 +170,8 @@ export default function SiteEditorWorkspace({
               <SiteImages images={siteImages} />
             ) : item.value === "servicos" ? (
               <SiteServices usage={serviceUsage} />
+            ) : item.value === "planos" ? (
+              <SitePlans usage={planUsage} />
             ) : (
               <section aria-labelledby={`${item.value}-title`} className="admin-panel">
                 <div className="admin-panel__heading">

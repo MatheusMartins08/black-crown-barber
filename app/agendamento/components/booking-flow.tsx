@@ -15,11 +15,11 @@ import {
   type ServiceId,
   type TimeSlot,
 } from "../../data/booking";
-import { getPlan } from "../../data/plans";
+import { getPlan, type SubscriptionPlan } from "../../data/plans";
 import { evaluateCoverage, type SubscriberSession } from "../../data/subscribers";
 import { fetchPlanCoverage } from "../../lib/subscribers-api";
 import { BookingApiError, createReservation, createSubscriberReservation } from "../lib/booking-api";
-import { useBookingProfessionals, useBookingServices } from "./booking-catalog";
+import { useBookingPlans, useBookingProfessionals, useBookingServices } from "./booking-catalog";
 import BookingProgress from "./booking-progress";
 import BookingSuccess from "./booking-success";
 import { BookingSummaryBar, BookingSummaryPanel } from "./booking-summary";
@@ -73,9 +73,10 @@ type CopyContext = {
   serviceName?: string;
   professionalName?: string;
   session: SubscriberSession | null;
+  plans: readonly SubscriptionPlan[];
 };
 
-function getStepCopy(step: StepId, { serviceName, professionalName, session }: CopyContext) {
+function getStepCopy(step: StepId, { serviceName, professionalName, session, plans }: CopyContext) {
   switch (step) {
     case "perfil":
       return {
@@ -83,7 +84,7 @@ function getStepCopy(step: StepId, { serviceName, professionalName, session }: C
         description: "Assinantes entram com o telefone cadastrado na barbearia e usam os benefícios do plano.",
       };
     case "servico": {
-      const planName = getPlan(session?.planId ?? null)?.name;
+      const planName = getPlan(plans, session?.planId ?? null)?.name;
       return {
         title: "Qual serviço você quer fazer?",
         description:
@@ -131,6 +132,7 @@ function BookingFlowContent({
 }: BookingFlowProps & { restore: boolean; persist: boolean }) {
   const professionals = useBookingProfessionals();
   const services = useBookingServices();
+  const plans = useBookingPlans();
   const [{ step, draft }, dispatch] = useBookingDraft({
     professionals,
     services,
@@ -176,7 +178,7 @@ function BookingFlowContent({
     draft.professionalId && draft.professionalId !== ANY_PROFESSIONAL
       ? getProfessional(professionals, draft.professionalId)?.name
       : undefined;
-  const copy = getStepCopy(step, { serviceName: service?.name, professionalName, session });
+  const copy = getStepCopy(step, { serviceName: service?.name, professionalName, session, plans });
 
   // Cobertura do plano: confirmada no adaptador quando há data (limite semanal); antes
   // disso, uma prévia pelo catálogo do plano.
@@ -194,7 +196,7 @@ function BookingFlowContent({
     coverageResult.status === "success"
       ? coverageResult.data
       : session && draft.serviceId
-        ? evaluateCoverage(session, draft.serviceId, draft.date ?? getTodayIso(), 0)
+        ? evaluateCoverage(plans, session, draft.serviceId, draft.date ?? getTodayIso(), 0)
         : null;
   const checkingCoverage = coverageLoader !== null && coverageResult.status === "loading";
   const planInfo = { session, coverage };

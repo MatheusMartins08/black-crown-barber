@@ -11,11 +11,12 @@ import {
   type Appointment,
   type AppointmentStatus,
 } from "../../data/painel";
+import type { SubscriptionPlan } from "../../data/plans";
 import { getFirstName, type Professional } from "../../data/professionals";
 import BarberAvatar from "./barber-avatar";
 import FilterToggle from "./filter-toggle";
 import MembershipTag, { isSubscriber } from "./membership-tag";
-import { usePainelProfessionals, usePainelServices } from "./painel-catalog";
+import { usePainelPlans, usePainelProfessionals, usePainelServices } from "./painel-catalog";
 
 export type AgendaFilters = {
   /** Id do profissional (uuid) ou "todos". */
@@ -197,16 +198,16 @@ export default function AppointmentsTable({
 }
 
 /** Preço exibido na agenda: coberto, plano congelado, bloqueado por atraso, limite da semana, fora do plano ou avulso. */
-function getPriceNote(appointment: Appointment) {
+function getPriceNote(appointment: Appointment, plans: readonly SubscriptionPlan[]) {
   const price = formatCurrency(appointment.charged ?? appointment.price);
-  const plan = getPlanByName(appointment.planName);
+  const plan = getPlanByName(plans, appointment.planName);
 
   if (isCoveredByPlan(appointment)) return "Coberto pelo plano";
   if (!appointment.planName) return price;
   if (appointment.membership === "congelado") return `Plano congelado · cobrar ${price}`;
   if (appointment.membership === "atrasado") return `Plano bloqueado por atraso · cobrar ${price}`;
   if (plan?.benefits.some((benefit) => benefit.serviceId === appointment.serviceSlug)) {
-    return `Limite semanal do plano · cobrar ${price}`;
+    return `Limite do plano já usado · cobrar ${price}`;
   }
   return `Fora do plano · ${price}`;
 }
@@ -223,6 +224,7 @@ function AppointmentRow({
   const status = statusOptions.find((option) => option.value === appointment.status)!;
   const StatusIcon = status.icon;
   const reassigned = appointment.performedById !== appointment.bookedWithId;
+  const plans = usePainelPlans();
   // Só profissionais ativos recebem atendimentos; o atual fica na lista mesmo se inativo.
   const performerOptions = activeProfessionals.some((professional) => professional.id === appointment.performedById)
     ? activeProfessionals
@@ -239,7 +241,7 @@ function AppointmentRow({
       </td>
       <td className="admin-row__what" data-label="Serviço">
         <span className="admin-row__service">{appointment.serviceName}</span>
-        <span className="admin-row__price">{getPriceNote(appointment)}</span>
+        <span className="admin-row__price">{getPriceNote(appointment, plans)}</span>
       </td>
       <td className="admin-row__booked" data-label="Marcado com">
         <span className="admin-person">

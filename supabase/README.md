@@ -20,6 +20,7 @@ Schema da Black Crown Barber: agenda, clientes, planos e repasse da equipe. As m
 | `20261008120000_professionals_soft_delete` | `professionals.deleted_at` (exclusão lógica de quem tem histórico) |
 | `20261008130000_site_images` | `site_images` (8 posições da galeria e a foto da barbearia, editáveis pelo admin) e pastas `gallery/` e `barbershop/` no bucket |
 | `20261008140000_services_editing` | `services.deleted_at`, `appointments.service_name` (nome copiado na reserva, trigger `appointments_25_service_name`) e `appointment_details` lendo a cópia |
+| `20261008150000_plans_editing` | planos editáveis: `description` e `deleted_at`, `plan_services.period` (semanal ou mensal), leitura de planos inativos não excluídos, `plan_coverage` com janela mensal (ciclo da mensalidade) e `set_subscription` aceitando o plano atual do cliente mesmo inativo |
 
 ## Como aplicar
 
@@ -71,7 +72,8 @@ Depois de aplicar:
 
 ## Assinantes e login
 
-- **Planos:** Bronze (corte), Prata (corte) e Ouro (corte, barba e sobrancelha), cada benefício 1× por semana (`plan_services.weekly_limit`). Valores provisórios: R$ 99, R$ 129 e R$ 189. O catálogo do front é `app/data/plans.ts`; mantenha os dois iguais.
+- **Planos:** editados no painel (Edição do site > Planos): nome, descrição, mensalidade e serviços incluídos, cada um com quantidade por **semana** (segunda a domingo, 1–7) ou por **mês** (1–31, no ciclo da mensalidade: dia de início da assinatura + k meses, a mesma âncora das mensalidades). `plan_services.weekly_limit` guarda a quantidade e `period` o período. O front lê tudo do banco (nada fixo em `app/data/plans.ts`).
+- **Mudanças em planos:** a mensalidade nova vale para os ciclos gerados depois (cada `subscription_payments.amount` guarda o valor do ciclo). Mudar os serviços incluídos vale na hora para quem assina; atendimentos concluídos guardam a cobertura gravada. Inativo = não aceita novos assinantes (quem já assina continua, e `set_subscription` aceita o plano atual do cliente para congelar/reativar). Excluir é bloqueado enquanto houver assinante com período em aberto; com histórico, a exclusão é lógica (`deleted_at`).
 - **Situação manual** (painel → Clientes → aba Assinantes): cada linha de `customer_subscriptions` é um período com plano e situação fixos.
 
   | painel | período | o plano cobre? | gera mensalidade? |
@@ -81,7 +83,7 @@ Depois de aplicar:
   | Inativo | nenhum período vigente | não | não |
 
   `set_subscription` encerra o período atual na véspera e abre outro hoje; a mensalidade passa a vencer na data da mudança, sem rateio. No dia em que o período começou, ele é ajustado no lugar (`cancelada` = período anulado no mesmo dia).
-- **Limite semanal** (segunda a domingo, fuso da barbearia): contam os agendamentos feitos antes e os concluídos cobertos pelo plano; faltas e cancelamentos liberam o benefício. A mesma regra vale na prévia do site (`get_plan_coverage`), na reserva (`create_subscriber_reservation`) e na liquidação (`appointments_settle`), via `private.plan_coverage`.
+- **Limite do benefício** (semana de segunda a domingo ou ciclo mensal da assinatura, fuso da barbearia): contam os agendamentos feitos antes e os concluídos cobertos pelo plano; faltas e cancelamentos liberam o benefício. A mesma regra vale na prévia do site (`get_plan_coverage`), na reserva (`create_subscriber_reservation`) e na liquidação (`appointments_settle`), via `private.plan_coverage`.
 - **Login:** o telefone é o login e a senha fica **só no Supabase Auth** (bcrypt). `customers.user_id` liga o cliente ao usuário do Auth. Nenhuma tabela do projeto guarda senha.
 - **Integração (rotina de servidor, com a service role, nunca no navegador):**
   1. Cadastrar: `auth.admin.createUser` com o telefone como identificador e a senha inicial, depois `save_subscriber(null, nome, telefone, user_id)` e `set_subscription(id, plano, status)`. Se uma das RPCs falhar, apague o usuário criado.

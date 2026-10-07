@@ -15,7 +15,7 @@ import type { PlanCoverage, SubscriberSession } from "../../data/subscribers";
 import type { Professional } from "../../data/professionals";
 import { formatDuration, type Service } from "../../data/services";
 import { getPriceLabel } from "../lib/plan-pricing";
-import { useBookingProfessionals, useBookingServices } from "./booking-catalog";
+import { useBookingPlans, useBookingProfessionals, useBookingServices } from "./booking-catalog";
 import PrimaryActionButton, { type PrimaryAction } from "./primary-action-button";
 import ProfessionalAvatar from "./professional-avatar";
 
@@ -41,9 +41,10 @@ function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: Summa
     draft.professionalId === ANY_PROFESSIONAL ? draft.assignedProfessionalId : draft.professionalId;
 
   const { session } = planInfo;
+  const plans = useBookingPlans();
   const rows = [
     ...(session
-      ? [{ label: "Assinante", value: `${session.name.split(" ")[0]} · ${getPlan(session.planId)?.shortName}` }]
+      ? [{ label: "Assinante", value: `${session.name.split(" ")[0]} · ${getPlan(plans, session.planId)?.shortName}` }]
       : []),
     { label: "Serviço", value: service?.name },
     {

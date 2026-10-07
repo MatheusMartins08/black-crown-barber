@@ -9,7 +9,6 @@ import {
   type CyclePayment,
   type PaymentMethod,
 } from "../../data/painel";
-import { isPlanId } from "../../data/plans";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 
@@ -229,7 +228,7 @@ export async function fetchClientProfiles(): Promise<ClientProfile[]> {
       phone: formatPhone(row.phone),
       whatsappOptIn: row.whatsapp_opt_in,
       membership: row.membership_status,
-      planId: isPlanId(row.plan_slug) ? row.plan_slug : null,
+      planId: row.plan_slug,
       planName: row.plan_name,
       monthlyPrice: row.monthly_price === null ? null : Number(row.monthly_price),
       subscribedSince: row.subscribed_since,
@@ -271,7 +270,7 @@ export async function fetchMonthPayments(month: string): Promise<MonthPayment[]>
 
   return (data as unknown as MonthPaymentRow[]).map((row) => {
     const slug = row.customer_subscriptions?.subscription_plans?.slug ?? null;
-    return { id: row.id, amount: Number(row.amount), status: row.status, planId: isPlanId(slug) ? slug : null };
+    return { id: row.id, amount: Number(row.amount), status: row.status, planId: slug };
   });
 }
 

@@ -9,6 +9,7 @@ import {
   validateProfessional,
   type ProfessionalInput,
 } from "../data/professionals";
+import { createPlanSlug, validatePlan, type PlanInput } from "../data/plans";
 import { createServiceSlug, validateService, type ServiceInput } from "../data/services";
 import { getSlotFolder, isSiteImageSlot, validateSiteImage, type SiteImageSlot } from "../data/site-images";
 import { getSiteMediaPath, siteMediaBucket } from "../data/site-media";
@@ -208,7 +209,7 @@ export async function setProfessionalActiveAction(id: string, active: boolean): 
  */
 async function reorder(
   supabase: Supabase,
-  table: "professionals" | "services",
+  table: "professionals" | "services" | "subscription_plans",
   id: string,
   direction: -1 | 1,
   tag: string,
@@ -574,4 +575,193 @@ export async function deleteServiceAction(id: string): Promise<SiteActionResult>
 
   refreshServices();
   return { ok: true, message: `${service.name} foi excluído. Os atendimentos e fechamentos com ele continuam no painel.` };
+}
+
+// --- Edição do site > Planos ---
+//
+// Cada mensalidade guarda o valor do ciclo em que foi gerada (subscription_payments.amount):
+// mudar o preço vale para os próximos ciclos. Mudar os serviços incluídos vale na hora para
+// quem assina; atendimentos concluídos guardam a cobertura gravada e não mudam.
+
+export type SavePlanInput = PlanInput & { /** null = novo plano. */ id: string | null };
+
+export async function savePlanAction(input: SavePlanInput): Promise<SiteActionResult> {
+  if (
+    typeof input?.name !== "string" ||
+    typeof input.description !== "string" ||
+    typeof input.monthlyPrice !== "number" ||
+    !Array.isArray(input.benefits) ||
+    input.benefits.some(
+      (benefit) =>
+        !isUuid(benefit?.serviceId) || typeof benefit.quantity !== "number" || typeof benefit.period !== "string",
+    ) ||
+    (input.id !== null && !isUuid(input.id)) ||
+    Object.keys(validatePlan(input)).length
+  ) {
+    return failure("Revise os dados do plano.");
+  }
+
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
+  // Serviços do plano precisam existir e não ter sido excluídos.
+  const serviceIds = input.benefits.map((benefit) => benefit.serviceId);
+  const { data: found, error: servicesError } = await supabase
+    .from("services")
+    .select("id")
+    .in("id", serviceIds)
+    .is("deleted_at", null);
+  if (servicesError || found.length !== serviceIds.length) {
+    return failure("Algum serviço escolhido não está mais disponível. Recarregue a página.");
+  }
+
+  const name = input.name.trim();
+  const fields = { name, description: input.description.trim() || null, monthly_price: input.monthlyPrice };
+  const rows = (planId: string) =>
+    input.benefits.map((benefit) => ({
+      plan_id: planId,
+      service_id: benefit.serviceId,
+      weekly_limit: benefit.quantity,
+      period: benefit.period,
+    }));
+
+  if (input.id === null) {
+    const { data: existing, error: listError } = await supabase.from("subscription_plans").select("slug, sort_order");
+    if (listError) return failure("Não foi possível conferir os planos. Tente novamente.");
+
+    const { data: created, error } = await supabase
+      .from("subscription_plans")
+      .insert({
+        ...fields,
+        slug: createPlanSlug(name, existing.map((row) => row.slug)),
+        sort_order: Math.max(0, ...existing.map((row) => row.sort_order)) + 1,
+      })
+      .select("id")
+      .single();
+    if (error || !created) return failure("Não foi possível criar o plano. Tente novamente.");
+
+    const { error: benefitsError } = await supabase.from("plan_services").insert(rows(created.id));
+    if (benefitsError) {
+      // Ainda sem assinantes: desfaz o cadastro inteiro.
+      await supabase.from("subscription_plans").delete().eq("id", created.id);
+      return failure("Não foi possível salvar os serviços do plano. Nada foi salvo; tente novamente.");
+    }
+
+    updateTag(catalogTags.plans);
+    return { ok: true, message: `${name} foi criado e já pode receber assinantes.` };
+  }
+
+  const { data: current, error: currentError } = await supabase
+    .from("subscription_plans")
+    .select("monthly_price")
+    .eq("id", input.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (currentError || !current) return failure("Plano não encontrado. Recarregue a página.");
+
+  const { error } = await supabase.from("subscription_plans").update(fields).eq("id", input.id);
+  if (error) return failure("Não foi possível salvar o plano. Tente novamente.");
+
+  // Benefícios: grava os da lista (novos ou alterados) e só então tira os que saíram.
+  const { error: upsertError } = await supabase
+    .from("plan_services")
+    .upsert(rows(input.id), { onConflict: "plan_id,service_id" });
+  const { error: removeError } = upsertError
+    ? { error: upsertError }
+    : await supabase
+        .from("plan_services")
+        .delete()
+        .eq("plan_id", input.id)
+        .not("service_id", "in", `(${serviceIds.join(",")})`);
+
+  updateTag(catalogTags.plans);
+  if (upsertError || removeError) {
+    return failure("Os dados do plano foram salvos, mas os serviços incluídos não. Confira e tente de novo.");
+  }
+  const priceChanged = Number(current.monthly_price) !== input.monthlyPrice;
+  return {
+    ok: true,
+    message: priceChanged
+      ? `${name} salvo. A nova mensalidade vale a partir dos próximos ciclos; as já geradas mantêm o valor.`
+      : `${name} salvo.`,
+  };
+}
+
+export async function setPlanActiveAction(id: string, active: boolean): Promise<SiteActionResult> {
+  if (!isUuid(id) || typeof active !== "boolean") return failure("Plano não encontrado. Recarregue a página.");
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+
+  const { data, error } = await auth.supabase
+    .from("subscription_plans")
+    .update({ is_active: active })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("name");
+  if (error || !data?.length) return failure("Não foi possível mudar o status. Tente novamente.");
+
+  updateTag(catalogTags.plans);
+  return {
+    ok: true,
+    message: active
+      ? `${data[0].name} voltou a aceitar novos assinantes.`
+      : `${data[0].name} não aceita novos assinantes. Quem já assina continua com o plano.`,
+  };
+}
+
+export async function movePlanAction(id: string, direction: -1 | 1): Promise<SiteActionResult> {
+  if (!isUuid(id) || (direction !== -1 && direction !== 1)) return failure("Plano não encontrado.");
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  return reorder(auth.supabase, "subscription_plans", id, direction, catalogTags.plans);
+}
+
+/**
+ * Exclui um plano. Bloqueado enquanto houver assinante com período em aberto (ativo ou
+ * congelado): troque o plano deles antes. Sem nenhuma assinatura, a linha é apagada
+ * (benefícios em cascata). Com histórico, a exclusão é lógica: assinaturas e mensalidades
+ * antigas continuam apontando para ele.
+ */
+export async function deletePlanAction(id: string): Promise<SiteActionResult> {
+  if (!isUuid(id)) return failure("Plano não encontrado. Recarregue a página.");
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
+  const { data: plan } = await supabase.from("subscription_plans").select("name, deleted_at").eq("id", id).maybeSingle();
+  if (!plan || plan.deleted_at) return failure("Plano não encontrado. Recarregue a página.");
+
+  const { data: subscriptions, error: usageError } = await supabase
+    .from("customer_subscriptions")
+    .select("status, ended_at")
+    .eq("plan_id", id);
+  if (usageError) return failure("Não foi possível conferir os assinantes. Nada foi excluído.");
+
+  const current = subscriptions.filter((row) => row.ended_at === null && row.status !== "cancelada").length;
+  if (current) {
+    return failure(
+      `${plan.name} tem ${current === 1 ? "1 assinante" : `${current} assinantes`} no momento. Troque o plano deles em Clientes > Assinantes antes de excluir (ou só inative).`,
+    );
+  }
+
+  if (!subscriptions.length) {
+    const { data: deleted, error } = await supabase.from("subscription_plans").delete().eq("id", id).select("id");
+    if (!error && deleted?.length) {
+      updateTag(catalogTags.plans);
+      return { ok: true, message: `${plan.name} foi excluído.` };
+    }
+    // Assinatura criada entre a conferência e o delete (FK): cai na exclusão lógica.
+    if (error?.code !== "23503") return failure("Não foi possível excluir. Tente novamente.");
+  }
+
+  const { data: archived, error } = await supabase
+    .from("subscription_plans")
+    .update({ is_active: false, deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (error || !archived?.length) return failure("Não foi possível excluir. Tente novamente.");
+
+  updateTag(catalogTags.plans);
+  return { ok: true, message: `${plan.name} foi excluído. Assinaturas e mensalidades antigas continuam no painel.` };
 }

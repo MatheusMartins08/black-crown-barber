@@ -1,7 +1,7 @@
 "use server";
 
 import "server-only";
-import { isPlanId, type PlanId } from "../data/plans";
+import type { PlanId } from "../data/plans";
 import {
   getSubscriberLoginEmail,
   normalizePhone,
@@ -64,7 +64,9 @@ export async function createSubscriberAction(input: {
     validateSubscriberName(input.name) ||
     validateSubscriberPhone(input.phone) ||
     validateSubscriberPassword(input.password) ||
-    !isPlanId(input.planId) ||
+    // O banco (set_subscription) confere se o plano existe e está ativo.
+    typeof input.planId !== "string" ||
+    !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(input.planId) ||
     !subscriptionStatuses.includes(input.status)
   ) {
     return failure("invalid_request", "Revise os dados do assinante.");

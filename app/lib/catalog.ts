@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
+import { planColumns, sortPlans, toPlan, type PlanRow } from "../data/plans";
 import { professionalColumns, sortProfessionals, toProfessional, type ProfessionalRow } from "../data/professionals";
 import { serviceColumns, sortServices, toService, type ServiceRow } from "../data/services";
 import { siteImageColumns, toSiteImage, type SiteImageRow } from "../data/site-images";
@@ -14,6 +15,7 @@ export const catalogTags = {
   professionals: "catalog:professionals",
   siteImages: "catalog:site-images",
   services: "catalog:services",
+  plans: "catalog:plans",
 } as const;
 
 function getPublicClient() {
@@ -67,4 +69,22 @@ export const getPublicServices = unstable_cache(
   },
   ["catalog-services"],
   { tags: [catalogTags.services], revalidate: 3600 },
+);
+
+/**
+ * Planos não excluídos (ativos e inativos: o assinante de um plano inativado continua vendo o
+ * próprio plano no agendamento), com os serviços incluídos.
+ */
+export const getPublicPlans = unstable_cache(
+  async () => {
+    const { data, error } = await getPublicClient()
+      .from("subscription_plans")
+      .select(planColumns)
+      .is("deleted_at", null)
+      .order("sort_order");
+    if (error) throw new Error(`Não foi possível carregar os planos: ${error.message}`);
+    return sortPlans((data as unknown as PlanRow[]).map(toPlan));
+  },
+  ["catalog-plans"],
+  { tags: [catalogTags.plans], revalidate: 3600 },
 );

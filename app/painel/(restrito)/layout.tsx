@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import AdminHeader from "../components/admin-header";
 import NoAccess from "../components/no-access";
 import { PainelCatalogProvider } from "../components/painel-catalog";
-import { getCurrentStaff, getStaffProfessionals, getStaffServices, getWalkInRate } from "../lib/staff";
+import { getCurrentStaff, getStaffPlans, getStaffProfessionals, getStaffServices, getWalkInRate } from "../lib/staff";
 import "../painel.css";
 
 export const metadata: Metadata = {
@@ -39,16 +39,17 @@ export default async function PainelLayout({ children }: { children: ReactNode }
   }
 
   const name = staff.display_name || email;
-  const [professionals, services, walkInRate] = await Promise.all([
+  const [professionals, services, plans, walkInRate] = await Promise.all([
     getStaffProfessionals(),
     getStaffServices(),
+    getStaffPlans(),
     getWalkInRate(),
   ]);
 
   return (
     <div className="admin">
       <AdminHeader role={staff.role} userLabel={`${name} · ${roleLabels[staff.role] ?? staff.role}`} />
-      <PainelCatalogProvider professionals={professionals} services={services} walkInRate={walkInRate}>
+      <PainelCatalogProvider plans={plans} professionals={professionals} services={services} walkInRate={walkInRate}>
         {children}
       </PainelCatalogProvider>
     </div>

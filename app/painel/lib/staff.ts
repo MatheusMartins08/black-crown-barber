@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { planColumns, sortPlans, toPlan, type PlanRow } from "../../data/plans";
 import {
   professionalColumns,
   sortProfessionals,
@@ -136,6 +137,36 @@ export async function getServiceUsage(): Promise<Record<string, ServiceUsage>> {
   }
   for (const row of plans.data as unknown as { service_id: string; subscription_plans: { name: string } | null }[]) {
     if (row.subscription_plans) entry(row.service_id).plans.push(row.subscription_plans.name);
+  }
+  return usage;
+}
+
+/** Todos os planos (inclusive inativos e excluídos, para o histórico) com os serviços incluídos. */
+export const getStaffPlans = cache(async () => {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("subscription_plans").select(planColumns).order("sort_order");
+  if (error) throw new Error(`Não foi possível carregar os planos: ${error.message}`);
+  return sortPlans((data as unknown as PlanRow[]).map(toPlan));
+});
+
+export type PlanUsage = {
+  /** Assinantes com período em aberto (ativos ou congelados): o plano não pode ser excluído. */
+  current: number;
+  /** Já teve assinatura (inclusive encerrada): a exclusão mantém o cadastro só para o histórico. */
+  hasHistory: boolean;
+};
+
+/** Uso de cada plano (id → uso), para a tela Edição do site > Planos. */
+export async function getPlanUsage(): Promise<Record<string, PlanUsage>> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("customer_subscriptions").select("plan_id, status, ended_at");
+  if (error) throw new Error("Não foi possível carregar o uso dos planos.");
+
+  const usage: Record<string, PlanUsage> = {};
+  for (const row of data) {
+    const entry = (usage[row.plan_id] ??= { current: 0, hasHistory: false });
+    entry.hasHistory = true;
+    if (row.ended_at === null && row.status !== "cancelada") entry.current += 1;
   }
   return usage;
 }

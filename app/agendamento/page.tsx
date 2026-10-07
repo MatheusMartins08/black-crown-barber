@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { isProfessionalChoice, isServiceId } from "../data/booking";
 import { openingHours, siteConfig } from "../data/site";
-import { getPublicProfessionals, getPublicServices } from "../lib/catalog";
+import { getPublicPlans, getPublicProfessionals, getPublicServices } from "../lib/catalog";
 import { BookingCatalogProvider } from "./components/booking-catalog";
 import BookingFlow from "./components/booking-flow";
 import BookingHeader from "./components/booking-header";
@@ -21,10 +21,11 @@ function firstValue(value: string | string[] | undefined) {
 }
 
 export default async function AgendamentoPage({ searchParams }: PageProps<"/agendamento">) {
-  const [params, professionals, services] = await Promise.all([
+  const [params, professionals, services, plans] = await Promise.all([
     searchParams,
     getPublicProfessionals(),
     getPublicServices(),
+    getPublicPlans(),
   ]);
   const serviceParam = firstValue(params.servico);
   const professionalParam = firstValue(params.profissional);
@@ -34,7 +35,7 @@ export default async function AgendamentoPage({ searchParams }: PageProps<"/agen
     <div className="booking-page">
       <BookingHeader />
       <main className="booking-page__main">
-        <BookingCatalogProvider professionals={professionals} services={services}>
+        <BookingCatalogProvider plans={plans} professionals={professionals} services={services}>
           <BookingFlow
             initialProfessionalId={isProfessionalChoice(professionals, professionalParam) ? professionalParam : null}
             initialServiceId={isServiceId(services, serviceParam) ? serviceParam : null}

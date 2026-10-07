@@ -2,6 +2,7 @@ import { CalendarCheck, CircleAlert, Crown, LogOut } from "lucide-react";
 import type { CustomerType } from "../../../data/booking";
 import { getPlan } from "../../../data/plans";
 import { blockedMessages, type SubscriberSession } from "../../../data/subscribers";
+import { useBookingPlans } from "../booking-catalog";
 import ChoiceCard from "../choice-card";
 
 type ProfileStepProps = {
@@ -22,7 +23,7 @@ export default function ProfileStep({
   onChooseGuest,
   onSignOut,
 }: ProfileStepProps) {
-  const plan = getPlan(session?.planId ?? null);
+  const plan = getPlan(useBookingPlans(), session?.planId ?? null);
   const subscriberSelected = customerType === "assinante" && session !== null;
 
   return (

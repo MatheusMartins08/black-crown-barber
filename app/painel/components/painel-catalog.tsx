@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
+import type { SubscriptionPlan } from "../../data/plans";
 import type { Professional } from "../../data/professionals";
 import type { Service } from "../../data/services";
 
@@ -10,11 +11,13 @@ import type { Service } from "../../data/services";
 type PainelCatalog = {
   professionals: readonly Professional[];
   services: readonly Service[];
+  /** Todos os planos (ativos, inativos e excluídos, porque assinaturas antigas apontam para eles). */
+  plans: readonly SubscriptionPlan[];
   /** Fração do preço repassada ao profissional em atendimentos fora do plano. */
   walkInRate: number;
 };
 
-const PainelCatalogContext = createContext<PainelCatalog>({ professionals: [], services: [], walkInRate: 0 });
+const PainelCatalogContext = createContext<PainelCatalog>({ professionals: [], services: [], plans: [], walkInRate: 0 });
 
 export function PainelCatalogProvider({ children, ...catalog }: PainelCatalog & { children: ReactNode }) {
   return <PainelCatalogContext.Provider value={catalog}>{children}</PainelCatalogContext.Provider>;
@@ -26,6 +29,10 @@ export function usePainelProfessionals() {
 
 export function usePainelServices() {
   return useContext(PainelCatalogContext).services;
+}
+
+export function usePainelPlans() {
+  return useContext(PainelCatalogContext).plans;
 }
 
 export function useWalkInRate() {

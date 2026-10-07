@@ -3,14 +3,13 @@ import { DefaultServiceIcon, serviceIcons } from "../../../components/service-ic
 import { formatCurrency, type BookingService, type ServiceId } from "../../../data/booking";
 import {
   describePlanBenefits,
-  formatPerWeek,
+  formatFrequency,
   getPlan,
-  getPlanBenefit,
   type SubscriptionPlan,
 } from "../../../data/plans";
 import { formatDuration } from "../../../data/services";
 import { blockedMessages, type SubscriberSession } from "../../../data/subscribers";
-import { useBookingServices } from "../booking-catalog";
+import { useBookingPlans, useBookingServices } from "../booking-catalog";
 import ChoiceCard from "../choice-card";
 
 type ServiceStepProps = {
@@ -37,7 +36,7 @@ function ServiceCard({
   plan?: SubscriptionPlan;
 }) {
   const Icon = serviceIcons[service.icon] ?? DefaultServiceIcon;
-  const benefit = plan ? getPlanBenefit(plan.id, service.slug) : null;
+  const benefit = plan?.benefits.find((item) => item.serviceId === service.slug) ?? null;
 
   return (
     <ChoiceCard
@@ -62,7 +61,7 @@ function ServiceCard({
         <span>
           <Clock3 aria-hidden="true" size={14} strokeWidth={1.7} />
           {formatDuration(service.durationMinutes)}
-          {benefit ? ` · ${formatPerWeek(benefit.perWeek)}` : null}
+          {benefit ? ` · ${formatFrequency(benefit)}` : null}
         </span>
         <strong>{benefit ? "Incluído" : formatCurrency(service.price)}</strong>
       </span>
@@ -102,6 +101,7 @@ function ServiceGrid({
 
 export default function ServiceStep({ selectedId, onSelect, session, loading }: ServiceStepProps) {
   const bookingServices = useBookingServices();
+  const plans = useBookingPlans();
   if (loading) {
     return (
       <ul aria-busy="true" aria-label="Carregando os serviços do seu plano" className="choice-grid">
@@ -114,7 +114,7 @@ export default function ServiceStep({ selectedId, onSelect, session, loading }: 
     );
   }
 
-  const plan = getPlan(session?.planId ?? null);
+  const plan = getPlan(plans, session?.planId ?? null);
 
   if (!session || !plan) {
     return <ServiceGrid onSelect={onSelect} selectedId={selectedId} services={bookingServices} />;
@@ -140,8 +140,9 @@ export default function ServiceStep({ selectedId, onSelect, session, loading }: 
     );
   }
 
-  const included = bookingServices.filter((service) => getPlanBenefit(plan.id, service.slug));
-  const others = bookingServices.filter((service) => !getPlanBenefit(plan.id, service.slug));
+  const inPlan = (service: BookingService) => plan.benefits.some((benefit) => benefit.serviceId === service.slug);
+  const included = bookingServices.filter(inPlan);
+  const others = bookingServices.filter((service) => !inPlan(service));
 
   return (
     <>
@@ -149,7 +150,7 @@ export default function ServiceStep({ selectedId, onSelect, session, loading }: 
         <header className="service-group__header">
           <h3 id="service-group-plan">Serviços do seu plano</h3>
           <p>
-            {plan.name}: {describePlanBenefits(plan.id, bookingServices)}.
+            {plan.name}: {describePlanBenefits(plan, bookingServices)}.
           </p>
         </header>
         <ServiceGrid onSelect={onSelect} plan={plan} selectedId={selectedId} services={included} />

@@ -4,7 +4,7 @@ import { useId, useState, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import Dialog from "../../components/dialog";
 import { formatPhone } from "../../data/booking";
-import { describePlanBenefits, subscriptionPlans, type PlanId } from "../../data/plans";
+import { describePlanBenefits, getPlan, type PlanId } from "../../data/plans";
 import {
   hasSubscriberErrors,
   passwordRules,
@@ -24,7 +24,7 @@ import {
   updateSubscriber,
 } from "../../lib/subscribers-api";
 import { DialogFrame, Field, FormAlert, SubmitButton, useDialogIds, type DialogIds } from "./admin-form";
-import { usePainelServices } from "./painel-catalog";
+import { usePainelPlans, usePainelServices } from "./painel-catalog";
 
 const statusDescriptions: Record<SubscriptionStatus, string> = {
   ativo: "Benefícios do plano liberados no agendamento online.",
@@ -126,10 +126,12 @@ function SubscriberForm({
   const ids = useId();
   const isCreate = mode.type === "create";
   const services = usePainelServices();
+  // Assinatura nova só em plano ativo.
+  const activePlans = usePainelPlans().filter((plan) => plan.isActive);
   const [name, setName] = useState(isCreate ? "" : mode.account.name);
   const [phone, setPhone] = useState(isCreate ? "" : mode.account.phone);
   const [password, setPassword] = useState("");
-  const [planId, setPlanId] = useState<PlanId>(isCreate ? "bronze" : mode.account.planId);
+  const [planId, setPlanId] = useState<PlanId>(isCreate ? (activePlans[0]?.slug ?? "") : mode.account.planId);
   const [status, setStatus] = useState<SubscriptionStatus>(isCreate ? "ativo" : mode.account.status);
   const [touched, setTouched] = useState<Partial<Record<keyof SubscriberErrors, boolean>>>({});
   const [attempted, setAttempted] = useState(false);
@@ -258,10 +260,12 @@ function SubscriberForm({
             <Segmented
               label="Plano"
               onChange={setPlanId}
-              options={subscriptionPlans.map((plan) => ({ value: plan.id, label: plan.shortName }))}
+              options={activePlans.map((plan) => ({ value: plan.slug, label: plan.shortName }))}
               value={planId}
             />
-            <p className="admin-field__hint">{describePlanBenefits(planId, services)}</p>
+            <p className="admin-field__hint">{activePlans.length
+                ? describePlanBenefits(getPlan(activePlans, planId), services)
+                : "Nenhum plano ativo. Ative ou crie um plano em Edição do site > Planos."}</p>
           </div>
 
           <div className="admin-field admin-dialog__field">

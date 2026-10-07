@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, KeyRound, LoaderCircle, Pencil, RotateCw, Snowflake, UserPlus, Users, XCircle } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
 import { formatFullDate, formatMonthTitle, listHistoryMonths } from "../../data/painel";
-import { describePlanBenefits, getPlan, subscriptionPlans, type PlanId } from "../../data/plans";
+import { describePlanBenefits, getPlan, type PlanId } from "../../data/plans";
 import {
   normalizePhone,
   subscriptionStatusLabels,
@@ -19,7 +19,7 @@ import {
   SubscriberApiError,
 } from "../../lib/subscribers-api";
 import FilterToggle from "./filter-toggle";
-import { usePainelServices } from "./painel-catalog";
+import { usePainelPlans, usePainelServices } from "./painel-catalog";
 import ShowMore, { listPageSize } from "./show-more";
 import { ResetPasswordDialog, SubscriberFormDialog } from "./subscriber-dialogs";
 
@@ -73,6 +73,7 @@ export default function SubscribersOverview({
   onAccountsChange?: () => void;
 }) {
   const loaded = useAsyncData(listSubscribers);
+  const plans = usePainelPlans();
   const [edited, setEdited] = useState<SubscriberAccount[] | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("todos");
   const [planFilter, setPlanFilter] = useState<PlanFilter>("todos");
@@ -240,11 +241,13 @@ export default function SubscribersOverview({
               value={planFilter}
             >
               <option value="todos">Todos</option>
-              {subscriptionPlans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.shortName}
-                </option>
-              ))}
+              {plans
+                .filter((plan) => !plan.deletedAt)
+                .map((plan) => (
+                  <option key={plan.id} value={plan.slug}>
+                    {plan.shortName}
+                  </option>
+                ))}
             </select>
           </label>
           <label className="admin-field">
@@ -322,7 +325,7 @@ export default function SubscribersOverview({
                         account,
                         { ...account, planId },
                         () => changeSubscriberPlan(account.id, planId),
-                        `${account.name} agora está no ${getPlan(planId)?.name}.`,
+                        `${account.name} agora está no ${getPlan(plans, planId)?.name}.`,
                       )
                     }
                     onChangeStatus={(status) =>
@@ -369,7 +372,7 @@ export default function SubscribersOverview({
           setAccounts((current) => upsert(current, account));
           setFormOpen(false);
           onAccountsChange?.();
-          highlight(account.id, isNew ? `${account.name} cadastrado no ${getPlan(account.planId)?.name}.` : `Dados de ${account.name} atualizados.`);
+          highlight(account.id, isNew ? `${account.name} cadastrado no ${getPlan(plans, account.planId)?.name}.` : `Dados de ${account.name} atualizados.`);
         }}
         open={formOpen}
         openKey={openKey}
@@ -411,6 +414,9 @@ function SubscriberRow({
   const StatusIcon = statusIcons[account.status];
   const isInactive = account.status === "inativo";
   const services = usePainelServices();
+  const plans = usePainelPlans();
+  // Planos ativos para troca; o atual fica na lista mesmo se tiver sido inativado.
+  const planOptions = plans.filter((plan) => plan.isActive || plan.slug === account.planId);
 
   return (
     <tr
@@ -434,15 +440,16 @@ function SubscriberRow({
             onChange={(event) => onChangePlan(event.target.value as PlanId)}
             value={account.planId}
           >
-            {subscriptionPlans.map((plan) => (
-              <option key={plan.id} value={plan.id}>
+            {planOptions.map((plan) => (
+              <option key={plan.id} value={plan.slug}>
                 {plan.name}
+                {plan.isActive ? "" : " (inativo)"}
               </option>
             ))}
           </select>
         </label>
         <span className="admin-row__price admin-row__benefits">
-          {isInactive ? "Reative para trocar o plano" : describePlanBenefits(account.planId, services)}
+          {isInactive ? "Reative para trocar o plano" : describePlanBenefits(getPlan(plans, account.planId), services)}
         </span>
       </td>
       <td className="admin-subscribers__status" data-label="Status">

@@ -12,13 +12,12 @@ import {
   getPlanByName,
   isCoveredByPlan,
   listHistoryMonths,
-  subscriptionPlans,
   type ClientProfile,
 } from "../../data/painel";
-import { formatPerWeek } from "../../data/plans";
+import { formatFrequency } from "../../data/plans";
 import { fetchAppointments, fetchMonthPayments, PainelApiError } from "../lib/painel-api";
 import { isSubscriber } from "./membership-tag";
-import { usePainelServices } from "./painel-catalog";
+import { usePainelPlans, usePainelServices } from "./painel-catalog";
 
 function getErrorMessage(error: unknown) {
   return error instanceof PainelApiError ? error.message : "Não foi possível falar com o banco. Tente novamente.";
@@ -56,6 +55,13 @@ export default function PlansOverview({
   const monthPayments = data?.monthPayments ?? [];
   const nonSubscribers = profiles.filter((profile) => !isSubscriber(profile.membership)).length;
   const monthLabel = formatMonth(`${month}-01`);
+  // Planos em uso e, mesmo excluídos, os que ainda têm assinante ou mensalidade no mês.
+  const plans = usePainelPlans().filter(
+    (plan) =>
+      !plan.deletedAt ||
+      profiles.some((profile) => profile.planId === plan.slug) ||
+      monthPayments.some((payment) => payment.planId === plan.slug),
+  );
 
   return (
     <section aria-labelledby="planos-title" className="admin-panel admin-plans" id="planos">
@@ -103,18 +109,18 @@ export default function PlansOverview({
               </tr>
             </thead>
             <tbody>
-              {subscriptionPlans.map((plan) => {
+              {plans.map((plan) => {
                 const planClients = profiles.filter(
-                  (profile) => profile.planId === plan.id && isSubscriber(profile.membership),
+                  (profile) => profile.planId === plan.slug && isSubscriber(profile.membership),
                 );
                 const upToDate = planClients.filter((profile) => profile.membership === "ativo").length;
                 const frozen = planClients.filter((profile) => profile.membership === "congelado").length;
                 const pending = planClients.length - upToDate - frozen;
                 const uses = completed.filter(
-                  (appointment) => getPlanByName(appointment.planName)?.id === plan.id && isCoveredByPlan(appointment),
+                  (appointment) => getPlanByName(plans, appointment.planName)?.id === plan.id && isCoveredByPlan(appointment),
                 ).length;
                 const planPayments = monthPayments.filter(
-                  (payment) => payment.planId === plan.id && payment.status !== "cancelado",
+                  (payment) => payment.planId === plan.slug && payment.status !== "cancelado",
                 );
                 const expected = planPayments.reduce((sum, payment) => sum + payment.amount, 0);
                 const received = planPayments
@@ -126,7 +132,7 @@ export default function PlansOverview({
                     <th scope="row">{plan.name}</th>
                     <td className="admin-plans__covers" data-label="Cobre">
                       {plan.benefits
-                        .map((benefit) => `${serviceName(benefit.serviceId)} (${formatPerWeek(benefit.perWeek)})`)
+                        .map((benefit) => `${serviceName(benefit.serviceId)} (${formatFrequency(benefit)})`)
                         .join(", ")}
                     </td>
                     <td className="is-numeric admin-plans__price" data-label="Mensalidade">

@@ -1,5 +1,5 @@
 import { formatPhone, type ServiceId } from "../data/booking";
-import { isPlanId, type PlanId } from "../data/plans";
+import type { PlanId } from "../data/plans";
 import {
   getSubscriberLoginEmail,
   type BlockedReason,
@@ -75,7 +75,8 @@ type SessionPayload = {
 };
 
 function toSession(payload: SessionPayload | null): SubscriberSession | null {
-  if (!payload || !isPlanId(payload.planId)) return null;
+  // O plano vem pelo slug; o catálogo (Supabase) é conferido onde ele é exibido.
+  if (!payload || typeof payload.planId !== "string" || !payload.planId) return null;
   return { ...payload, planId: payload.planId, blockedReason: payload.blockedReason ?? null };
 }
 
@@ -140,7 +141,7 @@ export async function fetchPlanCoverage(query: { serviceId: ServiceId; date: str
   if (error) fromRpc(error, "Não foi possível conferir o plano.");
 
   const payload = data as CoveragePayload | null;
-  if (!payload || !isPlanId(payload.planId)) return null;
+  if (!payload || !payload.planId) return null;
   return { ...payload, planId: payload.planId };
 }
 
@@ -160,7 +161,7 @@ function toAccount(row: AccountRow): SubscriberAccount {
     id: row.id,
     name: row.name,
     phone: formatPhone(row.phone),
-    planId: isPlanId(row.plan_slug) ? row.plan_slug : "bronze",
+    planId: row.plan_slug,
     status: row.status,
     since: row.subscribed_since,
   };
@@ -215,7 +216,7 @@ export async function updateSubscriber(id: string, changes: { name: string; phon
 }
 
 export async function changeSubscriberPlan(id: string, planId: PlanId): Promise<SubscriberAccount> {
-  if (!isPlanId(planId)) throw new SubscriberApiError("Plano inválido.", "invalid_request");
+  if (!planId) throw new SubscriberApiError("Plano inválido.", "invalid_request");
   const account = await getAccount(id);
   if (account.status === "inativo") {
     throw new SubscriberApiError("Reative a assinatura para trocar o plano.", "invalid_request");

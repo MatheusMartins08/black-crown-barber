@@ -1,4 +1,4 @@
-import { subscriptionPlans as planCatalog, type PlanBenefit, type PlanId } from "./plans";
+import type { PlanId, SubscriptionPlan } from "./plans";
 import type { Professional } from "./professionals";
 import type { Service } from "./services";
 
@@ -9,14 +9,6 @@ import type { Service } from "./services";
 
 export type AppointmentStatus = "agendado" | "concluido" | "faltou" | "cancelado";
 export type Period = "dia" | "semana" | "mes";
-
-export type SubscriptionPlan = {
-  id: PlanId;
-  name: string;
-  monthlyPrice: number;
-  /** Benefícios por slug de serviço; o nome vem do catálogo de serviços (Supabase). */
-  benefits: readonly PlanBenefit[];
-};
 
 export type PaymentMethod = "pix" | "cartao" | "dinheiro";
 
@@ -116,21 +108,9 @@ export type ClientProfile = {
   currentCycle: CyclePayment | null;
 };
 
-export const subscriptionPlans: SubscriptionPlan[] = planCatalog.map((plan) => ({
-  id: plan.id,
-  name: plan.name,
-  monthlyPrice: plan.monthlyPrice,
-  benefits: plan.benefits,
-}));
-
-const plansById = new Map<string, SubscriptionPlan>(subscriptionPlans.map((plan) => [plan.id, plan]));
-
-export function getPlan(planId: string | null) {
-  return planId ? plansById.get(planId) ?? null : null;
-}
-
-export function getPlanByName(name: string | null) {
-  return subscriptionPlans.find((plan) => plan.name === name) ?? null;
+/** Plano pelo nome que a view devolve (live_plan_name), dentro do catálogo do painel. */
+export function getPlanByName(plans: readonly SubscriptionPlan[], name: string | null) {
+  return plans.find((plan) => plan.name === name) ?? null;
 }
 
 /** Dias depois do vencimento em que o plano ainda cobre (shop_settings.subscription_grace_days). */
