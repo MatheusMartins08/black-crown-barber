@@ -145,9 +145,9 @@ export default function ClientsOverview({
   profiles: ClientProfile[];
   loading: boolean;
   /** Forma escolhida agora, por mensalidade, enquanto o banco confirma. */
-  chosenMethods: Record<string, PaymentMethod>;
+  chosenMethods: Record<string, PaymentMethod | null>;
   savingPayments: string[];
-  onRegisterPayment: (paymentId: string, method: PaymentMethod) => void;
+  onRegisterPayment: (paymentId: string, method: PaymentMethod | null) => void;
 }) {
   const [filter, setFilter] = useState<ClientFilter>("todos");
   const [search, setSearch] = useState("");
@@ -352,9 +352,10 @@ export default function ClientsOverview({
         <summary>Como funciona a mensalidade</summary>
         <p>
           A mensalidade vence no início de cada mês do plano; depois de {billingRules.graceDays} dias em aberto, o plano
-          deixa de cobrir os atendimentos. Cada ciclo tem o seu pagamento: marque Pix, Cartão ou Dinheiro em “Pagamento
-          do ciclo” (dá para trocar a forma depois, se marcar errado). Quando começa um ciclo novo, ele aparece pendente e
-          os pagamentos anteriores continuam guardados.
+          deixa de cobrir os atendimentos. Cada ciclo tem o seu pagamento: em “Pagamento do ciclo”, marque Pago e
+          escolha Pix, Cartão ou Dinheiro. Nada é definitivo: dá para trocar a forma ou voltar para Não pago (a forma é
+          desmarcada). Quando começa um ciclo novo, ele aparece como Não pago e os pagamentos anteriores continuam
+          guardados.
           {visitPeriod === "base"
             ? " “Última visita” conta os atendimentos concluídos guardados no histórico do painel."
             : " Com um período escolhido, a lista mostra só quem teve atendimento concluído nele."}
@@ -374,9 +375,9 @@ function ClientRow({
   profile: ClientProfile;
   /** Presente quando a lista está filtrada por período. */
   visits?: Visits;
-  chosenMethods: Record<string, PaymentMethod>;
+  chosenMethods: Record<string, PaymentMethod | null>;
   savingPayments: string[];
-  onRegisterPayment: (paymentId: string, method: PaymentMethod) => void;
+  onRegisterPayment: (paymentId: string, method: PaymentMethod | null) => void;
 }) {
   // A dívida mais antiga vem primeiro; sem nada em aberto, o ciclo de hoje (pago ou não).
   const cycle = profile.nextToReceive ?? profile.currentCycle;
@@ -458,9 +459,10 @@ function ClientRow({
       <td className={`admin-clients__receive${cycle ? "" : " is-empty"}`} data-label="Pagamento do ciclo">
         {cycle ? (
           <CyclePaymentControl
-            chosen={chosenMethods[cycle.id] ?? cycle.method}
+            chosen={cycle.id in chosenMethods ? chosenMethods[cycle.id] : cycle.method}
             cycle={cycle}
             clientName={profile.name}
+            key={cycle.id}
             onChoose={(method) => onRegisterPayment(cycle.id, method)}
             saving={savingPayments.includes(cycle.id)}
           />
@@ -473,8 +475,9 @@ function ClientRow({
 }
 
 /**
- * Pagamento de um ciclo: sempre visível. Pendente, nenhuma forma marcada; pago, a forma
- * usada fica marcada e pode ser trocada (por exemplo, Pix marcado por engano).
+ * Pagamento de um ciclo: primeiro o status (Não pago | Pago); a forma só aparece com Pago.
+ * Nada é definitivo: dá para trocar a forma (Pix marcado por engano) ou voltar para não pago,
+ * e aí o banco desassocia a forma. Ao tocar "Pago", nada é gravado até escolher a forma.
  */
 function CyclePaymentControl({
   cycle,
@@ -484,43 +487,83 @@ function CyclePaymentControl({
   onChoose,
 }: {
   cycle: CyclePayment;
+  /** Forma do pagamento; `null` = não pago. */
   chosen: PaymentMethod | null;
   saving: boolean;
   clientName: string;
-  onChoose: (method: PaymentMethod) => void;
+  onChoose: (method: PaymentMethod | null) => void;
 }) {
+  // Tocou "Pago" num ciclo não pago e ainda não escolheu a forma.
+  const [choosingMethod, setChoosingMethod] = useState(false);
   const period = `${formatShortDate(cycle.periodStart)}–${formatShortDate(cycle.periodEnd)}`;
+  const paid = chosen !== null;
+  const showMethods = paid || choosingMethod;
+
+  function selectStatus(nextPaid: boolean) {
+    if (nextPaid) {
+      if (!paid) setChoosingMethod(true);
+      return;
+    }
+    setChoosingMethod(false);
+    if (paid) onChoose(null);
+  }
 
   return (
     <div className="admin-cycle">
       <span className="admin-cycle__label">
         Ciclo {period} · {formatCurrency(cycle.amount)} ·{" "}
-        <strong className={chosen ? "admin-cycle__state--paid" : "admin-cycle__state--pending"}>
-          {chosen ? "Pago" : "Pendente"}
+        <strong className={paid ? "admin-cycle__state--paid" : "admin-cycle__state--pending"}>
+          {paid ? `Pago · ${paymentMethodLabels[chosen]}` : choosingMethod ? "Escolha a forma" : "Não pago"}
         </strong>
       </span>
       <div
         aria-busy={saving || undefined}
-        aria-label={`Forma de pagamento do ciclo ${period} de ${clientName}`}
-        className="admin-segmented admin-cycle__methods"
+        aria-label={`Status do pagamento do ciclo ${period} de ${clientName}`}
+        className="admin-segmented admin-cycle__options"
         role="radiogroup"
       >
-        {(Object.keys(paymentMethodLabels) as PaymentMethod[]).map((method) => (
-          <button
-            aria-checked={chosen === method}
-            className={chosen === method ? "is-active" : undefined}
-            disabled={saving}
-            key={method}
-            onClick={() => {
-              if (chosen !== method) onChoose(method);
-            }}
-            role="radio"
-            type="button"
-          >
-            {paymentMethodLabels[method]}
-          </button>
-        ))}
+        {[false, true].map((option) => {
+          const active = option === showMethods;
+          return (
+            <button
+              aria-checked={active}
+              className={active ? "is-active" : undefined}
+              disabled={saving}
+              key={String(option)}
+              onClick={() => selectStatus(option)}
+              role="radio"
+              type="button"
+            >
+              {option ? "Pago" : "Não pago"}
+            </button>
+          );
+        })}
       </div>
+      {showMethods ? (
+        <div
+          aria-busy={saving || undefined}
+          aria-label={`Forma de pagamento do ciclo ${period} de ${clientName}`}
+          className="admin-segmented admin-cycle__options"
+          role="radiogroup"
+        >
+          {(Object.keys(paymentMethodLabels) as PaymentMethod[]).map((method) => (
+            <button
+              aria-checked={chosen === method}
+              className={chosen === method ? "is-active" : undefined}
+              disabled={saving}
+              key={method}
+              onClick={() => {
+                setChoosingMethod(false);
+                if (chosen !== method) onChoose(method);
+              }}
+              role="radio"
+              type="button"
+            >
+              {paymentMethodLabels[method]}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

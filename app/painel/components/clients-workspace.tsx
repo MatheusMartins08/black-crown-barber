@@ -5,7 +5,7 @@ import { CircleAlert } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
 import { getTodayIso } from "../../data/booking";
 import type { ClientProfile, PaymentMethod } from "../../data/painel";
-import { fetchClientProfiles, PainelApiError, registerPayment as savePayment } from "../lib/painel-api";
+import { fetchClientProfiles, PainelApiError, savePaymentStatus } from "../lib/painel-api";
 import ClientsOverview from "./clients-overview";
 import PlansOverview from "./plans-overview";
 import SubscribersOverview from "./subscribers-overview";
@@ -38,8 +38,8 @@ export default function ClientsWorkspace({ initialTab }: { initialTab?: string }
   const [actionError, setActionError] = useState<string | null>(null);
   const [plansMonth, setPlansMonth] = useState(today.slice(0, 7));
   const [paymentsVersion, setPaymentsVersion] = useState(0);
-  // Forma marcada agora (aparece na hora) e mensalidades sendo gravadas.
-  const [chosenMethods, setChosenMethods] = useState<Record<string, PaymentMethod>>({});
+  // Forma marcada agora (aparece na hora; `null` = voltou a não pago) e mensalidades sendo gravadas.
+  const [chosenMethods, setChosenMethods] = useState<Record<string, PaymentMethod | null>>({});
   const [savingPayments, setSavingPayments] = useState<string[]>([]);
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
@@ -81,22 +81,23 @@ export default function ClientsWorkspace({ initialTab }: { initialTab?: string }
     selectTab(target.value, true);
   }
 
-  // Registro manual (Pix, cartão ou dinheiro), ou troca da forma de um ciclo já pago. A
-  // escolha aparece na hora; se o banco recusar, volta. Depois de gravar, recarrega clientes
-  // e o mês dos planos: a situação do cliente e o recebido podem mudar.
-  async function registerPayment(id: string, method: PaymentMethod) {
+  // Registro manual (Pix, cartão ou dinheiro), troca da forma de um ciclo já pago ou volta
+  // para não pago (`null`). A escolha aparece na hora; se o banco recusar, volta. Depois de
+  // gravar, recarrega clientes e o mês dos planos: a situação do cliente e o recebido podem mudar.
+  async function registerPayment(id: string, method: PaymentMethod | null) {
+    const hadChoice = id in chosenMethods;
     const previousChoice = chosenMethods[id];
     setActionError(null);
     setChosenMethods((current) => ({ ...current, [id]: method }));
     setSavingPayments((current) => [...current, id]);
     try {
-      await savePayment(id, method);
+      await savePaymentStatus(id, method);
       reloadProfiles();
       setPaymentsVersion((version) => version + 1);
     } catch (error) {
       setChosenMethods((current) => {
         const next = { ...current };
-        if (previousChoice) next[id] = previousChoice;
+        if (hadChoice) next[id] = previousChoice;
         else delete next[id];
         return next;
       });

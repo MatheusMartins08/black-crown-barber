@@ -299,13 +299,14 @@ export async function fetchMonthPayments(month: string): Promise<MonthPayment[]>
 }
 
 /**
- * Registra o pagamento de uma mensalidade ou troca a forma de uma já paga (só admin).
- * Numa linha já paga, o banco mantém a data do pagamento e só troca a forma.
+ * Marca uma mensalidade como paga com a forma dada (ou troca a forma de uma já paga), ou,
+ * com `null`, volta para não paga (só admin). Numa linha já paga, o banco mantém a data do
+ * pagamento e só troca a forma; ao voltar para não paga, o banco limpa a data e a forma.
  */
-export async function registerPayment(paymentId: string, method: PaymentMethod) {
+export async function savePaymentStatus(paymentId: string, method: PaymentMethod | null) {
   const { data, error } = await getSupabaseBrowserClient()
     .from("subscription_payments")
-    .update({ status: "pago", method })
+    .update(method ? { status: "pago", method } : { status: "pendente", method: null })
     .eq("id", paymentId)
     .select("id");
   if (error) fail(error, "Não foi possível registrar o pagamento.");
