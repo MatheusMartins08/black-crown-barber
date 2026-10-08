@@ -5,13 +5,14 @@ import {
   formatCurrency,
   formatLongDate,
   getProfessional,
-  getService,
+  getServices,
+  sumServices,
   type BookingDraft,
 } from "../../../data/booking";
 import { getPlan } from "../../../data/plans";
 import { formatDuration } from "../../../data/services";
-import type { PlanCoverage, SubscriberSession } from "../../../data/subscribers";
-import { formatWeek, getCoverageNote, getPriceLabel } from "../../lib/plan-pricing";
+import type { SubscriberSession } from "../../../data/subscribers";
+import { formatWeek, getCoverageNote, getPriceLabel, getTotalLabel, type CoverageMap } from "../../lib/plan-pricing";
 import { useBookingPlans, useBookingProfessionals, useBookingServices } from "../booking-catalog";
 import ProfessionalAvatar from "../professional-avatar";
 import type { StepId } from "../use-booking-draft";
@@ -22,25 +23,42 @@ type ReviewStepProps = {
   error: { message: string; canPickAnotherTime: boolean } | null;
   /** Assinante logado (os dados vêm da conta). */
   session: SubscriberSession | null;
-  coverage: PlanCoverage | null;
+  /** Cobertura do plano de cada serviço escolhido. */
+  coverage: CoverageMap;
   /** A cobertura da data escolhida ainda está sendo conferida. */
   checkingCoverage: boolean;
 };
 
 export default function ReviewStep({ draft, onEdit, error, session, coverage, checkingCoverage }: ReviewStepProps) {
-  const service = getService(useBookingServices(), draft.serviceId);
+  const items = getServices(useBookingServices(), draft.serviceIds);
   const plans = useBookingPlans();
   const assignee = getProfessional(useBookingProfessionals(), draft.assignedProfessionalId);
-  if (!service || !draft.date || !draft.time) return null;
+  if (!items.length || !draft.date || !draft.time) return null;
 
-  const coverageNote = session ? getCoverageNote(coverage, plans) : null;
+  const totals = sumServices(items);
+  const showPrices = items.length > 1;
   const rows: { label: string; value: ReactNode; step: StepId }[] = [
     {
-      label: "Serviço",
+      label: items.length > 1 ? "Serviços" : "Serviço",
       value: (
-        <span className="booking-review__stack">
-          {service.name}
-          {coverageNote && !checkingCoverage ? <small>{coverageNote}</small> : null}
+        <span className="booking-review__items">
+          {items.map((item) => {
+            const note = session && !checkingCoverage ? getCoverageNote(coverage[item.slug] ?? null, plans) : null;
+            return (
+              <span className="booking-review__stack" key={item.slug}>
+                {item.name}
+                {showPrices ? (
+                  <small>
+                    {formatDuration(item.durationMinutes)} ·{" "}
+                    {session && !checkingCoverage
+                      ? getPriceLabel(item.price, coverage[item.slug] ?? null)
+                      : formatCurrency(item.price)}
+                  </small>
+                ) : null}
+                {note ? <small>{note}</small> : null}
+              </span>
+            );
+          })}
         </span>
       ),
       step: "servico",
@@ -60,7 +78,7 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
     },
     { label: "Data", value: formatLongDate(draft.date), step: "horario" },
     { label: "Horário", value: draft.time, step: "horario" },
-    { label: "Duração", value: formatDuration(service.durationMinutes), step: "servico" },
+    { label: "Duração", value: formatDuration(totals.durationMinutes), step: "servico" },
     session
       ? {
           label: "Assinante",
@@ -87,9 +105,15 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
         },
   ];
 
-  const isMonthlyLimit = coverage?.reason === "limite_mensal";
-  const showLimitNotice =
-    session && (coverage?.reason === "limite_semanal" || isMonthlyLimit) && !checkingCoverage;
+  // Serviços cujo benefício do período já foi usado: saem pelo valor avulso.
+  const limited = session && !checkingCoverage
+    ? items.flatMap((item) => {
+        const itemCoverage = coverage[item.slug];
+        return itemCoverage && (itemCoverage.reason === "limite_semanal" || itemCoverage.reason === "limite_mensal")
+          ? [{ item, coverage: itemCoverage }]
+          : [];
+      })
+    : [];
 
   return (
     <div className="booking-review-wrap">
@@ -117,31 +141,35 @@ export default function ReviewStep({ draft, onEdit, error, session, coverage, ch
               Conferindo o plano…
             </strong>
           ) : (
-            <strong key={coverage?.reason ?? "avulso"}>
-              {session ? getPriceLabel(service.price, coverage) : formatCurrency(service.price)}
+            <strong key={Object.values(coverage).map((item) => item?.reason).join() || "avulso"}>
+              {getTotalLabel(items, session ? coverage : null) ?? formatCurrency(totals.price)}
             </strong>
           )}
         </div>
       </div>
 
-      {showLimitNotice && coverage ? (
-        <div className="booking-alert" role="status">
-          <p>
-            <Info aria-hidden="true" size={16} />
-            <span>
-              <strong>
-                O benefício de {service.name.toLowerCase()} {isMonthlyLimit ? "deste mês do plano" : "desta semana"} já
-                foi usado.
-              </strong>{" "}
-              {isMonthlyLimit ? "No período de" : "Na semana de"} {formatWeek(coverage)}, este horário será cobrado como
-              avulso ({formatCurrency(service.price)}).
-            </span>
-          </p>
-          <button className="booking-text-button" onClick={() => onEdit("horario")} type="button">
-            Escolher outra data
-          </button>
-        </div>
-      ) : null}
+      {limited.map(({ item, coverage: itemCoverage }) => {
+        const isMonthlyLimit = itemCoverage.reason === "limite_mensal";
+        return (
+          <div className="booking-alert" key={item.slug} role="status">
+            <p>
+              <Info aria-hidden="true" size={16} />
+              <span>
+                <strong>
+                  O benefício de {item.name.toLowerCase()} {isMonthlyLimit ? "deste mês do plano" : "desta semana"} já foi
+                  usado.
+                </strong>{" "}
+                {isMonthlyLimit ? "No período de" : "Na semana de"} {formatWeek(itemCoverage)},{" "}
+                {items.length > 1 ? "este serviço será cobrado" : "este horário será cobrado"} como avulso (
+                {formatCurrency(item.price)}).
+              </span>
+            </p>
+            <button className="booking-text-button" onClick={() => onEdit("horario")} type="button">
+              Escolher outra data
+            </button>
+          </div>
+        );
+      })}
 
       {error ? (
         <div className="booking-alert" role="alert">

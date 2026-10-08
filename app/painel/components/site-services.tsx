@@ -36,6 +36,14 @@ function formatPlans(plans: string[]) {
   return plans.length > 1 ? `${plans.slice(0, -1).join(", ")} e ${plans.at(-1)}` : (plans[0] ?? "");
 }
 
+/** "Corte masculino + Barba": as partes de um combo, pelo catálogo do painel. */
+function describeCombo(service: Service, services: readonly Service[]) {
+  return service.components
+    .map((id) => services.find((item) => item.id === id)?.name)
+    .filter(Boolean)
+    .join(" + ");
+}
+
 /**
  * Edição do site > Serviços: o menu da barbearia na landing, no agendamento e no painel.
  * Preço e duração mudam só para novos agendamentos (cada atendimento guarda os seus).
@@ -43,7 +51,8 @@ function formatPlans(plans: string[]) {
 export default function SiteServices({ usage }: { usage: Record<string, ServiceUsage> }) {
   const router = useRouter();
   // Excluídos ficam só no histórico (agenda e fechamento): não aparecem aqui.
-  const services = usePainelServices().filter((service) => service.deletedAt === null);
+  const catalog = usePainelServices();
+  const services = catalog.filter((service) => service.deletedAt === null);
   const [notice, setNotice] = useState<Notice>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, startRefresh] = useTransition();
@@ -150,6 +159,7 @@ export default function SiteServices({ usage }: { usage: Record<string, ServiceU
                   </p>
                   <p className="admin-site-item__meta">
                     {formatDuration(service.durationMinutes)} · {formatCurrency(service.price)}
+                    {service.components.length ? ` · combo: ${describeCombo(service, catalog)}` : ""}
                     {plans.length ? ` · nos planos: ${formatPlans(plans)}` : ""}
                   </p>
                 </div>
@@ -215,6 +225,10 @@ export default function SiteServices({ usage }: { usage: Record<string, ServiceU
           cada atendimento já marcado ou concluído guarda o preço, a duração e o nome do momento da reserva.
         </p>
         <p>
+          O cliente pode escolher vários serviços no mesmo horário. Um combo (ex.: Corte + barba) lista os serviços que já
+          inclui: o agendamento não deixa escolher o combo junto com eles, e oferece trocar um pelo outro.
+        </p>
+        <p>
           Inativar tira o serviço do site e do agendamento sem apagar nada. Excluir (dentro de “Editar”) também o tira
           desta lista; quem já foi atendido com ele continua no histórico. Um serviço que faz parte de um plano precisa
           sair do plano antes de ser excluído.
@@ -272,6 +286,8 @@ function ServiceForm({
 }) {
   const ids = useId();
   const current = mode.type === "edit" ? mode.service : null;
+  const catalog = usePainelServices();
+  const [components, setComponents] = useState<string[]>(current?.components ?? []);
   const [name, setName] = useState(current?.name ?? "");
   const [description, setDescription] = useState(current?.description ?? "");
   const [duration, setDuration] = useState(current ? String(current.durationMinutes) : "30");
@@ -294,6 +310,12 @@ function ServiceForm({
     isPopular,
   };
   const errors: ServiceErrors = attempted ? validateService(input, serviceIconKeys) : {};
+  // Partes possíveis: serviços simples (sem partes), não excluídos, além do próprio.
+  const comboOptions = catalog.filter(
+    (service) => service.deletedAt === null && service.id !== current?.id && service.components.length === 0,
+  );
+  // Quem já é parte de um combo não pode ser combo (sem aninhar).
+  const partOf = current ? catalog.filter((service) => service.components.includes(current.id)) : [];
   const priceChanged = current !== null && Number.isFinite(input.price) && input.price !== current.price;
   const durationChanged = current !== null && input.durationMinutes !== current.durationMinutes;
 
@@ -313,7 +335,11 @@ function ServiceForm({
 
     setBusy(true);
     try {
-      const result = await saveServiceAction({ id: current?.id ?? null, ...input });
+      const result = await saveServiceAction({
+        id: current?.id ?? null,
+        ...input,
+        components: partOf.length ? [] : components.filter((id) => comboOptions.some((service) => service.id === id)),
+      });
       if (!result.ok) {
         setFormError(result.message);
         setBusy(false);
@@ -459,6 +485,41 @@ function ServiceForm({
           value={payout}
         />
       </Field>
+
+      <div className="admin-field admin-dialog__field">
+        <span id={fieldId("combo-label")}>Este serviço é um combo de:</span>
+        {partOf.length ? (
+          <p className="admin-field__hint">
+            Faz parte de {formatPlans(partOf.map((service) => service.name))}, então não pode ser um combo.
+          </p>
+        ) : (
+          <>
+            <div aria-labelledby={fieldId("combo-label")} className="admin-combo" role="group">
+              {comboOptions.map((service) => (
+                <label className="admin-check" key={service.id}>
+                  <input
+                    checked={components.includes(service.id)}
+                    onChange={(event) =>
+                      setComponents((list) =>
+                        event.target.checked ? [...list, service.id] : list.filter((id) => id !== service.id),
+                      )
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    {service.name}
+                    {service.isActive ? null : <small>Inativo</small>}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="admin-field__hint">
+              Deixe em branco num serviço simples. Num combo, marque o que ele já inclui: no agendamento, o cliente não
+              escolhe o combo junto com esses serviços.
+            </p>
+          </>
+        )}
+      </div>
 
       <div className="admin-field admin-dialog__field">
         <span id={fieldId("icon-label")}>Ícone</span>

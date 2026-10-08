@@ -2,7 +2,7 @@ import Image from "next/image";
 import { Crown } from "lucide-react";
 import {
   ANY_PROFESSIONAL,
-  getProfessionalsForService,
+  getProfessionalsForServices,
   type ProfessionalChoice,
   type ServiceId,
 } from "../../../data/booking";
@@ -10,13 +10,14 @@ import { useBookingProfessionals } from "../booking-catalog";
 import ChoiceCard from "../choice-card";
 
 type ProfessionalStepProps = {
-  serviceId: ServiceId;
+  /** Só aparecem os profissionais que atendem todos os serviços escolhidos. */
+  serviceIds: readonly ServiceId[];
   selectedId: ProfessionalChoice | null;
   onSelect: (professionalId: ProfessionalChoice) => void;
 };
 
-export default function ProfessionalStep({ serviceId, selectedId, onSelect }: ProfessionalStepProps) {
-  const professionals = getProfessionalsForService(useBookingProfessionals(), serviceId);
+export default function ProfessionalStep({ serviceIds, selectedId, onSelect }: ProfessionalStepProps) {
+  const professionals = getProfessionalsForServices(useBookingProfessionals(), serviceIds);
 
   return (
     <ul className="choice-grid choice-grid--professionals">

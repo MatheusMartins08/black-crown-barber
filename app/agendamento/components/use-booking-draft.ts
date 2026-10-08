@@ -8,9 +8,9 @@ import {
   getTodayIso,
   hasErrors,
   isProfessionalChoice,
-  isServiceId,
+  isValidServiceSelection,
   isWithinBookingWindow,
-  offersService,
+  offersServices,
   validateCustomer,
   type BookingDraft,
   type CustomerDetails,
@@ -48,7 +48,7 @@ export type BookingState = {
 
 type Action =
   | { type: "setCustomerType"; customerType: CustomerType | null }
-  | { type: "selectService"; serviceId: ServiceId }
+  | { type: "setServices"; serviceIds: ServiceId[] }
   | { type: "selectProfessional"; professionalId: ProfessionalChoice }
   | { type: "selectDate"; date: string }
   | { type: "selectSlot"; date: string; slot: TimeSlot }
@@ -57,12 +57,14 @@ type Action =
   | { type: "goTo"; step: StepId }
   | { type: "reset" };
 
-const storageKey = "black-crown:booking-draft:v2";
+const storageKey = "black-crown:booking-draft:v3";
+/** Rascunho de antes de existirem vários serviços (`serviceId`): convertido ao restaurar. */
+const legacyStorageKey = "black-crown:booking-draft:v2";
 
 /** Etapa mais avançada que as escolhas atuais permitem abrir. */
 export function getMaxReachableStep(draft: BookingDraft): StepId {
   if (!draft.customerType) return "perfil";
-  if (!draft.serviceId) return "servico";
+  if (!draft.serviceIds.length) return "servico";
   if (!draft.professionalId) return "profissional";
   if (!draft.date || !draft.time) return "horario";
   if (draft.customerType === "avulso" && hasErrors(validateCustomer(draft.customer))) return "dados";
@@ -103,16 +105,17 @@ function reducer(state: BookingState, action: Action, professionals: readonly Pr
       const next = { ...draft, customerType: action.customerType };
       return { step: action.customerType ? clampStep(next, state.step) : "perfil", draft: next };
     }
-    case "selectService": {
-      if (draft.serviceId === action.serviceId) return state;
+    case "setServices": {
+      if (action.serviceIds.join() === draft.serviceIds.join()) return state;
+      // A duração muda: o horário escolhido deixa de valer. A data fica para buscar de novo.
       const keepsProfessional =
-        draft.professionalId && offersService(professionals, draft.professionalId, action.serviceId);
+        draft.professionalId && offersServices(professionals, draft.professionalId, action.serviceIds);
       return {
         ...state,
         draft: {
           ...draft,
           ...clearedTime,
-          serviceId: action.serviceId,
+          serviceIds: action.serviceIds,
           professionalId: keepsProfessional ? draft.professionalId : null,
         },
       };
@@ -170,16 +173,26 @@ type InitOptions = {
 
 export function hasStoredDraft() {
   try {
-    return sessionStorage.getItem(storageKey) !== null;
+    return sessionStorage.getItem(storageKey) !== null || sessionStorage.getItem(legacyStorageKey) !== null;
   } catch {
     return false;
   }
 }
 
-function readStoredState(): BookingState | null {
+type StoredState = { step?: unknown; draft?: Partial<BookingDraft> & { serviceId?: unknown } };
+
+/** Rascunho v2 (um serviço) → v3 (lista). O resultado ainda passa por sanitizeDraft. */
+export function upgradeStoredState(stored: StoredState): StoredState {
+  const draft = stored.draft;
+  if (!draft || Array.isArray(draft.serviceIds)) return stored;
+  const { serviceId, ...rest } = draft;
+  return { ...stored, draft: { ...rest, serviceIds: typeof serviceId === "string" ? [serviceId] : [] } };
+}
+
+function readStoredState(): StoredState | null {
   try {
-    const stored = sessionStorage.getItem(storageKey);
-    return stored ? (JSON.parse(stored) as BookingState) : null;
+    const stored = sessionStorage.getItem(storageKey) ?? sessionStorage.getItem(legacyStorageKey);
+    return stored ? upgradeStoredState(JSON.parse(stored) as StoredState) : null;
   } catch {
     return null;
   }
@@ -189,18 +202,20 @@ function isStepId(value: unknown): value is StepId {
   return allSteps.includes(value as StepId);
 }
 
-function sanitizeDraft(
+export function sanitizeDraft(
   value: Partial<BookingDraft> | undefined,
   today: string,
   professionals: readonly Professional[],
   services: readonly Service[],
 ): BookingDraft {
   const customerType = value?.customerType === "assinante" || value?.customerType === "avulso" ? value.customerType : null;
-  const serviceId = isServiceId(services, value?.serviceId) ? value.serviceId : null;
+  const storedIds = Array.isArray(value?.serviceIds) ? value.serviceIds : [];
+  // Uma seleção que deixou de valer (serviço fora do catálogo, combo novo) é descartada inteira.
+  const serviceIds = isValidServiceSelection(services, storedIds) ? [...storedIds] : [];
   const professionalId =
-    serviceId &&
+    serviceIds.length &&
     isProfessionalChoice(professionals, value?.professionalId) &&
-    offersService(professionals, value.professionalId, serviceId)
+    offersServices(professionals, value.professionalId, serviceIds)
       ? value.professionalId
       : null;
   const date = typeof value?.date === "string" && isWithinBookingWindow(value.date, today) ? value.date : null;
@@ -210,7 +225,7 @@ function sanitizeDraft(
 
   return {
     customerType,
-    serviceId,
+    serviceIds,
     professionalId,
     date,
     time,
@@ -235,7 +250,7 @@ function init({ professionals, services, initialServiceId, initialProfessionalId
     const kept = stored ? sanitizeDraft(stored.draft, getTodayIso(), professionals, services) : emptyDraft;
     const professionalId =
       initialProfessionalId &&
-      (!initialServiceId || offersService(professionals, initialProfessionalId, initialServiceId))
+      (!initialServiceId || offersServices(professionals, initialProfessionalId, [initialServiceId]))
         ? initialProfessionalId
         : null;
     return {
@@ -243,7 +258,7 @@ function init({ professionals, services, initialServiceId, initialProfessionalId
       draft: {
         ...emptyDraft,
         customerType: kept.customerType,
-        serviceId: initialServiceId,
+        serviceIds: initialServiceId ? [initialServiceId] : [],
         professionalId,
         customer: kept.customer,
       },
@@ -262,6 +277,7 @@ export default function useBookingDraft(options: InitOptions) {
     if (!options.persist) return;
     try {
       sessionStorage.setItem(storageKey, JSON.stringify(state));
+      sessionStorage.removeItem(legacyStorageKey);
     } catch {
       // Sem armazenamento, o fluxo continua funcionando apenas em memória.
     }

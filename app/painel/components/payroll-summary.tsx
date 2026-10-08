@@ -24,9 +24,9 @@ function downloadCsv(summaries: BarberSummary[], services: Service[], periodLabe
     "Profissional",
     ...services.map((service) => service.name),
     "Atendidos",
-    "Assinantes",
+    "Serviços no plano",
     "Repasse planos",
-    "Avulsos",
+    "Serviços avulsos",
     "Comissão avulsos",
     "Total",
   ];
@@ -134,11 +134,11 @@ export default function PayrollSummary({ period, periodLabel, summaries, service
                 </td>
                 <td className="is-numeric admin-payroll__plans" data-label="Planos">
                   <span className="admin-money">{formatCurrency(summary.planPayout)}</span>
-                  <span className="admin-money__detail">{summary.planCount} atend.</span>
+                  <span className="admin-money__detail">{summary.planCount} serv.</span>
                 </td>
                 <td className="is-numeric admin-payroll__walkin" data-label="Avulsos">
                   <span className="admin-money">{formatCurrency(summary.walkInPayout)}</span>
-                  <span className="admin-money__detail">{summary.walkInCount} atend.</span>
+                  <span className="admin-money__detail">{summary.walkInCount} serv.</span>
                 </td>
                 <td className="is-numeric is-total" data-label="Total a pagar">
                   {formatCurrency(summary.total)}
@@ -163,11 +163,11 @@ export default function PayrollSummary({ period, periodLabel, summaries, service
               </td>
               <td className="is-numeric admin-payroll__plans" data-label="Planos">
                 <span className="admin-money">{formatCurrency(totals.planPayout)}</span>
-                <span className="admin-money__detail">{totals.planCount} atend.</span>
+                <span className="admin-money__detail">{totals.planCount} serv.</span>
               </td>
               <td className="is-numeric admin-payroll__walkin" data-label="Avulsos">
                 <span className="admin-money">{formatCurrency(totals.walkInPayout)}</span>
-                <span className="admin-money__detail">{totals.walkInCount} atend.</span>
+                <span className="admin-money__detail">{totals.walkInCount} serv.</span>
               </td>
               <td className="is-numeric is-total" data-label="Total a pagar">
                 {formatCurrency(totals.total)}
@@ -180,8 +180,9 @@ export default function PayrollSummary({ period, periodLabel, summaries, service
       {/* Valores atuais de payroll_settings e service_payouts no Supabase. Atendimentos concluídos
           guardam o repasse do momento: mudar estas regras não altera o fechamento já feito. */}
       <p className="admin-footnote">
-        Regras de repasse: avulsos rendem {Math.round(walkInRate * 100)}% do valor do serviço ao profissional;
-        atendimentos cobertos por plano têm repasse fixo (
+        Atendidos conta clientes (um por atendimento); as colunas de serviço, planos e avulsos contam cada serviço
+        feito. Regras de repasse: serviços avulsos rendem {Math.round(walkInRate * 100)}% do valor ao profissional;
+        serviços cobertos por plano têm repasse fixo (
         {payoutRules.map((service) => `${service.name} ${formatCurrency(service.planPayout ?? 0)}`).join(" · ")}
         ).
       </p>

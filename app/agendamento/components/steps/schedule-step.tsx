@@ -23,7 +23,8 @@ import DateStrip from "./date-strip";
 import TimeSlotGroups, { TimeSlotSkeleton } from "./time-slot-groups";
 
 type ScheduleStepProps = {
-  serviceId: ServiceId;
+  /** Serviços escolhidos: os horários consideram a duração somada. */
+  serviceIds: readonly ServiceId[];
   professionalId: ProfessionalChoice;
   date: string | null;
   time: string | null;
@@ -37,7 +38,7 @@ type ScheduleStepProps = {
 };
 
 export default function ScheduleStep({
-  serviceId,
+  serviceIds: selectedIds,
   professionalId,
   date,
   time,
@@ -49,10 +50,13 @@ export default function ScheduleStep({
   onChangeProfessional,
 }: ScheduleStepProps) {
   const [today] = useState(getTodayIso);
+  // Chave pelo conteúdo: só busca de novo quando a seleção de serviços muda de fato.
+  const serviceKey = selectedIds.join(",");
+  const serviceIds = useMemo(() => serviceKey.split(","), [serviceKey]);
 
   const summariesLoader = useCallback(
-    () => fetchDaySummaries({ serviceId, professionalId, startDate: today, days: bookingRules.windowDays }),
-    [serviceId, professionalId, today],
+    () => fetchDaySummaries({ serviceIds, professionalId, startDate: today, days: bookingRules.windowDays }),
+    [serviceIds, professionalId, today],
   );
   const summaries = useAsyncData(summariesLoader);
   const days = summaries.status === "success" ? summaries.data : null;
@@ -65,12 +69,12 @@ export default function ScheduleStep({
     () =>
       activeDate
         ? async () => {
-            const slots = await fetchDayAvailability({ serviceId, professionalId, date: activeDate });
+            const slots = await fetchDayAvailability({ serviceIds, professionalId, date: activeDate });
             onSlotsLoaded(activeDate, slots);
             return slots;
           }
         : null,
-    [activeDate, serviceId, professionalId, onSlotsLoaded],
+    [activeDate, serviceIds, professionalId, onSlotsLoaded],
   );
   const slots = useAsyncData(slotsLoader);
 
@@ -78,9 +82,9 @@ export default function ScheduleStep({
   const nextLoader = useMemo(
     () =>
       isEmpty && activeDate
-        ? () => findNextAvailable({ serviceId, professionalId, fromDate: addDays(activeDate, 1) })
+        ? () => findNextAvailable({ serviceIds, professionalId, fromDate: addDays(activeDate, 1) })
         : null,
-    [isEmpty, activeDate, serviceId, professionalId],
+    [isEmpty, activeDate, serviceIds, professionalId],
   );
   const next = useAsyncData(nextLoader);
 

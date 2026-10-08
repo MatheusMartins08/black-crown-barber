@@ -4,7 +4,10 @@ import { useState } from "react";
 import { CalendarX2, CheckCircle2, Clock3, UserX, XCircle } from "lucide-react";
 import {
   formatCurrency,
+  getAppointmentItems,
   getPlanByName,
+  getServicePrice,
+  hasService,
   isCoveredByPlan,
   listProfessionalsFor,
   listServicesFor,
@@ -13,6 +16,7 @@ import {
 } from "../../data/painel";
 import type { SubscriptionPlan } from "../../data/plans";
 import { getFirstName, type Professional } from "../../data/professionals";
+import { formatDuration } from "../../data/services";
 import BarberAvatar from "./barber-avatar";
 import FilterToggle from "./filter-toggle";
 import MembershipTag, { isSubscriber } from "./membership-tag";
@@ -43,7 +47,8 @@ type AppointmentsTableProps = {
 
 export function matchesFilters(appointment: Appointment, filters: AgendaFilters) {
   if (filters.barber !== "todos" && appointment.performedById !== filters.barber) return false;
-  if (filters.service !== "todos" && appointment.serviceId !== filters.service) return false;
+  // Um atendimento com vários serviços aparece no filtro de qualquer um deles.
+  if (filters.service !== "todos" && !hasService(appointment, filters.service)) return false;
   if (filters.clientType === "todos") return true;
 
   const membership = appointment.membership;
@@ -197,16 +202,25 @@ export default function AppointmentsTable({
   );
 }
 
-/** Preço exibido na agenda: coberto, plano congelado, bloqueado por atraso, limite da semana, fora do plano ou avulso. */
+/**
+ * Preço exibido na agenda: coberto, plano congelado, bloqueado por atraso, limite do período,
+ * fora do plano ou avulso. Com vários serviços, o plano cobre serviço a serviço e o valor a
+ * cobrar é a soma dos que ficaram fora.
+ */
 function getPriceNote(appointment: Appointment, plans: readonly SubscriptionPlan[]) {
-  const price = formatCurrency(appointment.charged ?? appointment.price);
+  const items = getAppointmentItems(appointment);
+  const price = formatCurrency(getServicePrice(appointment));
   const plan = getPlanByName(plans, appointment.planName);
+  const uncovered = items.filter((item) => !item.covered);
 
   if (isCoveredByPlan(appointment)) return "Coberto pelo plano";
   if (!appointment.planName) return price;
   if (appointment.membership === "congelado") return `Plano congelado · cobrar ${price}`;
   if (appointment.membership === "atrasado") return `Plano bloqueado por atraso · cobrar ${price}`;
-  if (plan?.benefits.some((benefit) => benefit.serviceId === appointment.serviceSlug)) {
+  if (uncovered.length < items.length) {
+    return `Plano cobre ${items.filter((item) => item.covered).map((item) => item.serviceName).join(" + ")} · cobrar ${price}`;
+  }
+  if (plan?.benefits.some((benefit) => uncovered.some((item) => item.serviceSlug === benefit.serviceId))) {
     return `Limite do plano já usado · cobrar ${price}`;
   }
   return `Fora do plano · ${price}`;
@@ -241,7 +255,10 @@ function AppointmentRow({
       </td>
       <td className="admin-row__what" data-label="Serviço">
         <span className="admin-row__service">{appointment.serviceName}</span>
-        <span className="admin-row__price">{getPriceNote(appointment, plans)}</span>
+        <span className="admin-row__price">
+          {appointment.items.length > 1 ? `${formatDuration(appointment.durationMinutes)} · ` : null}
+          {getPriceNote(appointment, plans)}
+        </span>
       </td>
       <td className="admin-row__booked" data-label="Marcado com">
         <span className="admin-person">

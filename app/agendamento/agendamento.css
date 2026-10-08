@@ -640,6 +640,26 @@ button.booking-progress__step:hover {
   margin-bottom: 22px;
 }
 
+/* Aviso no cartão tocado (combo em conflito ou limite de serviços) */
+
+.choice-grid > li.has-prompt {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice-grid > li.has-prompt > .choice-card {
+  flex: 1 1 auto;
+}
+
+.booking-alert.service-conflict {
+  margin-top: 0;
+}
+
+.service-conflict__actions {
+  display: inline-flex;
+  gap: 18px;
+}
+
 /* Etapa Perfil */
 
 .profile-choice {
@@ -1326,6 +1346,11 @@ button.booking-progress__step:hover {
   display: block;
 }
 
+.booking-review__items {
+  display: grid;
+  gap: 8px;
+}
+
 .booking-review__total {
   display: flex;
   align-items: baseline;
@@ -1595,6 +1620,18 @@ button.booking-progress__step:hover {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.summary-list__items {
+  display: grid;
+  gap: 6px;
+}
+
+.summary-list__items small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .booking-summary__total {

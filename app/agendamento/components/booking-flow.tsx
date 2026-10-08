@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
 import {
   ANY_PROFESSIONAL,
+  describeServices,
   getProfessional,
-  getService,
+  getServices,
   getTodayIso,
   hasErrors,
   validateCustomer,
@@ -19,6 +20,7 @@ import { getPlan, type SubscriptionPlan } from "../../data/plans";
 import { evaluateCoverage, type SubscriberSession } from "../../data/subscribers";
 import { fetchPlanCoverage } from "../../lib/subscribers-api";
 import { BookingApiError, createReservation, createSubscriberReservation } from "../lib/booking-api";
+import type { CoverageMap } from "../lib/plan-pricing";
 import { useBookingPlans, useBookingProfessionals, useBookingServices } from "./booking-catalog";
 import BookingProgress from "./booking-progress";
 import BookingSuccess from "./booking-success";
@@ -70,6 +72,7 @@ export default function BookingFlow(props: BookingFlowProps) {
 }
 
 type CopyContext = {
+  /** "Corte masculino + Sobrancelha". */
   serviceName?: string;
   professionalName?: string;
   session: SubscriberSession | null;
@@ -86,11 +89,11 @@ function getStepCopy(step: StepId, { serviceName, professionalName, session, pla
     case "servico": {
       const planName = getPlan(plans, session?.planId ?? null)?.name;
       return {
-        title: "Qual serviço você quer fazer?",
+        title: "Quais serviços você quer fazer?",
         description:
           planName && !session?.blockedReason
-            ? `Os serviços do ${planName} aparecem primeiro. Dá para alterar a escolha a qualquer momento.`
-            : "Escolha um serviço. Dá para alterar a escolha a qualquer momento.",
+            ? `Os serviços do ${planName} aparecem primeiro. Escolha um ou mais; dá para alterar a qualquer momento.`
+            : "Escolha um ou mais serviços para o mesmo horário. Dá para alterar a qualquer momento.",
       };
     }
     case "profissional":
@@ -117,7 +120,7 @@ function getStepCopy(step: StepId, { serviceName, professionalName, session, pla
 
 const stepHints: Partial<Record<StepId, string>> = {
   perfil: "Responda para continuar.",
-  servico: "Escolha um serviço para continuar.",
+  servico: "Escolha ao menos um serviço para continuar.",
   profissional: "Escolha um profissional para continuar.",
   horario: "Escolha um horário para continuar.",
 };
@@ -148,6 +151,8 @@ function BookingFlowContent({
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginKey, setLoginKey] = useState(0);
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+  // Os serviços mudaram depois de escolher o horário: a duração mudou e é preciso escolher de novo.
+  const [servicesChanged, setServicesChanged] = useState(false);
 
   const flowRef = useRef<HTMLDivElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -173,31 +178,44 @@ function BookingFlowContent({
   const stepIndex = steps.indexOf(step);
   const maxReachable = getMaxReachableStep(draft);
   const maxIndex = steps.indexOf(maxReachable);
-  const service = getService(services, draft.serviceId);
+  const selectedServices = getServices(services, draft.serviceIds);
   const professionalName =
     draft.professionalId && draft.professionalId !== ANY_PROFESSIONAL
       ? getProfessional(professionals, draft.professionalId)?.name
       : undefined;
-  const copy = getStepCopy(step, { serviceName: service?.name, professionalName, session, plans });
+  const copy = getStepCopy(step, {
+    serviceName: selectedServices.length ? describeServices(selectedServices) : undefined,
+    professionalName,
+    session,
+    plans,
+  });
 
-  // Cobertura do plano: confirmada no adaptador quando há data (limite semanal); antes
-  // disso, uma prévia pelo catálogo do plano.
+  // Cobertura do plano, serviço a serviço: confirmada no adaptador quando há data (limite do
+  // período); antes disso, uma prévia pelo catálogo do plano.
+  const serviceKey = draft.serviceIds.join(",");
   const coverageLoader = useMemo(
     () =>
-      session && draft.serviceId && draft.date
-        ? () => fetchPlanCoverage({ serviceId: draft.serviceId!, date: draft.date! })
+      session && serviceKey && draft.date
+        ? async () => {
+            const ids = serviceKey.split(",");
+            const date = draft.date!;
+            const results = await Promise.all(ids.map((serviceId) => fetchPlanCoverage({ serviceId, date })));
+            return Object.fromEntries(ids.map((id, index) => [id, results[index]])) as CoverageMap;
+          }
         : null,
     // A situação e o plano entram na chave para reconsultar quando a conta muda.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session?.subscriberId, session?.planId, session?.status, draft.serviceId, draft.date],
+    [session?.subscriberId, session?.planId, session?.status, serviceKey, draft.date],
   );
   const coverageResult = useAsyncData(coverageLoader);
-  const coverage =
+  const coverage: CoverageMap =
     coverageResult.status === "success"
       ? coverageResult.data
-      : session && draft.serviceId
-        ? evaluateCoverage(plans, session, draft.serviceId, draft.date ?? getTodayIso(), 0)
-        : null;
+      : session
+        ? Object.fromEntries(
+            draft.serviceIds.map((id) => [id, evaluateCoverage(plans, session, id, draft.date ?? getTodayIso(), 0)]),
+          )
+        : {};
   const checkingCoverage = coverageLoader !== null && coverageResult.status === "loading";
   const planInfo = { session, coverage };
 
@@ -297,6 +315,7 @@ function BookingFlowContent({
       setReservation(created);
       // Mantém quem é o cliente e os dados de contato para um próximo agendamento; limpa as escolhas.
       dispatch({ type: "reset" });
+      setServicesChanged(false);
       setDetailsAttempted(false);
     } catch (error) {
       setSubmissionError(
@@ -382,40 +401,56 @@ function BookingFlowContent({
             />
           ) : null}
 
+          {servicesChanged && (step === "servico" || step === "horario") ? (
+            <div className="booking-alert service-step__notice" role="status">
+              <p>
+                <Info aria-hidden="true" size={16} />
+                <span>
+                  <strong>Os serviços mudaram, e a duração também.</strong> Escolha o horário de novo.
+                </span>
+              </p>
+            </div>
+          ) : null}
+
           {step === "servico" ? (
             <ServiceStep
               loading={sessionPending}
-              onSelect={(serviceId) => {
-                dispatch({ type: "selectService", serviceId });
-                advanceAfterSelection("profissional");
+              onChange={(serviceIds) => {
+                // Sem avanço automático: dá para escolher mais de um serviço antes de continuar.
+                if (draft.time) setServicesChanged(true);
+                setSubmissionError(null);
+                dispatch({ type: "setServices", serviceIds });
               }}
-              selectedId={draft.serviceId}
+              selectedIds={draft.serviceIds}
               session={session}
             />
           ) : null}
 
-          {step === "profissional" && draft.serviceId ? (
+          {step === "profissional" && draft.serviceIds.length ? (
             <ProfessionalStep
               onSelect={(professionalId) => {
                 dispatch({ type: "selectProfessional", professionalId });
                 advanceAfterSelection("horario");
               }}
               selectedId={draft.professionalId}
-              serviceId={draft.serviceId}
+              serviceIds={draft.serviceIds}
             />
           ) : null}
 
-          {step === "horario" && draft.serviceId && draft.professionalId ? (
+          {step === "horario" && draft.serviceIds.length && draft.professionalId ? (
             <ScheduleStep
               assignedProfessionalId={draft.assignedProfessionalId}
               date={draft.date}
               onChangeProfessional={() => goTo("profissional")}
               onSelectDate={(date) => dispatch({ type: "selectDate", date })}
-              onSelectSlot={(date, slot) => dispatch({ type: "selectSlot", date, slot })}
+              onSelectSlot={(date, slot) => {
+                setServicesChanged(false);
+                dispatch({ type: "selectSlot", date, slot });
+              }}
               onSlotsLoaded={handleSlotsLoaded}
               onUseAnyProfessional={() => dispatch({ type: "selectProfessional", professionalId: ANY_PROFESSIONAL })}
               professionalId={draft.professionalId}
-              serviceId={draft.serviceId}
+              serviceIds={draft.serviceIds}
               time={draft.time}
             />
           ) : null}

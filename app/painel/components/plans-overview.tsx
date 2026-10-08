@@ -8,9 +8,9 @@ import {
   formatCurrency,
   formatMonth,
   formatMonthTitle,
+  getAppointmentItems,
   getPeriodRange,
   getPlanByName,
-  isCoveredByPlan,
   listHistoryMonths,
   type ClientProfile,
 } from "../../data/painel";
@@ -116,9 +116,10 @@ export default function PlansOverview({
                 const upToDate = planClients.filter((profile) => profile.membership === "ativo").length;
                 const frozen = planClients.filter((profile) => profile.membership === "congelado").length;
                 const pending = planClients.length - upToDate - frozen;
-                const uses = completed.filter(
-                  (appointment) => getPlanByName(plans, appointment.planName)?.id === plan.id && isCoveredByPlan(appointment),
-                ).length;
+                // Cada serviço coberto conta um uso (um atendimento pode usar mais de um benefício).
+                const uses = completed
+                  .filter((appointment) => getPlanByName(plans, appointment.planName)?.id === plan.id)
+                  .reduce((sum, appointment) => sum + getAppointmentItems(appointment).filter((item) => item.covered).length, 0);
                 const planPayments = monthPayments.filter(
                   (payment) => payment.planId === plan.slug && payment.status !== "cancelado",
                 );

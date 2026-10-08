@@ -15,13 +15,15 @@ export default function BarberProduction({ summaries, services }: { summaries: B
       <div className="admin-panel__heading">
         <div>
           <h2 id="producao-title">Produção do dia</h2>
-          <p>Conta quem executou o serviço, apenas atendimentos concluídos.</p>
+          <p>Conta quem executou o serviço, apenas atendimentos concluídos. Cada serviço de um atendimento conta nas barras.</p>
         </div>
       </div>
 
       <ol className="admin-production__list">
         {summaries.map((summary) => {
-          const planShare = summary.completed ? (summary.planCount / summary.completed) * 100 : 0;
+          // Plano × avulso por serviço feito (um atendimento pode ter serviços dos dois tipos).
+          const servicesDone = summary.planCount + summary.walkInCount;
+          const planShare = servicesDone ? (summary.planCount / servicesDone) * 100 : 0;
 
           return (
             <li className="admin-barber" key={summary.professionalId}>
@@ -59,7 +61,7 @@ export default function BarberProduction({ summaries, services }: { summaries: B
 
               <div className="admin-split">
                 <span className="admin-split__track" aria-hidden="true">
-                  {summary.completed ? (
+                  {servicesDone ? (
                     <>
                       <span className="admin-split__plan" style={{ width: `${planShare}%` }} />
                       <span className="admin-split__walkin" style={{ width: `${100 - planShare}%` }} />
@@ -69,7 +71,7 @@ export default function BarberProduction({ summaries, services }: { summaries: B
                 <p className="admin-split__legend">
                   <span>
                     <i className="admin-swatch admin-swatch--plan" aria-hidden="true" />
-                    {summary.planCount} {summary.planCount === 1 ? "assinante" : "assinantes"}
+                    {summary.planCount} no plano
                   </span>
                   <span>
                     <i className="admin-swatch admin-swatch--walkin" aria-hidden="true" />

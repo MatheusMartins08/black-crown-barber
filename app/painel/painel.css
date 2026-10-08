@@ -1713,6 +1713,19 @@
   font-size: 12px;
 }
 
+/* Serviços: partes de um combo no formulário. */
+.admin-combo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+@media (max-width: 520px) {
+  .admin-combo {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-dialog__alert--info {
   border-left-color: var(--admin-walkin);
   background: rgb(176 138 62 / 9%);

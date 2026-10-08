@@ -4,17 +4,19 @@ import { useState } from "react";
 import { ChevronUp } from "lucide-react";
 import {
   ANY_PROFESSIONAL,
+  describeServices,
   formatCurrency,
   formatLongDate,
   getProfessional,
-  getService,
+  getServices,
+  sumServices,
   type BookingDraft,
 } from "../../data/booking";
 import { getPlan } from "../../data/plans";
-import type { PlanCoverage, SubscriberSession } from "../../data/subscribers";
+import type { SubscriberSession } from "../../data/subscribers";
 import type { Professional } from "../../data/professionals";
 import { formatDuration, type Service } from "../../data/services";
-import { getPriceLabel } from "../lib/plan-pricing";
+import { getPriceLabel, getTotalLabel, type CoverageMap } from "../lib/plan-pricing";
 import { useBookingPlans, useBookingProfessionals, useBookingServices } from "./booking-catalog";
 import PrimaryActionButton, { type PrimaryAction } from "./primary-action-button";
 import ProfessionalAvatar from "./professional-avatar";
@@ -26,16 +28,33 @@ function getProfessionalLabel(draft: BookingDraft, professionals: readonly Profe
   return getProfessional(professionals, draft.professionalId)?.name ?? null;
 }
 
-/** Assinante logado e a cobertura do plano para o serviço escolhido. */
-export type SummaryPlanInfo = { session: SubscriberSession | null; coverage: PlanCoverage | null };
+/** Assinante logado e a cobertura do plano de cada serviço escolhido. */
+export type SummaryPlanInfo = { session: SubscriberSession | null; coverage: CoverageMap };
 
-function getTotal(service: Service | null, { session, coverage }: SummaryPlanInfo) {
-  if (!service) return null;
-  return session ? getPriceLabel(service.price, coverage) : formatCurrency(service.price);
+function getTotal(items: readonly Service[], { session, coverage }: SummaryPlanInfo) {
+  return getTotalLabel(items, session ? coverage : null);
+}
+
+/** Um serviço por linha, com o valor dele (ou "Incluído" para o assinante). */
+function ServiceItems({ items, planInfo }: { items: readonly Service[]; planInfo: SummaryPlanInfo }) {
+  if (!items.length) return null;
+  if (items.length === 1) return <>{items[0].name}</>;
+  return (
+    <span className="summary-list__items">
+      {items.map((item) => (
+        <span key={item.slug}>
+          {item.name}
+          <small>
+            {planInfo.session ? getPriceLabel(item.price, planInfo.coverage[item.slug] ?? null) : formatCurrency(item.price)}
+          </small>
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: SummaryPlanInfo }) {
-  const service = getService(useBookingServices(), draft.serviceId);
+  const items = getServices(useBookingServices(), draft.serviceIds);
   const professionalLabel = getProfessionalLabel(draft, useBookingProfessionals());
   const professionalAvatarId =
     draft.professionalId === ANY_PROFESSIONAL ? draft.assignedProfessionalId : draft.professionalId;
@@ -46,7 +65,11 @@ function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: Summa
     ...(session
       ? [{ label: "Assinante", value: `${session.name.split(" ")[0]} · ${getPlan(plans, session.planId)?.shortName}` }]
       : []),
-    { label: "Serviço", value: service?.name },
+    {
+      label: items.length > 1 ? "Serviços" : "Serviço",
+      value: items.length ? <ServiceItems items={items} planInfo={planInfo} /> : null,
+      key: `${draft.serviceIds.join()}:${Object.values(planInfo.coverage).map((item) => item?.reason).join()}`,
+    },
     {
       label: "Profissional",
       value: professionalLabel ? (
@@ -59,7 +82,7 @@ function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: Summa
     },
     { label: "Data", value: draft.date ? formatLongDate(draft.date) : null },
     { label: "Horário", value: draft.time },
-    { label: "Duração", value: service ? formatDuration(service.durationMinutes) : null },
+    { label: "Duração", value: items.length ? formatDuration(sumServices(items).durationMinutes) : null },
   ];
 
   return (
@@ -76,11 +99,11 @@ function SummaryList({ draft, planInfo }: { draft: BookingDraft; planInfo: Summa
 }
 
 export function BookingSummaryPanel({ draft, planInfo }: { draft: BookingDraft; planInfo: SummaryPlanInfo }) {
-  const total = getTotal(getService(useBookingServices(), draft.serviceId), planInfo);
+  const total = getTotal(getServices(useBookingServices(), draft.serviceIds), planInfo);
 
   return (
-    <aside aria-label="Resumo do agendamento" className="booking-summary">
-      <p className="booking-summary__title">Seu agendamento</p>
+    <aside aria-label="Resumo do atendimento" className="booking-summary">
+      <p className="booking-summary__title">Seu atendimento</p>
       <SummaryList draft={draft} planInfo={planInfo} />
       <div className="booking-summary__total">
         <span>Total</span>
@@ -100,8 +123,8 @@ export function BookingSummaryBar({
   planInfo: SummaryPlanInfo;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const service = getService(useBookingServices(), draft.serviceId);
-  const meta = [service ? formatDuration(service.durationMinutes) : null, getTotal(service, planInfo), draft.time]
+  const items = getServices(useBookingServices(), draft.serviceIds);
+  const meta = [items.length ? formatDuration(sumServices(items).durationMinutes) : null, getTotal(items, planInfo), draft.time]
     .filter(Boolean)
     .join(" · ");
 
@@ -120,8 +143,8 @@ export function BookingSummaryBar({
           onClick={() => setIsOpen((open) => !open)}
           type="button"
         >
-          <span className="booking-bar__title">{service?.name ?? "Escolha um serviço"}</span>
-          <span className="booking-bar__meta">{meta || "Resumo do agendamento"}</span>
+          <span className="booking-bar__title">{items.length ? describeServices(items) : "Escolha um serviço"}</span>
+          <span className="booking-bar__meta">{meta || "Resumo do atendimento"}</span>
           <ChevronUp aria-hidden="true" className="booking-bar__chevron" size={18} />
           <span className="sr-only">{isOpen ? "Ocultar resumo" : "Ver resumo"}</span>
         </button>

@@ -23,6 +23,23 @@ export type PaymentMethod = "pix" | "cartao" | "dinheiro";
  */
 export type MembershipStatus = "ativo" | "pendente" | "atrasado" | "congelado" | "ex_assinante" | "avulso";
 
+/**
+ * Um serviço do atendimento (appointment_services), com preço e duração copiados na reserva
+ * e, ao concluir, a liquidação dele: o plano cobre serviço a serviço.
+ */
+export type AppointmentItem = {
+  serviceId: string;
+  serviceSlug: string;
+  serviceName: string;
+  price: number;
+  durationMinutes: number;
+  /** Entrou no plano: o gravado ao concluir ou, em aberto, a cobertura atual. */
+  covered: boolean;
+  /** Cobrado e repasse deste serviço, gravados ao concluir. `null` enquanto não concluído. */
+  charged: number | null;
+  payout: number | null;
+};
+
 /** Atendimento como o painel enxerga (view appointment_details). */
 export type Appointment = {
   id: string;
@@ -31,25 +48,32 @@ export type Appointment = {
   time: string;
   clientId: string;
   clientName: string;
-  /** Serviço pelo id (uuid) e slug; o nome é o copiado na reserva (não muda se o serviço for renomeado). */
+  /**
+   * Primeiro serviço pelo id (uuid) e slug. O nome é o copiado na reserva, com todos os
+   * serviços ("Corte masculino + Sobrancelha"), e não muda se um serviço for renomeado.
+   */
   serviceId: string;
   serviceSlug: string;
   serviceName: string;
+  /** Serviços do atendimento, na ordem da reserva (1 a 5). */
+  items: AppointmentItem[];
   /** Profissionais pelo id (uuid estável); os nomes vêm do cadastro atual, só para exibir. */
   bookedWithId: string;
   bookedWith: string;
   performedById: string;
   performedBy: string;
   status: AppointmentStatus;
-  /** Preço do serviço copiado na reserva. */
+  /** Preço total copiado na reserva (soma dos serviços). */
   price: number;
+  /** Duração total (soma dos serviços). */
+  durationMinutes: number;
   /** Situação do cliente no dia do atendimento. */
   membership: MembershipStatus;
   /** Plano vigente no dia (inclusive congelado). */
   planName: string | null;
-  /** Entrou no plano: o snapshot gravado ao concluir ou, em aberto, a cobertura atual. */
+  /** O plano cobriu todos os serviços: o snapshot gravado ao concluir ou, em aberto, a cobertura atual. */
   covered: boolean;
-  /** Valor cobrado e repasse gravados ao concluir. `null` enquanto não concluído. */
+  /** Valor cobrado e repasse (somas dos serviços) gravados ao concluir. `null` enquanto não concluído. */
   charged: number | null;
   payout: number | null;
 };
@@ -124,15 +148,46 @@ export function isCoveredByPlan(appointment: Appointment) {
   return appointment.covered;
 }
 
-/** Valor a cobrar do cliente: o gravado ao concluir ou, em aberto, a previsão. */
+/** Serviços do atendimento. Sem itens (não deveria acontecer), o próprio atendimento vale como um. */
+export function getAppointmentItems(appointment: Appointment): AppointmentItem[] {
+  if (appointment.items.length) return appointment.items;
+  return [
+    {
+      serviceId: appointment.serviceId,
+      serviceSlug: appointment.serviceSlug,
+      serviceName: appointment.serviceName,
+      price: appointment.price,
+      durationMinutes: appointment.durationMinutes,
+      covered: appointment.covered,
+      charged: appointment.charged,
+      payout: appointment.payout,
+    },
+  ];
+}
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+/** Valor a cobrar do cliente: o gravado ao concluir ou, em aberto, a previsão (serviços fora do plano). */
 export function getServicePrice(appointment: Appointment) {
   if (appointment.charged !== null) return appointment.charged;
-  return appointment.covered ? 0 : appointment.price;
+  return roundMoney(
+    getAppointmentItems(appointment).reduce((sum, item) => sum + (item.covered ? 0 : item.price), 0),
+  );
 }
 
 /** Repasse ao profissional: só existe depois de concluído (gravado pelo banco). */
 export function getPayout(appointment: Appointment) {
   return appointment.status === "concluido" ? appointment.payout ?? 0 : 0;
+}
+
+/** Repasse de um serviço do atendimento (só depois de concluído). */
+function getItemPayout(appointment: Appointment, item: AppointmentItem) {
+  return appointment.status === "concluido" ? item.payout ?? 0 : 0;
+}
+
+/** O atendimento tem o serviço (filtro da agenda)? */
+export function hasService(appointment: Appointment, serviceId: string) {
+  return getAppointmentItems(appointment).some((item) => item.serviceId === serviceId);
 }
 
 // --- Datas (strings YYYY-MM-DD, calculadas em UTC para não depender do fuso) ---
@@ -261,10 +316,12 @@ export type BarberSummary = {
   professionalId: string;
   barberName: string;
   specialty: string;
+  /** Atendimentos concluídos (clientes atendidos): um por agendamento, com qualquer número de serviços. */
   completed: number;
   booked: number;
-  /** Atendimentos concluídos por serviço (id do serviço → quantidade). */
+  /** Serviços feitos nos atendimentos concluídos (id do serviço → quantidade). */
   byService: Record<string, number>;
+  /** Serviços concluídos cobertos pelo plano e avulsos (cada serviço conta um). */
   planCount: number;
   walkInCount: number;
   planPayout: number;
@@ -287,11 +344,14 @@ export function listProfessionalsFor(professionals: readonly Professional[], app
  * ou excluídos, os que aparecem nos atendimentos da lista (o histórico continua visível).
  */
 export function listServicesFor(services: readonly Service[], appointments: readonly Appointment[]) {
-  const used = new Set(appointments.map((appointment) => appointment.serviceId));
+  const used = new Set(appointments.flatMap((appointment) => getAppointmentItems(appointment).map((item) => item.serviceId)));
   return services.filter((service) => (service.isActive && !service.deletedAt) || used.has(service.id));
 }
 
-/** Resumo por profissional considerando quem executou o serviço (não com quem foi marcado). */
+/**
+ * Resumo por profissional considerando quem executou o serviço (não com quem foi marcado).
+ * Atendidos contam agendamentos; colunas por serviço, plano/avulso e repasses contam serviços.
+ */
 export function summarizeByBarber(
   appointments: Appointment[],
   professionals: readonly Professional[],
@@ -303,16 +363,20 @@ export function summarizeByBarber(
     const completed = own.filter((appointment) => appointment.status === "concluido");
     const byService: Record<string, number> = Object.fromEntries(columns.map((service) => [service.id, 0]));
     let planCount = 0;
+    let walkInCount = 0;
     let planPayout = 0;
     let walkInPayout = 0;
 
     for (const appointment of completed) {
-      byService[appointment.serviceId] = (byService[appointment.serviceId] ?? 0) + 1;
-      if (isCoveredByPlan(appointment)) {
-        planCount += 1;
-        planPayout += getPayout(appointment);
-      } else {
-        walkInPayout += getPayout(appointment);
+      for (const item of getAppointmentItems(appointment)) {
+        byService[item.serviceId] = (byService[item.serviceId] ?? 0) + 1;
+        if (item.covered) {
+          planCount += 1;
+          planPayout += getItemPayout(appointment, item);
+        } else {
+          walkInCount += 1;
+          walkInPayout += getItemPayout(appointment, item);
+        }
       }
     }
 
@@ -324,10 +388,10 @@ export function summarizeByBarber(
       booked: own.filter((appointment) => appointment.status !== "cancelado").length,
       byService,
       planCount,
-      walkInCount: completed.length - planCount,
-      planPayout,
-      walkInPayout,
-      total: planPayout + walkInPayout,
+      walkInCount,
+      planPayout: roundMoney(planPayout),
+      walkInPayout: roundMoney(walkInPayout),
+      total: roundMoney(planPayout + walkInPayout),
     };
   });
 }

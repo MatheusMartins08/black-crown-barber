@@ -413,9 +413,12 @@ export async function saveSiteImageAction(input: SaveSiteImageInput): Promise<Si
 
 // --- Edição do site > Serviços ---
 //
-// Preço e duração de cada atendimento são copiados na reserva (appointments.price, ends_at,
-// service_name): mudar o catálogo vale só para novos agendamentos. O repasse do plano
-// (service_payouts) é gravado em cada atendimento ao concluir.
+// Preço e duração de cada atendimento são copiados na reserva (appointment_services e os
+// totais em appointments): mudar o catálogo vale só para novos agendamentos. O repasse do
+// plano (service_payouts) é gravado em cada serviço do atendimento ao concluir.
+//
+// Combos (service_components): um combo lista os serviços simples que já inclui. O
+// agendamento não deixa escolher um combo junto com uma das partes (o banco confere de novo).
 
 function refreshServices() {
   // Serviços aparecem na landing e no agendamento; a lista de quem atende cada um fica no
@@ -424,7 +427,62 @@ function refreshServices() {
   updateTag(catalogTags.professionals);
 }
 
-export type SaveServiceInput = ServiceInput & { /** null = novo serviço. */ id: string | null };
+export type SaveServiceInput = ServiceInput & {
+  /** null = novo serviço. */
+  id: string | null;
+  /** Combo: ids dos serviços simples que ele inclui. Vazio = serviço simples. */
+  components: string[];
+};
+
+/** Até quantos serviços um combo pode incluir (o agendamento aceita até 5 por horário). */
+const maxComponents = 5;
+
+/**
+ * Confere as partes de um combo: serviços existentes, não excluídos e simples, e o próprio
+ * serviço não pode ser parte de outro combo (sem aninhar). O gatilho do banco repete a regra.
+ */
+async function checkComponents(supabase: Supabase, serviceId: string | null, components: string[]) {
+  if (!components.length) return null;
+  const [parts, nested, usedIn] = await Promise.all([
+    supabase.from("services").select("id").in("id", components).is("deleted_at", null),
+    supabase.from("service_components").select("service_id").in("service_id", components).limit(1),
+    serviceId
+      ? supabase.from("service_components").select("service_id").eq("component_id", serviceId).limit(1)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (parts.error || nested.error || usedIn.error) return "Não foi possível conferir o combo. Tente novamente.";
+  if (parts.data.length !== components.length) return "Um dos serviços do combo não existe mais. Recarregue a página.";
+  if (nested.data.length) return "Um combo só pode incluir serviços simples (não outro combo).";
+  if (usedIn.data?.length) return "Este serviço faz parte de um combo, então não pode ser um combo também.";
+  return null;
+}
+
+/** Grava as partes do combo mexendo só no que mudou. */
+async function saveComponents(supabase: Supabase, serviceId: string, components: string[]) {
+  const { data: current, error } = await supabase
+    .from("service_components")
+    .select("component_id")
+    .eq("service_id", serviceId);
+  if (error) return false;
+  const have = new Set(current.map((row) => row.component_id as string));
+  const removed = [...have].filter((id) => !components.includes(id));
+  const added = components.filter((id) => !have.has(id));
+  if (removed.length) {
+    const { error: deleteError } = await supabase
+      .from("service_components")
+      .delete()
+      .eq("service_id", serviceId)
+      .in("component_id", removed);
+    if (deleteError) return false;
+  }
+  if (added.length) {
+    const { error: insertError } = await supabase
+      .from("service_components")
+      .insert(added.map((componentId) => ({ service_id: serviceId, component_id: componentId })));
+    if (insertError) return false;
+  }
+  return true;
+}
 
 export async function saveServiceAction(input: SaveServiceInput): Promise<SiteActionResult> {
   if (
@@ -436,6 +494,11 @@ export async function saveServiceAction(input: SaveServiceInput): Promise<SiteAc
     typeof input.icon !== "string" ||
     typeof input.isPopular !== "boolean" ||
     (input.id !== null && !isUuid(input.id)) ||
+    !Array.isArray(input.components) ||
+    input.components.length > maxComponents ||
+    !input.components.every(isUuid) ||
+    new Set(input.components).size !== input.components.length ||
+    (input.id !== null && input.components.includes(input.id)) ||
     Object.keys(validateService(input, serviceIconKeys)).length
   ) {
     return failure("Revise os dados do serviço.");
@@ -444,6 +507,9 @@ export async function saveServiceAction(input: SaveServiceInput): Promise<SiteAc
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
+
+  const comboProblem = await checkComponents(supabase, input.id, input.components);
+  if (comboProblem) return failure(comboProblem);
 
   const name = input.name.trim();
   const fields = {
@@ -485,7 +551,8 @@ export async function saveServiceAction(input: SaveServiceInput): Promise<SiteAc
         : await supabase
             .from("professional_services")
             .insert(team.map((professional) => ({ professional_id: professional.id, service_id: created.id })));
-    if (payout.error || links.error) {
+    const combo = await saveComponents(supabase, created.id, input.components);
+    if (payout.error || links.error || !combo) {
       // Ainda sem histórico: desfaz o cadastro inteiro (repasse e vínculos caem em cascata).
       await supabase.from("services").delete().eq("id", created.id);
       return failure("Não foi possível concluir o cadastro do serviço. Nada foi salvo; tente novamente.");
@@ -506,9 +573,11 @@ export async function saveServiceAction(input: SaveServiceInput): Promise<SiteAc
   const { error: payoutError } = await supabase
     .from("service_payouts")
     .upsert({ service_id: input.id, plan_payout_amount: input.planPayout }, { onConflict: "service_id" });
+  const combo = await saveComponents(supabase, input.id, input.components);
 
   refreshServices();
   if (payoutError) return { ok: true, message: `${name} salvo, mas o repasse do plano não foi atualizado. Tente de novo.` };
+  if (!combo) return { ok: true, message: `${name} salvo, mas os serviços do combo não foram atualizados. Tente de novo.` };
   return { ok: true, message: `${name} salvo. Os novos agendamentos já usam os dados atualizados.` };
 }
 
@@ -557,7 +626,8 @@ export async function deleteServiceAction(id: string): Promise<SiteActionResult>
   if (!service || service.deleted_at) return failure("Serviço não encontrado. Recarregue a página.");
 
   const [appointments, plans] = await Promise.all([
-    supabase.from("appointments").select("id", { count: "exact", head: true }).eq("service_id", id),
+    // Qualquer serviço do atendimento (não só o primeiro) conta como histórico.
+    supabase.from("appointment_services").select("appointment_id", { count: "exact", head: true }).eq("service_id", id),
     supabase.from("plan_services").select("subscription_plans(name)").eq("service_id", id),
   ]);
   if (appointments.error || plans.error) return failure("Não foi possível conferir o uso do serviço. Nada foi excluído.");

@@ -6,14 +6,14 @@ import {
   formatCurrency,
   formatLongDate,
   getProfessional,
-  getService,
+  sumServices,
   toMinutes,
   toTime,
   type Reservation,
 } from "../../data/booking";
 import { formatDuration } from "../../data/services";
 import { reservationActions, type ReservationActionId } from "../lib/booking-integrations";
-import { useBookingProfessionals, useBookingServices } from "./booking-catalog";
+import { useBookingProfessionals } from "./booking-catalog";
 import ProfessionalAvatar from "./professional-avatar";
 
 const actionIcons: Record<ReservationActionId, typeof MessageCircle> = {
@@ -30,12 +30,35 @@ type BookingSuccessProps = {
 };
 
 export default function BookingSuccess({ reservation, onBookAnother, headingRef }: BookingSuccessProps) {
-  const service = getService(useBookingServices(), reservation.serviceId);
   const professional = getProfessional(useBookingProfessionals(), reservation.professionalId);
   const endTime = toTime(toMinutes(reservation.time) + reservation.durationMinutes);
+  // Valores copiados pelo banco na reserva. O assinante paga só o que o plano não cobre.
+  const items = reservation.services ?? [];
+  const isSubscriber = Boolean(reservation.plan);
+  const charged = sumServices(items.filter((item) => !(isSubscriber && item.covered))).price;
+  const total = reservation.plan?.covered
+    ? "Incluído no plano"
+    : formatCurrency(isSubscriber && items.length ? charged : reservation.price);
 
   const rows = [
-    { label: "Serviço", value: service?.name },
+    {
+      label: items.length > 1 ? "Serviços" : "Serviço",
+      value: (
+        <span className="booking-review__items">
+          {items.map((item) => (
+            <span className="booking-review__stack" key={item.id}>
+              {item.name}
+              {items.length > 1 || (isSubscriber && item.covered) ? (
+                <small>
+                  {formatDuration(item.durationMinutes)} ·{" "}
+                  {isSubscriber && item.covered ? "Incluído no plano" : formatCurrency(item.price)}
+                </small>
+              ) : null}
+            </span>
+          ))}
+        </span>
+      ),
+    },
     {
       label: "Profissional",
       value: (
@@ -50,7 +73,7 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
     },
     { label: "Data", value: formatLongDate(reservation.date) },
     { label: "Horário", value: `${reservation.time} às ${endTime}` },
-    { label: "Duração", value: service ? formatDuration(service.durationMinutes) : null },
+    { label: "Duração", value: formatDuration(reservation.durationMinutes) },
     { label: "Local", value: `${siteConfig.address}, ${siteConfig.city}` },
     {
       label: reservation.plan ? "Assinante" : "Cliente",
@@ -94,9 +117,7 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
         </dl>
         <div className="booking-review__total">
           <span>Valor</span>
-          <strong>
-            {reservation.plan?.covered ? "Incluído no plano" : formatCurrency(reservation.price)}
-          </strong>
+          <strong>{total}</strong>
         </div>
       </div>
 

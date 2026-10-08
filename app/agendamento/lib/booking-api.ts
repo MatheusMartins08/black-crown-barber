@@ -14,8 +14,10 @@ import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 
 // Adaptador da agenda: cada função chama uma RPC pública do Supabase
-// (supabase/migrations/…120500_booking_rpc.sql e …121000_subscriber_accounts.sql).
-// O banco revalida tudo: expediente, bloqueios, antecedência, horário livre e plano.
+// (supabase/migrations/…120500_booking_rpc.sql, …121000_subscriber_accounts.sql e
+// …20261009130000_multi_service_booking.sql, que recebe a lista de serviços em p_services).
+// O banco revalida tudo: serviços e combos, expediente, bloqueios, antecedência, horário
+// livre (pela duração somada) e plano.
 
 export class BookingApiError extends Error {
   constructor(
@@ -28,7 +30,7 @@ export class BookingApiError extends Error {
 }
 
 type AvailabilityQuery = {
-  serviceId: ServiceId;
+  serviceIds: readonly ServiceId[];
   professionalId: ProfessionalChoice;
 };
 
@@ -37,6 +39,7 @@ const genericMessage = "Não foi possível falar com a agenda agora. Tente novam
 function fail(error: RpcError): never {
   throw new BookingApiError(
     getRpcMessage(error, genericMessage),
+    // BC002: o horário foi ocupado; BC012: combo incompatível (a seleção precisa mudar).
     error.code === "BC002" ? "slot_unavailable" : "invalid_request",
   );
 }
@@ -54,7 +57,7 @@ function toSlot(row: SlotRow): TimeSlot {
 /** Horários livres de um dia. */
 export async function fetchDayAvailability(query: AvailabilityQuery & { date: string }): Promise<TimeSlot[]> {
   const { data, error } = await getSupabaseBrowserClient().rpc("get_day_availability", {
-    p_service: query.serviceId,
+    p_services: query.serviceIds,
     p_professional: query.professionalId,
     p_date: query.date,
   });
@@ -65,7 +68,7 @@ export async function fetchDayAvailability(query: AvailabilityQuery & { date: st
 /** Resumo de disponibilidade para a janela de datas exibida no calendário. */
 export async function fetchDaySummaries(query: AvailabilityQuery & { startDate: string; days: number }): Promise<DaySummary[]> {
   const { data, error } = await getSupabaseBrowserClient().rpc("get_day_summaries", {
-    p_service: query.serviceId,
+    p_services: query.serviceIds,
     p_professional: query.professionalId,
     p_start: query.startDate,
     p_days: query.days,
@@ -81,7 +84,7 @@ export async function fetchDaySummaries(query: AvailabilityQuery & { startDate: 
 /** Primeiro horário livre a partir de uma data, dentro da janela de agendamento. */
 export async function findNextAvailable(query: AvailabilityQuery & { fromDate: string }) {
   const { data, error } = await getSupabaseBrowserClient().rpc("find_next_available", {
-    p_service: query.serviceId,
+    p_services: query.serviceIds,
     p_professional: query.professionalId,
     p_from: query.fromDate,
   });
@@ -91,12 +94,12 @@ export async function findNextAvailable(query: AvailabilityQuery & { fromDate: s
 }
 
 function getSlotParams(draft: BookingDraft) {
-  const { serviceId, professionalId, date, time } = draft;
-  if (!serviceId || !professionalId || !date || !time) {
+  const { serviceIds, professionalId, date, time } = draft;
+  if (!serviceIds.length || !professionalId || !date || !time) {
     throw new BookingApiError("Revise os dados do agendamento antes de confirmar.", "invalid_request");
   }
   return {
-    p_service: serviceId,
+    p_services: serviceIds,
     p_professional: professionalId,
     p_date: date,
     p_time: time,
@@ -123,7 +126,7 @@ export async function createReservation(draft: BookingDraft): Promise<Reservatio
 
 /**
  * Confirma a reserva do assinante logado (create_subscriber_reservation). Os dados do
- * cliente vêm da conta, e o servidor decide se o plano cobre o atendimento.
+ * cliente vêm da conta, e o servidor decide, serviço a serviço, o que o plano cobre.
  */
 export async function createSubscriberReservation(draft: BookingDraft): Promise<Reservation> {
   const { data, error } = await getSupabaseBrowserClient().rpc("create_subscriber_reservation", getSlotParams(draft));

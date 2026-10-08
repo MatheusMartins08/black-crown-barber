@@ -23,6 +23,9 @@ Schema da Black Crown Barber: agenda, clientes, planos e repasse da equipe. As m
 | `20261008150000_plans_editing` | planos editáveis: `description` e `deleted_at`, `plan_services.period` (semanal ou mensal), leitura de planos inativos não excluídos, `plan_coverage` com janela mensal (ciclo da mensalidade) e `set_subscription` aceitando o plano atual do cliente mesmo inativo |
 | `20261008160000_opening_periods_and_exceptions` | `opening_periods` (horário semanal com vários períodos por dia, preenchida com `opening_hours`), `schedule_exceptions` (fechado, horário especial, bloqueio de um trecho) e os helpers `private.day_periods` / `private.day_blocks` |
 | `20261008170000_schedule_uses_periods` | `free_slots`, `get_day_summaries` e `appointments_prepare` passam a usar os períodos e as exceções (mesmas assinaturas; resultado idêntico sem exceções); a checagem de expediente não roda mais só por trocar quem executa |
+| `20261009120000_appointment_services_and_combos` | `appointment_services` (serviços de cada agendamento, com cópia da reserva e liquidação por serviço; 1 item por atendimento antigo) e `service_components` (combos: `corte-barba` = `corte` + `barba`). Só aditiva |
+| `20261009130000_multi_service_booking` | vários serviços no mesmo agendamento: RPCs com `p_services text[]` (as de `p_service text` ficam como atalho), horários pela duração somada, reserva grava os itens, cobertura e liquidação por serviço, gatilhos `appointments_50_sync_items` e `appointments_60_check_items`, `reservation_json` com `services` e `appointment_details` com `service_ids` e `items` |
+| `20261009140000_subscriber_reservation_grant` | tira do `anon` o execute de `create_subscriber_reservation(text[], …)` (só assinante logado) |
 
 ## Como aplicar
 
@@ -49,6 +52,17 @@ Depois de aplicar:
 - **Agenda travada no executor** (`performed_by_id`): o mesmo profissional nunca tem dois atendimentos `agendado`/`concluido` sobrepostos. `faltou` e `cancelado` liberam o horário.
 - **Toda inserção é validada no banco**, venha do site, do painel ou do balcão. O banco exige expediente aberto (períodos e exceções da barbearia), ausência de bloqueio e profissional habilitado no serviço. O preço é copiado do serviço e `ends_at` é calculado pela duração. A antecedência mínima de 60 min vale só para o site.
 - **Liquidação:** ao marcar `concluido`, o banco grava `covered_by_plan`, `charged_amount` e `payout_amount`. O fechamento usa esses valores; a view expõe `covered_live` para a agenda em aberto.
+- **Vários serviços (1 a 5) no mesmo agendamento:** 1 cliente → 1 profissional → 1 agendamento → N serviços.
+  - `appointment_services` guarda cada serviço com nome, preço e duração da reserva.
+  - `appointments` guarda os totais: `price` e `ends_at` são somas, `service_name` é "Corte masculino + Sobrancelha", `service_id` é o 1º serviço.
+  - O intervalo inteiro fica reservado, e a exclusão `appointments_no_overlap` cobre o bloco todo. Cancelar libera o bloco todo.
+  - `private.resolve_services` recusa repetição e combos em conflito (`BC012`). Um serviço simples conta como ele mesmo, um combo conta como as suas partes, e uma parte não pode aparecer duas vezes.
+  - A reserva recalcula tudo no servidor e grava os itens antes do agendamento (FK adiada). `appointments_prepare` tira os totais dos itens, e `appointments_60_check_items` confere no commit que os totais batem com os itens.
+  - Uma inserção ou troca de serviço direta, de um item só, é espelhada em `appointment_services` por `appointments_50_sync_items`. Trocar o serviço de um agendamento com vários serviços é recusado.
+- **Plano com vários serviços:** cada serviço é avaliado no plano com o próprio limite.
+  - O combo só é coberto se o próprio combo estiver no plano. Não existe rateio.
+  - Ao concluir, cada item recebe a cobertura, o valor cobrado e o repasse (serviço coberto: R$ 0 e repasse fixo; fora do plano: preço e comissão de avulso). O agendamento recebe as somas, e `covered_by_plan` só é verdadeiro se todos os itens foram cobertos.
+  - No fechamento, "Atendidos" conta agendamentos. As colunas por serviço, planos, avulsos e repasses contam itens.
 - **Equipe (não admin):** altera apenas `status` e `performed_by_id`, e não reabre um atendimento concluído.
 - **Repasse** (`payroll_settings`, `service_payouts`): visível só para a equipe.
 - **Fuso:** "hoje" e os horários locais usam `shop_settings.timezone` (America/Sao_Paulo), nunca o fuso da sessão.
@@ -102,19 +116,19 @@ O assinante entra com telefone e senha, sem SMS. Por baixo, o Supabase Auth usa 
 
 ## RPCs do site
 
-Equivalentes às funções de `app/agendamento/lib/booking-api.ts`. O visitante (anon) acessa os agendamentos só por elas.
+Equivalentes às funções de `app/agendamento/lib/booking-api.ts`. O visitante (anon) acessa os agendamentos só por elas. As de agenda e reserva recebem a lista de serviços (`p_services text[]`, de 1 a 5, na ordem da escolha); as versões antigas com `p_service text` continuam como atalho para a lista de um item.
 
 | RPC | substitui |
 | --- | --- |
-| `get_day_availability(p_service, p_professional, p_date)` | `fetchDayAvailability` |
-| `get_day_summaries(p_service, p_professional, p_start, p_days)` | `fetchDaySummaries` |
-| `find_next_available(p_service, p_professional, p_from)` | `findNextAvailable` |
-| `create_reservation(p_service, p_professional, p_date, p_time, p_assigned_professional, p_name, p_phone, p_email, p_notes, p_whatsapp_opt_in)` | `createReservation` (retorna o JSON de `Reservation`) |
+| `get_day_availability(p_services, p_professional, p_date)` | `fetchDayAvailability` |
+| `get_day_summaries(p_services, p_professional, p_start, p_days)` | `fetchDaySummaries` |
+| `find_next_available(p_services, p_professional, p_from)` | `findNextAvailable` |
+| `create_reservation(p_services, p_professional, p_date, p_time, p_assigned_professional, p_name, p_phone, p_email, p_notes, p_whatsapp_opt_in)` | `createReservation` (retorna o JSON de `Reservation`, com `services`) |
 | `get_reservation(p_code, p_phone)` | remarcar (ainda desativado no site) |
 | `cancel_reservation(p_code, p_phone)` | cancelar (ainda desativado no site); exige 120 min de antecedência |
 | `get_subscriber_session()` | `getSubscriberSession` (assinante logado; formato de `SubscriberSession`) |
 | `get_plan_coverage(p_service, p_date)` | `fetchPlanCoverage` (formato de `PlanCoverage`) |
-| `create_subscriber_reservation(p_service, p_professional, p_date, p_time, p_assigned_professional)` | `createSubscriberReservation` (usa o cadastro do assinante logado) |
+| `create_subscriber_reservation(p_services, p_professional, p_date, p_time, p_assigned_professional)` | `createSubscriberReservation` (usa o cadastro do assinante logado; `services[].covered` diz o que o plano cobre) |
 | `save_subscriber(p_customer_id, p_name, p_phone, p_user_id)` | `createSubscriber` / `updateSubscriber` (admin ou service role) |
 | `set_subscription(p_customer_id, p_plan, p_status)` | `changeSubscriberPlan` / `changeSubscriberStatus` (admin ou service role) |
 
@@ -136,6 +150,8 @@ O PostgREST devolve `code` (SQLSTATE), `message` (chave) e `hint` (texto em pt-B
 | BC009 | `not_cancellable` | reserva já concluída, cancelada ou com falta |
 | BC010 | `phone_in_use` | telefone já é login de outro assinante (ou, na edição, de outro cliente) |
 | BC011 | `subscriber_not_found` | assinante inexistente ou login sem cadastro de assinante |
+| BC012 | `conflicting_services` | serviços escolhidos que cobrem o mesmo serviço simples (ex.: Corte + "Corte + barba") |
+| BC013 | `appointment_items_mismatch` | preço ou duração do agendamento diferente da soma dos serviços (proteção interna) |
 | 23P01 | — | sobreposição de horário ou de assinatura (inserções diretas do painel) |
 | 42501 | — | sem permissão (RLS, grant ou coluna protegida) |
 
@@ -150,7 +166,8 @@ O PostgREST devolve `code` (SQLSTATE), `message` (chave) e `hint` (texto em pt-B
     - O excluído continua nos atendimentos e aparece no fechamento só nos períodos em que atendeu.
     - Login de barbeiro ligado a ele perde o acesso; admin ligado só perde o vínculo.
     - Horários futuros nunca são cancelados.
-- **Serviços** (`services`, `service_payouts`): editados no painel (nome, descrição, duração, preço, ícone de uma coleção fixa, selo "Mais pedido" e repasse do plano). Cada atendimento guarda preço (`price`), duração (`ends_at`), nome (`service_name`) e, ao concluir, cobrado e repasse: mudar o catálogo vale só para novos agendamentos. Serviço novo é atendido por todos os profissionais ativos. Inativar e excluir seguem a mesma regra dos profissionais; serviço que está em algum plano não pode ser excluído.
+- **Serviços** (`services`, `service_payouts`): editados no painel (nome, descrição, duração, preço, ícone de uma coleção fixa, selo "Mais pedido" e repasse do plano). Cada atendimento guarda preço (`price`), duração (`ends_at`), nome (`service_name`) e, ao concluir, cobrado e repasse: mudar o catálogo vale só para novos agendamentos. Serviço novo é atendido por todos os profissionais ativos. Inativar e excluir seguem a mesma regra dos profissionais; serviço que está em algum plano não pode ser excluído. Um serviço com histórico em qualquer posição de um agendamento (`appointment_services`) é excluído só logicamente.
+- **Combos** (`service_components`): no formulário do serviço, "Este serviço é um combo de:" marca os serviços simples que ele inclui. Não há aninhamento: uma parte não pode ser combo, e um serviço que é parte não pode virar combo (gatilho `service_components_check`). O agendamento oferece "Substituir" quando o cliente escolhe um combo junto com uma das partes.
 - **Horários** (`opening_periods`, `schedule_exceptions`): horário geral da barbearia, editado no painel. Dia sem período = fechado. Exceções valem numa data ou intervalo: "fechado" (nenhum horário), "horário especial" (substitui o semanal) e "bloqueio" (tira um trecho). A agenda (`private.day_periods` / `day_blocks`) aplica: fechado > horário especial > semanal, menos os bloqueios. Os bloqueios por profissional continuam em `schedule_blocks`. `opening_hours` ficou só como histórico e não é mais lida. Nada cancela agendamentos: ao salvar, o painel lista os agendamentos que ficariam fora do expediente e só grava com confirmação; eles continuam na agenda.
 - **Imagens do site** (`site_images`): uma linha por posição fixa (`gallery-1` … `gallery-8`, `about`). O admin troca imagem, legenda, descrição e enquadramento; não cria nem apaga posições. O formato de cada posição no layout fica em `app/data/site-images.ts`. Fundos (topo e agendamento) e o comparador Antes/Depois não são editáveis.
 - **Fotos** (`site-media`): o navegador reduz a imagem e envia como `<pasta>/<uuid>.<ext>` (`barbers/`, `gallery/` ou `barbershop/`) com a sessão do admin; a Server Action grava a URL e só depois apaga a foto antiga (se for do bucket). Fotos em `/public` nunca são apagadas.

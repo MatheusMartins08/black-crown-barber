@@ -22,6 +22,11 @@ export type Service = {
   sortOrder: number;
   /** Repasse fixo ao profissional quando o plano cobre (service_payouts). Só a equipe lê; null no site. */
   planPayout: number | null;
+  /**
+   * Combo: ids dos serviços simples que ele já inclui (service_components). Vazio num serviço
+   * simples. Dois serviços que cobrem o mesmo serviço simples não entram no mesmo agendamento.
+   */
+  components: string[];
 };
 
 export type ServiceRow = {
@@ -38,10 +43,11 @@ export type ServiceRow = {
   sort_order: number;
   /** 1-para-1 com services; o PostgREST pode devolver objeto ou lista. */
   service_payouts?: { plan_payout_amount: number | string } | { plan_payout_amount: number | string }[] | null;
+  service_components?: { component_id: string }[];
 };
 
 export const serviceColumns =
-  "id, slug, name, description, duration_minutes, price, icon, is_popular, is_active, deleted_at, sort_order";
+  "id, slug, name, description, duration_minutes, price, icon, is_popular, is_active, deleted_at, sort_order, service_components!service_components_service_id_fkey(component_id)";
 
 /** Com o repasse do plano (só a equipe pode ler service_payouts). */
 export const staffServiceColumns = `${serviceColumns}, service_payouts(plan_payout_amount)`;
@@ -61,6 +67,7 @@ export function toService(row: ServiceRow): Service {
     deletedAt: row.deleted_at,
     sortOrder: row.sort_order,
     planPayout: payout ? Number(payout.plan_payout_amount) : null,
+    components: (row.service_components ?? []).map((item) => item.component_id),
   };
 }
 

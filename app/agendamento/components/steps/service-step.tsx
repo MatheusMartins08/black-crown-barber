@@ -1,6 +1,18 @@
+"use client";
+
+import { useState } from "react";
 import { CircleAlert, Clock3 } from "lucide-react";
 import { DefaultServiceIcon, serviceIcons } from "../../../components/service-icons";
-import { formatCurrency, type BookingService, type ServiceId } from "../../../data/booking";
+import {
+  describeServiceConflict,
+  findServiceConflicts,
+  formatCurrency,
+  getService,
+  maxServicesPerBooking,
+  replaceConflictingServices,
+  type BookingService,
+  type ServiceId,
+} from "../../../data/booking";
 import {
   describePlanBenefits,
   formatFrequency,
@@ -13,13 +25,17 @@ import { useBookingPlans, useBookingServices } from "../booking-catalog";
 import ChoiceCard from "../choice-card";
 
 type ServiceStepProps = {
-  selectedId: ServiceId | null;
-  onSelect: (serviceId: ServiceId) => void;
+  /** Serviços escolhidos, na ordem da escolha. */
+  selectedIds: readonly ServiceId[];
+  onChange: (serviceIds: ServiceId[]) => void;
   /** Assinante logado: os serviços do plano aparecem primeiro. */
   session: SubscriberSession | null;
   /** A sessão do assinante ainda está sendo conferida. */
   loading: boolean;
 };
+
+/** Aviso aberto no cartão tocado: conflito com um combo ou limite de serviços. */
+type Prompt = { serviceId: ServiceId; message: string; canReplace: boolean };
 
 function ServiceCard({
   service,
@@ -72,36 +88,68 @@ function ServiceCard({
 function ServiceGrid({
   services,
   startIndex = 0,
-  selectedId,
+  selectedIds,
   onSelect,
+  prompt,
+  onReplace,
+  onKeep,
   plan,
 }: {
   services: readonly BookingService[];
   startIndex?: number;
-  selectedId: ServiceId | null;
+  selectedIds: readonly ServiceId[];
   onSelect: (serviceId: ServiceId) => void;
+  prompt: Prompt | null;
+  onReplace: () => void;
+  onKeep: () => void;
   plan?: SubscriptionPlan;
 }) {
   return (
     <ul className="choice-grid">
-      {services.map((service, index) => (
-        <li key={service.slug}>
-          <ServiceCard
-            index={startIndex + index}
-            onSelect={() => onSelect(service.slug)}
-            plan={plan}
-            selected={selectedId === service.slug}
-            service={service}
-          />
-        </li>
-      ))}
+      {services.map((service, index) => {
+        const open = prompt?.serviceId === service.slug ? prompt : null;
+        return (
+          <li className={open ? "has-prompt" : undefined} key={service.slug}>
+            <ServiceCard
+              index={startIndex + index}
+              onSelect={() => onSelect(service.slug)}
+              plan={plan}
+              selected={selectedIds.includes(service.slug)}
+              service={service}
+            />
+            {open ? (
+              <div className="booking-alert service-conflict" role="status">
+                <p>
+                  <CircleAlert aria-hidden="true" size={16} />
+                  <span>
+                    <strong>{open.message}</strong>
+                    {open.canReplace ? " Substituir?" : null}
+                  </span>
+                </p>
+                <span className="service-conflict__actions">
+                  {open.canReplace ? (
+                    <button className="booking-text-button" onClick={onReplace} type="button">
+                      Substituir
+                    </button>
+                  ) : null}
+                  <button className="booking-text-button" onClick={onKeep} type="button">
+                    {open.canReplace ? "Manter" : "Entendi"}
+                  </button>
+                </span>
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-export default function ServiceStep({ selectedId, onSelect, session, loading }: ServiceStepProps) {
+export default function ServiceStep({ selectedIds, onChange, session, loading }: ServiceStepProps) {
   const bookingServices = useBookingServices();
   const plans = useBookingPlans();
+  const [prompt, setPrompt] = useState<Prompt | null>(null);
+
   if (loading) {
     return (
       <ul aria-busy="true" aria-label="Carregando os serviços do seu plano" className="choice-grid">
@@ -114,10 +162,49 @@ export default function ServiceStep({ selectedId, onSelect, session, loading }: 
     );
   }
 
+  // Tocar num escolhido tira da lista; num novo, adiciona, a não ser que conflite com um combo.
+  function toggle(serviceId: ServiceId) {
+    setPrompt(null);
+    if (selectedIds.includes(serviceId)) {
+      onChange(selectedIds.filter((id) => id !== serviceId));
+      return;
+    }
+    const service = getService(bookingServices, serviceId);
+    if (!service) return;
+    const conflicts = findServiceConflicts(bookingServices, selectedIds, serviceId);
+    if (conflicts.length) {
+      setPrompt({ serviceId, message: describeServiceConflict(service, conflicts), canReplace: true });
+      return;
+    }
+    if (selectedIds.length >= maxServicesPerBooking) {
+      setPrompt({
+        serviceId,
+        message: `Escolha até ${maxServicesPerBooking} serviços por agendamento.`,
+        canReplace: false,
+      });
+      return;
+    }
+    onChange([...selectedIds, serviceId]);
+  }
+
+  function replace() {
+    if (!prompt) return;
+    onChange(replaceConflictingServices(bookingServices, selectedIds, prompt.serviceId));
+    setPrompt(null);
+  }
+
+  const gridProps = {
+    selectedIds,
+    onSelect: toggle,
+    prompt,
+    onReplace: replace,
+    onKeep: () => setPrompt(null),
+  };
+
   const plan = getPlan(plans, session?.planId ?? null);
 
   if (!session || !plan) {
-    return <ServiceGrid onSelect={onSelect} selectedId={selectedId} services={bookingServices} />;
+    return <ServiceGrid {...gridProps} services={bookingServices} />;
   }
 
   if (session.blockedReason) {
@@ -135,7 +222,7 @@ export default function ServiceStep({ selectedId, onSelect, session, loading }: 
             </span>
           </p>
         </div>
-        <ServiceGrid onSelect={onSelect} selectedId={selectedId} services={bookingServices} />
+        <ServiceGrid {...gridProps} services={bookingServices} />
       </>
     );
   }
@@ -153,7 +240,7 @@ export default function ServiceStep({ selectedId, onSelect, session, loading }: 
             {plan.name}: {describePlanBenefits(plan, bookingServices)}.
           </p>
         </header>
-        <ServiceGrid onSelect={onSelect} plan={plan} selectedId={selectedId} services={included} />
+        <ServiceGrid {...gridProps} plan={plan} services={included} />
       </section>
 
       {others.length ? (
@@ -162,12 +249,7 @@ export default function ServiceStep({ selectedId, onSelect, session, loading }: 
             <h3 id="service-group-others">Serviços fora do plano</h3>
             <p>Valor avulso, pago na barbearia.</p>
           </header>
-          <ServiceGrid
-            onSelect={onSelect}
-            selectedId={selectedId}
-            services={others}
-            startIndex={included.length}
-          />
+          <ServiceGrid {...gridProps} services={others} startIndex={included.length} />
         </section>
       ) : null}
     </>

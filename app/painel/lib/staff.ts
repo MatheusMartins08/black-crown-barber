@@ -131,7 +131,8 @@ export type ServiceUsage = {
 export async function getServiceUsage(): Promise<Record<string, ServiceUsage>> {
   const supabase = await getSupabaseServerClient();
   const [appointments, plans] = await Promise.all([
-    supabase.from("appointments").select("service_id, status, starts_at"),
+    // Por serviço do atendimento: um horário com Corte + Sobrancelha conta para os dois.
+    supabase.from("appointment_services").select("service_id, appointments(status, starts_at)"),
     supabase.from("plan_services").select("service_id, subscription_plans(name)"),
   ]);
   if (appointments.error || plans.error) throw new Error("Não foi possível carregar o uso dos serviços.");
@@ -140,9 +141,13 @@ export async function getServiceUsage(): Promise<Record<string, ServiceUsage>> {
   const entry = (id: string) => (usage[id] ??= { hasHistory: false, upcoming: 0, plans: [] });
   const now = Date.now();
 
-  for (const row of appointments.data) {
+  type ItemRow = { service_id: string; appointments: { status: string; starts_at: string } | null };
+  for (const row of appointments.data as unknown as ItemRow[]) {
     entry(row.service_id).hasHistory = true;
-    if (row.status === "agendado" && new Date(row.starts_at).getTime() >= now) entry(row.service_id).upcoming += 1;
+    const appointment = row.appointments;
+    if (appointment?.status === "agendado" && new Date(appointment.starts_at).getTime() >= now) {
+      entry(row.service_id).upcoming += 1;
+    }
   }
   for (const row of plans.data as unknown as { service_id: string; subscription_plans: { name: string } | null }[]) {
     if (row.subscription_plans) entry(row.service_id).plans.push(row.subscription_plans.name);

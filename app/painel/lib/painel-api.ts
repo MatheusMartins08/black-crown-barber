@@ -2,6 +2,7 @@ import { formatPhone, getTodayIso } from "../../data/booking";
 import {
   addDays,
   type Appointment,
+  type AppointmentItem,
   type AppointmentStatus,
   type ClientProfile,
   type MembershipStatus,
@@ -52,12 +53,42 @@ type AppointmentRow = {
   charged_amount: number | null;
   payout_amount: number | null;
   membership_status: MembershipStatus;
+  /** appointment_services do atendimento (jsonb da view), na ordem da reserva. */
+  items: ItemRow[] | null;
 };
 
+type ItemRow = {
+  service_id: string;
+  service_slug: string;
+  service_name: string;
+  price: number | string;
+  duration_minutes: number;
+  covered_live: boolean;
+  covered_by_plan: boolean | null;
+  charged_amount: number | string | null;
+  payout_amount: number | string | null;
+};
+
+const toMoney = (value: number | string | null) => (value === null ? null : Number(value));
+
+function toItem(row: ItemRow): AppointmentItem {
+  return {
+    serviceId: row.service_id,
+    serviceSlug: row.service_slug,
+    serviceName: row.service_name,
+    price: Number(row.price),
+    durationMinutes: row.duration_minutes,
+    covered: row.covered_by_plan ?? row.covered_live,
+    charged: toMoney(row.charged_amount),
+    payout: toMoney(row.payout_amount),
+  };
+}
+
 const appointmentColumns =
-  "id, code, status, local_date, local_time, customer_id, customer_name, service_id, service_slug, service_name, booked_professional_id, booked_professional_name, performed_by_id, performed_by_name, price, live_plan_name, covered_live, covered_by_plan, charged_amount, payout_amount, membership_status";
+  "id, code, status, local_date, local_time, customer_id, customer_name, service_id, service_slug, service_name, booked_professional_id, booked_professional_name, performed_by_id, performed_by_name, price, live_plan_name, covered_live, covered_by_plan, charged_amount, payout_amount, membership_status, items";
 
 function toAppointment(row: AppointmentRow): Appointment {
+  const items = (row.items ?? []).map(toItem);
   return {
     id: row.id,
     code: row.code,
@@ -68,12 +99,14 @@ function toAppointment(row: AppointmentRow): Appointment {
     serviceId: row.service_id,
     serviceSlug: row.service_slug,
     serviceName: row.service_name,
+    items,
     bookedWithId: row.booked_professional_id,
     bookedWith: row.booked_professional_name,
     performedById: row.performed_by_id,
     performedBy: row.performed_by_name,
     status: row.status,
     price: Number(row.price),
+    durationMinutes: items.reduce((sum, item) => sum + item.durationMinutes, 0),
     membership: row.membership_status,
     planName: row.live_plan_name,
     covered: row.covered_by_plan ?? row.covered_live,
