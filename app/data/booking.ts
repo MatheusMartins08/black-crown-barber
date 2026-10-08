@@ -1,7 +1,6 @@
 import type { PlanId } from "./plans";
 import type { Professional } from "./professionals";
 import type { Service } from "./services";
-import { openingHours } from "./site";
 
 // Regras e dados do fluxo de agendamento. Tudo aqui é puro (sem React e sem rede)
 // para poder ser reaproveitado no servidor quando existir uma API de agenda.
@@ -173,16 +172,6 @@ export function toTime(minutes: number) {
 export function getDayPeriod(time: string) {
   const minutes = toMinutes(time);
   return dayPeriods.find((period) => minutes >= period.from && minutes < period.to) ?? dayPeriods[0];
-}
-
-const weekdayKeys = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-/** Janela de atendimento do dia, lida de `openingHours` (site.ts). `null` quando fechado. */
-export function getOpeningWindow(isoDate: string) {
-  const entry = openingHours.find((item) => item.dayOfWeek === weekdayKeys[getWeekday(isoDate)]);
-  const [opens, closes] = entry?.hours.split("–") ?? [];
-  if (!opens || !closes) return null;
-  return { opens: toMinutes(opens), closes: toMinutes(closes) };
 }
 
 // --- Formatação ---

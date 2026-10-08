@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
+import type { OpeningPeriod, ScheduleException } from "../../data/hours";
 import type { SubscriptionPlan } from "../../data/plans";
 import type { Professional } from "../../data/professionals";
 import type { Service } from "../../data/services";
@@ -15,9 +16,20 @@ type PainelCatalog = {
   plans: readonly SubscriptionPlan[];
   /** Fração do preço repassada ao profissional em atendimentos fora do plano. */
   walkInRate: number;
+  /** Horário semanal (opening_periods). */
+  openingPeriods: readonly OpeningPeriod[];
+  /** Exceções da barbearia de hoje em diante (schedule_exceptions). */
+  exceptions: readonly ScheduleException[];
 };
 
-const PainelCatalogContext = createContext<PainelCatalog>({ professionals: [], services: [], plans: [], walkInRate: 0 });
+const PainelCatalogContext = createContext<PainelCatalog>({
+  professionals: [],
+  services: [],
+  plans: [],
+  walkInRate: 0,
+  openingPeriods: [],
+  exceptions: [],
+});
 
 export function PainelCatalogProvider({ children, ...catalog }: PainelCatalog & { children: ReactNode }) {
   return <PainelCatalogContext.Provider value={catalog}>{children}</PainelCatalogContext.Provider>;
@@ -33,6 +45,12 @@ export function usePainelServices() {
 
 export function usePainelPlans() {
   return useContext(PainelCatalogContext).plans;
+}
+
+/** Horário semanal e exceções da barbearia. */
+export function usePainelSchedule() {
+  const { openingPeriods, exceptions } = useContext(PainelCatalogContext);
+  return { periods: openingPeriods, exceptions };
 }
 
 export function useWalkInRate() {

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { AtSign, Crown, MapPin, Phone } from "lucide-react";
-import { footerNavigationItems, openingHours, siteConfig } from "../data/site";
+import { getWeekSchedule, type OpeningPeriod } from "../data/hours";
+import { footerNavigationItems, siteConfig } from "../data/site";
 
-export default function SiteFooter() {
+/** `periods`: horário semanal do Supabase; o rodapé lista só os dias abertos. */
+export default function SiteFooter({ periods }: { periods: OpeningPeriod[] }) {
   return (
     <footer className="site-footer">
       <div className="site-footer__main">
@@ -33,7 +35,9 @@ export default function SiteFooter() {
 
         <div className="site-footer__hours">
           <h2>Horários</h2>
-          {openingHours.slice(0, 6).map((item) => (
+          {getWeekSchedule(periods)
+            .filter((item) => item.open)
+            .map((item) => (
             <p key={item.day}><span>{item.day.replace("-feira", "")}</span><span>{item.hours}</span></p>
           ))}
         </div>

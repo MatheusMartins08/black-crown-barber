@@ -155,7 +155,7 @@ export default function AppointmentsTable({
       {isClosed ? (
         <div className="admin-empty">
           <CalendarX2 aria-hidden="true" size={22} strokeWidth={1.6} />
-          <p className="admin-empty__title">Barbearia fechada aos domingos</p>
+          <p className="admin-empty__title">Barbearia fechada neste dia</p>
           <p>Escolha outro dia para ver a agenda e a produção da equipe.</p>
         </div>
       ) : visible.length === 0 ? (

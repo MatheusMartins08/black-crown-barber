@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { unstable_cache } from "next/cache";
+import { openingPeriodColumns, sortPeriods, toOpeningPeriod, type OpeningPeriodRow } from "../data/hours";
 import { planColumns, sortPlans, toPlan, type PlanRow } from "../data/plans";
 import { professionalColumns, sortProfessionals, toProfessional, type ProfessionalRow } from "../data/professionals";
 import { serviceColumns, sortServices, toService, type ServiceRow } from "../data/services";
@@ -16,6 +17,7 @@ export const catalogTags = {
   siteImages: "catalog:site-images",
   services: "catalog:services",
   plans: "catalog:plans",
+  hours: "catalog:hours",
 } as const;
 
 function getPublicClient() {
@@ -87,4 +89,15 @@ export const getPublicPlans = unstable_cache(
   },
   ["catalog-plans"],
   { tags: [catalogTags.plans], revalidate: 3600 },
+);
+
+/** Horário semanal (um ou mais períodos por dia). As exceções não são públicas. */
+export const getPublicOpeningPeriods = unstable_cache(
+  async () => {
+    const { data, error } = await getPublicClient().from("opening_periods").select(openingPeriodColumns);
+    if (error) throw new Error(`Não foi possível carregar o horário: ${error.message}`);
+    return sortPeriods((data as OpeningPeriodRow[]).map(toOpeningPeriod));
+  },
+  ["catalog-hours"],
+  { tags: [catalogTags.hours], revalidate: 3600 },
 );

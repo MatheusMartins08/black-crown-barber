@@ -9,6 +9,20 @@ import {
   validateProfessional,
   type ProfessionalInput,
 } from "../data/professionals";
+import {
+  fitsSchedule,
+  openingPeriodColumns,
+  scheduleExceptionColumns,
+  toOpeningPeriod,
+  toScheduleException,
+  validateException,
+  validateWeek,
+  type ExceptionInput,
+  type OpeningPeriod,
+  type OpeningPeriodRow,
+  type ScheduleException,
+  type ScheduleExceptionRow,
+} from "../data/hours";
 import { createPlanSlug, validatePlan, type PlanInput } from "../data/plans";
 import { createServiceSlug, validateService, type ServiceInput } from "../data/services";
 import { getSlotFolder, isSiteImageSlot, validateSiteImage, type SiteImageSlot } from "../data/site-images";
@@ -764,4 +778,223 @@ export async function deletePlanAction(id: string): Promise<SiteActionResult> {
 
   updateTag(catalogTags.plans);
   return { ok: true, message: `${plan.name} foi excluído. Assinaturas e mensalidades antigas continuam no painel.` };
+}
+
+// --- Edição do site > Horários ---
+//
+// Nada aqui cancela, remarca ou apaga agendamento. Antes de gravar um horário novo ou uma
+// exceção, a ação lista os agendamentos futuros que ficariam fora do expediente (mesma regra
+// de appointments_prepare) e só grava com a confirmação explícita do admin. Os agendamentos
+// continuam marcados; a equipe decide o que fazer com cada um.
+
+export type ScheduleConflict = {
+  id: string;
+  date: string;
+  time: string;
+  clientName: string;
+  serviceName: string;
+  professionalName: string;
+};
+
+export type ScheduleActionResult =
+  | SiteActionResult
+  | { ok: false; message: string; conflicts: ScheduleConflict[] };
+
+type WeekPeriodInput = Pick<OpeningPeriod, "weekday" | "opensAt" | "closesAt">;
+
+function shopToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+}
+
+/** Agendamentos ainda por acontecer que não caberiam no expediente proposto. */
+async function findConflicts(
+  supabase: Supabase,
+  periods: readonly WeekPeriodInput[],
+  exceptions: readonly ScheduleException[],
+  range?: { start: string; end: string },
+): Promise<ScheduleConflict[] | null> {
+  let query = supabase
+    .from("appointment_details")
+    .select("id, local_date, local_time, starts_at, ends_at, customer_name, service_name, performed_by_name")
+    .eq("status", "agendado")
+    .gte("starts_at", new Date().toISOString())
+    .order("starts_at");
+  if (range) query = query.gte("local_date", range.start).lte("local_date", range.end);
+  const { data, error } = await query;
+  if (error) return null;
+
+  return data
+    .filter(
+      (row) =>
+        !fitsSchedule(
+          {
+            id: row.id,
+            date: row.local_date,
+            time: row.local_time,
+            durationMinutes: Math.round((Date.parse(row.ends_at) - Date.parse(row.starts_at)) / 60000),
+          },
+          periods,
+          exceptions,
+        ),
+    )
+    .map((row) => ({
+      id: row.id,
+      date: row.local_date,
+      time: row.local_time,
+      clientName: row.customer_name,
+      serviceName: row.service_name,
+      professionalName: row.performed_by_name,
+    }));
+}
+
+async function loadSchedule(supabase: Supabase) {
+  const [periods, exceptions] = await Promise.all([
+    supabase.from("opening_periods").select(openingPeriodColumns),
+    supabase.from("schedule_exceptions").select(scheduleExceptionColumns).gte("ends_on", shopToday()),
+  ]);
+  if (periods.error || exceptions.error) return null;
+  return {
+    periods: (periods.data as OpeningPeriodRow[]).map(toOpeningPeriod),
+    exceptions: (exceptions.data as ScheduleExceptionRow[]).map(toScheduleException),
+  };
+}
+
+function conflictMessage(count: number) {
+  return count === 1
+    ? "1 agendamento ficaria fora do novo horário. Ele não será cancelado nem remarcado."
+    : `${count} agendamentos ficariam fora do novo horário. Eles não serão cancelados nem remarcados.`;
+}
+
+/**
+ * Salva o horário semanal mexendo só no que mudou: remove os períodos retirados e depois
+ * insere os novos (a validação acontece antes, então o banco não deve recusar a inserção).
+ */
+export async function saveWeekAction(
+  periods: WeekPeriodInput[],
+  confirmConflicts: boolean,
+): Promise<ScheduleActionResult> {
+  if (
+    !Array.isArray(periods) ||
+    periods.some(
+      (period) =>
+        typeof period?.weekday !== "number" || typeof period.opensAt !== "string" || typeof period.closesAt !== "string",
+    ) ||
+    validateWeek(periods)
+  ) {
+    return failure(validateWeek(Array.isArray(periods) ? periods : []) ?? "Revise o horário semanal.");
+  }
+
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
+  const current = await loadSchedule(supabase);
+  if (!current) return failure("Não foi possível carregar o horário atual. Nada foi alterado.");
+
+  const conflicts = await findConflicts(supabase, periods, current.exceptions);
+  if (!conflicts) return failure("Não foi possível conferir os agendamentos. Nada foi alterado.");
+  if (conflicts.length && confirmConflicts !== true) {
+    return { ok: false, message: conflictMessage(conflicts.length), conflicts };
+  }
+
+  const key = (period: WeekPeriodInput) => `${period.weekday}|${period.opensAt}|${period.closesAt}`;
+  const wanted = new Set(periods.map(key));
+  const existing = new Set(current.periods.map(key));
+  const toRemove = current.periods.filter((period) => !wanted.has(key(period)));
+  const toAdd = periods.filter((period, index) => !existing.has(key(period)) && periods.findIndex((item) => key(item) === key(period)) === index);
+
+  if (!toRemove.length && !toAdd.length) return { ok: true, message: "O horário semanal já estava assim." };
+
+  if (toRemove.length) {
+    const { error } = await supabase.from("opening_periods").delete().in("id", toRemove.map((period) => period.id));
+    if (error) return failure("Não foi possível salvar o horário. Nada foi alterado.");
+  }
+  if (toAdd.length) {
+    const { error } = await supabase.from("opening_periods").insert(
+      toAdd.map((period) => ({ weekday: period.weekday, opens_at: period.opensAt, closes_at: period.closesAt })),
+    );
+    if (error) {
+      updateTag(catalogTags.hours);
+      return failure(
+        "Os períodos retirados foram removidos, mas os novos não foram gravados. Confira o horário semanal e salve de novo.",
+      );
+    }
+  }
+
+  updateTag(catalogTags.hours);
+  return {
+    ok: true,
+    message: conflicts.length
+      ? `Horário salvo. ${conflicts.length === 1 ? "O agendamento fora do horário continua" : `Os ${conflicts.length} agendamentos fora do horário continuam`} na agenda para você decidir o que fazer.`
+      : "Horário semanal salvo. O site e o agendamento já usam o novo horário.",
+  };
+}
+
+export async function saveExceptionAction(input: ExceptionInput, confirmConflicts: boolean): Promise<ScheduleActionResult> {
+  const today = shopToday();
+  if (
+    typeof input?.startsOn !== "string" ||
+    typeof input.endsOn !== "string" ||
+    !["fechado", "horario_especial", "bloqueio"].includes(input.kind) ||
+    typeof input.opensAt !== "string" ||
+    typeof input.closesAt !== "string" ||
+    typeof input.reason !== "string" ||
+    Object.keys(validateException(input, today)).length
+  ) {
+    return failure("Revise as datas e os horários da exceção.");
+  }
+
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
+  const current = await loadSchedule(supabase);
+  if (!current) return failure("Não foi possível carregar o horário atual. Nada foi alterado.");
+
+  const isClosed = input.kind === "fechado";
+  const proposed: ScheduleException = {
+    id: "nova",
+    startsOn: input.startsOn,
+    endsOn: input.endsOn,
+    kind: input.kind,
+    opensAt: isClosed ? null : input.opensAt,
+    closesAt: isClosed ? null : input.closesAt,
+    reason: input.reason.trim(),
+  };
+  const conflicts = await findConflicts(supabase, current.periods, [...current.exceptions, proposed], {
+    start: input.startsOn,
+    end: input.endsOn,
+  });
+  if (!conflicts) return failure("Não foi possível conferir os agendamentos. Nada foi alterado.");
+  if (conflicts.length && confirmConflicts !== true) {
+    return { ok: false, message: conflictMessage(conflicts.length), conflicts };
+  }
+
+  const { error } = await supabase.from("schedule_exceptions").insert({
+    starts_on: input.startsOn,
+    ends_on: input.endsOn,
+    kind: input.kind,
+    opens_at: proposed.opensAt,
+    closes_at: proposed.closesAt,
+    reason: proposed.reason || null,
+  });
+  if (error) return failure("Não foi possível salvar a exceção. Tente novamente.");
+
+  return {
+    ok: true,
+    message: conflicts.length
+      ? `Exceção salva. ${conflicts.length === 1 ? "O agendamento afetado continua" : `Os ${conflicts.length} agendamentos afetados continuam`} na agenda para você decidir o que fazer.`
+      : "Exceção salva. O agendamento online já considera a mudança.",
+  };
+}
+
+/** Remove uma exceção (o dia volta ao horário semanal). Não afeta nenhum agendamento. */
+export async function deleteExceptionAction(id: string): Promise<SiteActionResult> {
+  if (!isUuid(id)) return failure("Exceção não encontrada. Recarregue a página.");
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+
+  const { data, error } = await auth.supabase.from("schedule_exceptions").delete().eq("id", id).select("id");
+  if (error || !data?.length) return failure("Não foi possível remover a exceção. Tente novamente.");
+  return { ok: true, message: "Exceção removida. Esses dias voltam ao horário semanal." };
 }

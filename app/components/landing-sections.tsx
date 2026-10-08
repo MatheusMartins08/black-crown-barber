@@ -16,11 +16,11 @@ import { DefaultServiceIcon, serviceIcons } from "./service-icons";
 import { formatCurrency } from "../data/booking";
 import { formatDuration, type Service } from "../data/services";
 import { getFirstName, type Professional } from "../data/professionals";
+import { describeOpenDays, getWeekSchedule, type OpeningPeriod } from "../data/hours";
 import { galleryLayouts, type SiteImage } from "../data/site-images";
 import {
   galleryComparison,
   galleryFeature,
-  openingHours,
   siteConfig,
   testimonials,
 } from "../data/site";
@@ -45,10 +45,11 @@ function SectionHeading({
   );
 }
 
-export function QuickInfo() {
+/** `periods`: horário semanal do Supabase (dias de funcionamento). */
+export function QuickInfo({ periods }: { periods: OpeningPeriod[] }) {
   const details = [
     { icon: MapPin, label: "Localização", value: siteConfig.city },
-    { icon: Clock3, label: "Funcionamento", value: "Segunda a sábado" },
+    { icon: Clock3, label: "Funcionamento", value: describeOpenDays(periods) },
     { icon: CalendarDays, label: "Atendimento", value: "Com agendamento" },
     { icon: MessageCircle, label: "Contato", value: siteConfig.whatsapp },
   ];
@@ -319,7 +320,8 @@ export function BookingSection() {
   );
 }
 
-export function LocationSection() {
+/** `periods`: horário semanal do Supabase; dia sem período aparece como "Fechado". */
+export function LocationSection({ periods }: { periods: OpeningPeriod[] }) {
   return (
     <section aria-labelledby="location-title" className="section location" id="localizacao">
       <div className="section__inner">
@@ -355,7 +357,7 @@ export function LocationSection() {
                 <h3>Horário de funcionamento</h3>
               </div>
               <dl>
-                {openingHours.map((item) => (
+                {getWeekSchedule(periods).map((item) => (
                   <div className="hours__row" key={item.day}>
                     <dt>{item.day}</dt>
                     <dd>{item.hours}</dd>

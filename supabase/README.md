@@ -21,6 +21,8 @@ Schema da Black Crown Barber: agenda, clientes, planos e repasse da equipe. As m
 | `20261008130000_site_images` | `site_images` (8 posições da galeria e a foto da barbearia, editáveis pelo admin) e pastas `gallery/` e `barbershop/` no bucket |
 | `20261008140000_services_editing` | `services.deleted_at`, `appointments.service_name` (nome copiado na reserva, trigger `appointments_25_service_name`) e `appointment_details` lendo a cópia |
 | `20261008150000_plans_editing` | planos editáveis: `description` e `deleted_at`, `plan_services.period` (semanal ou mensal), leitura de planos inativos não excluídos, `plan_coverage` com janela mensal (ciclo da mensalidade) e `set_subscription` aceitando o plano atual do cliente mesmo inativo |
+| `20261008160000_opening_periods_and_exceptions` | `opening_periods` (horário semanal com vários períodos por dia, preenchida com `opening_hours`), `schedule_exceptions` (fechado, horário especial, bloqueio de um trecho) e os helpers `private.day_periods` / `private.day_blocks` |
+| `20261008170000_schedule_uses_periods` | `free_slots`, `get_day_summaries` e `appointments_prepare` passam a usar os períodos e as exceções (mesmas assinaturas; resultado idêntico sem exceções); a checagem de expediente não roda mais só por trocar quem executa |
 
 ## Como aplicar
 
@@ -45,7 +47,7 @@ Depois de aplicar:
 ## Regras principais
 
 - **Agenda travada no executor** (`performed_by_id`): o mesmo profissional nunca tem dois atendimentos `agendado`/`concluido` sobrepostos. `faltou` e `cancelado` liberam o horário.
-- **Toda inserção é validada no banco**, venha do site, do painel ou do balcão. O banco exige expediente aberto, ausência de bloqueio e profissional habilitado no serviço. O preço é copiado do serviço e `ends_at` é calculado pela duração. A antecedência mínima de 60 min vale só para o site.
+- **Toda inserção é validada no banco**, venha do site, do painel ou do balcão. O banco exige expediente aberto (períodos e exceções da barbearia), ausência de bloqueio e profissional habilitado no serviço. O preço é copiado do serviço e `ends_at` é calculado pela duração. A antecedência mínima de 60 min vale só para o site.
 - **Liquidação:** ao marcar `concluido`, o banco grava `covered_by_plan`, `charged_amount` e `payout_amount`. O fechamento usa esses valores; a view expõe `covered_live` para a agenda em aberto.
 - **Equipe (não admin):** altera apenas `status` e `performed_by_id`, e não reabre um atendimento concluído.
 - **Repasse** (`payroll_settings`, `service_payouts`): visível só para a equipe.
@@ -149,6 +151,7 @@ O PostgREST devolve `code` (SQLSTATE), `message` (chave) e `hint` (texto em pt-B
     - Login de barbeiro ligado a ele perde o acesso; admin ligado só perde o vínculo.
     - Horários futuros nunca são cancelados.
 - **Serviços** (`services`, `service_payouts`): editados no painel (nome, descrição, duração, preço, ícone de uma coleção fixa, selo "Mais pedido" e repasse do plano). Cada atendimento guarda preço (`price`), duração (`ends_at`), nome (`service_name`) e, ao concluir, cobrado e repasse: mudar o catálogo vale só para novos agendamentos. Serviço novo é atendido por todos os profissionais ativos. Inativar e excluir seguem a mesma regra dos profissionais; serviço que está em algum plano não pode ser excluído.
+- **Horários** (`opening_periods`, `schedule_exceptions`): horário geral da barbearia, editado no painel. Dia sem período = fechado. Exceções valem numa data ou intervalo: "fechado" (nenhum horário), "horário especial" (substitui o semanal) e "bloqueio" (tira um trecho). A agenda (`private.day_periods` / `day_blocks`) aplica: fechado > horário especial > semanal, menos os bloqueios. Os bloqueios por profissional continuam em `schedule_blocks`. `opening_hours` ficou só como histórico e não é mais lida. Nada cancela agendamentos: ao salvar, o painel lista os agendamentos que ficariam fora do expediente e só grava com confirmação; eles continuam na agenda.
 - **Imagens do site** (`site_images`): uma linha por posição fixa (`gallery-1` … `gallery-8`, `about`). O admin troca imagem, legenda, descrição e enquadramento; não cria nem apaga posições. O formato de cada posição no layout fica em `app/data/site-images.ts`. Fundos (topo e agendamento) e o comparador Antes/Depois não são editáveis.
 - **Fotos** (`site-media`): o navegador reduz a imagem e envia como `<pasta>/<uuid>.<ext>` (`barbers/`, `gallery/` ou `barbershop/`) com a sessão do admin; a Server Action grava a URL e só depois apaga a foto antiga (se for do bucket). Fotos em `/public` nunca são apagadas.
 

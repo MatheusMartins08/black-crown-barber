@@ -1,65 +1,21 @@
 "use client";
 
 import { useRef, useState, type KeyboardEvent } from "react";
-import { BadgePercent, CalendarClock, Images, Scissors, UsersRound, type LucideIcon } from "lucide-react";
 import type { SiteImage } from "../../data/site-images";
 import type { PlanUsage, ProfessionalUsage, ServiceUsage } from "../lib/staff";
 import SiteBarbers from "./site-barbers";
+import SiteHours from "./site-hours";
 import SiteImages from "./site-images";
 import SitePlans from "./site-plans";
 import SiteServices from "./site-services";
 
-type Section = {
-  value: string;
-  label: string;
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  upcoming: string;
-};
-
 const tabs = [
-  {
-    value: "imagens",
-    label: "Imagens",
-    title: "Imagens do site",
-    description: "Fotos da galeria e da seção sobre a barbearia.",
-    icon: Images,
-    upcoming: "Aqui você vai trocar as fotos da galeria e a imagem da barbearia, com prévia antes de salvar.",
-  },
-  {
-    value: "barbeiros",
-    label: "Barbeiros",
-    title: "Barbeiros",
-    description: "Equipe exibida no site e no agendamento.",
-    icon: UsersRound,
-    upcoming: "Aqui você vai adicionar, editar, ativar e inativar profissionais, com foto, nome e descrição.",
-  },
-  {
-    value: "servicos",
-    label: "Serviços",
-    title: "Serviços",
-    description: "Menu de serviços, preços e durações.",
-    icon: Scissors,
-    upcoming: "Aqui você vai criar e editar serviços: nome, descrição, duração, preço, ícone e status.",
-  },
-  {
-    value: "horarios",
-    label: "Horários",
-    title: "Horários",
-    description: "Funcionamento semanal e exceções.",
-    icon: CalendarClock,
-    upcoming: "Aqui você vai definir os dias e horários de atendimento, feriados, férias e horários especiais.",
-  },
-  {
-    value: "planos",
-    label: "Planos",
-    title: "Planos",
-    description: "Planos de assinatura e serviços incluídos.",
-    icon: BadgePercent,
-    upcoming: "Aqui você vai editar nome, valor, descrição e serviços incluídos de cada plano.",
-  },
-] as const satisfies readonly Section[];
+  { value: "imagens", label: "Imagens" },
+  { value: "barbeiros", label: "Barbeiros" },
+  { value: "servicos", label: "Serviços" },
+  { value: "horarios", label: "Horários" },
+  { value: "planos", label: "Planos" },
+] as const;
 
 type Tab = (typeof tabs)[number]["value"];
 
@@ -154,42 +110,27 @@ export default function SiteEditorWorkspace({
         </div>
       </div>
 
-      {tabs.map((item) => {
-        const Icon = item.icon;
-        return (
-          <div
-            aria-labelledby={`aba-${item.value}-tab`}
-            hidden={tab !== item.value}
-            id={`aba-${item.value}`}
-            key={item.value}
-            role="tabpanel"
-          >
-            {item.value === "barbeiros" ? (
-              <SiteBarbers usage={professionalUsage} />
-            ) : item.value === "imagens" ? (
-              <SiteImages images={siteImages} />
-            ) : item.value === "servicos" ? (
-              <SiteServices usage={serviceUsage} />
-            ) : item.value === "planos" ? (
-              <SitePlans usage={planUsage} />
-            ) : (
-              <section aria-labelledby={`${item.value}-title`} className="admin-panel">
-                <div className="admin-panel__heading">
-                  <div>
-                    <h2 id={`${item.value}-title`}>{item.title}</h2>
-                    <p>{item.description}</p>
-                  </div>
-                </div>
-                <div className="admin-empty">
-                  <Icon aria-hidden="true" size={22} strokeWidth={1.6} />
-                  <p className="admin-empty__title">Em breve</p>
-                  <p>{item.upcoming}</p>
-                </div>
-              </section>
-            )}
-          </div>
-        );
-      })}
+      {tabs.map((item) => (
+        <div
+          aria-labelledby={`aba-${item.value}-tab`}
+          hidden={tab !== item.value}
+          id={`aba-${item.value}`}
+          key={item.value}
+          role="tabpanel"
+        >
+          {item.value === "imagens" ? (
+            <SiteImages images={siteImages} />
+          ) : item.value === "barbeiros" ? (
+            <SiteBarbers usage={professionalUsage} />
+          ) : item.value === "servicos" ? (
+            <SiteServices usage={serviceUsage} />
+          ) : item.value === "horarios" ? (
+            <SiteHours />
+          ) : (
+            <SitePlans usage={planUsage} />
+          )}
+        </div>
+      ))}
     </main>
   );
 }

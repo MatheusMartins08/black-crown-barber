@@ -8,7 +8,6 @@ import {
   bookingRules,
   formatLongDate,
   formatSlotLabel,
-  getOpeningWindow,
   getProfessional,
   getTodayIso,
   type ProfessionalChoice,
@@ -127,7 +126,9 @@ export default function ScheduleStep({
               <CalendarX2 aria-hidden="true" size={20} strokeWidth={1.6} />
             </span>
             <p className="booking-empty__title">
-              {getOpeningWindow(activeDate) ? "Nenhum horário livre neste dia." : "A barbearia não abre neste dia."}
+              {days?.find((day) => day.date === activeDate)?.status === "closed"
+                ? "A barbearia não abre neste dia."
+                : "Nenhum horário livre neste dia."}
             </p>
             <p className="booking-empty__text">
               {professional

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { isProfessionalChoice, isServiceId } from "../data/booking";
-import { openingHours, siteConfig } from "../data/site";
-import { getPublicPlans, getPublicProfessionals, getPublicServices } from "../lib/catalog";
+import { describeOpenDays } from "../data/hours";
+import { siteConfig } from "../data/site";
+import { getPublicOpeningPeriods, getPublicPlans, getPublicProfessionals, getPublicServices } from "../lib/catalog";
 import { BookingCatalogProvider } from "./components/booking-catalog";
 import BookingFlow from "./components/booking-flow";
 import BookingHeader from "./components/booking-header";
@@ -21,15 +22,15 @@ function firstValue(value: string | string[] | undefined) {
 }
 
 export default async function AgendamentoPage({ searchParams }: PageProps<"/agendamento">) {
-  const [params, professionals, services, plans] = await Promise.all([
+  const [params, professionals, services, plans, periods] = await Promise.all([
     searchParams,
     getPublicProfessionals(),
     getPublicServices(),
     getPublicPlans(),
+    getPublicOpeningPeriods(),
   ]);
   const serviceParam = firstValue(params.servico);
   const professionalParam = firstValue(params.profissional);
-  const openDays = openingHours.filter((item) => item.hours !== "Fechado");
 
   return (
     <div className="booking-page">
@@ -47,9 +48,7 @@ export default async function AgendamentoPage({ searchParams }: PageProps<"/agen
           <span>
             {siteConfig.name} · {siteConfig.address}, {siteConfig.city}
           </span>
-          <span>
-            {openDays[0]?.day.replace("-feira", "")} a {openDays.at(-1)?.day.toLowerCase()}
-          </span>
+          <span>{describeOpenDays(periods)}</span>
         </div>
       </footer>
     </div>

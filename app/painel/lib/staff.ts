@@ -1,5 +1,14 @@
 import "server-only";
 import { cache } from "react";
+import {
+  openingPeriodColumns,
+  scheduleExceptionColumns,
+  sortPeriods,
+  toOpeningPeriod,
+  toScheduleException,
+  type OpeningPeriodRow,
+  type ScheduleExceptionRow,
+} from "../../data/hours";
 import { planColumns, sortPlans, toPlan, type PlanRow } from "../../data/plans";
 import {
   professionalColumns,
@@ -170,3 +179,26 @@ export async function getPlanUsage(): Promise<Record<string, PlanUsage>> {
   }
   return usage;
 }
+
+/**
+ * Horário semanal e exceções a partir de hoje (as passadas não interessam ao painel).
+ * Exceções só a equipe lê (RLS).
+ */
+export const getStaffSchedule = cache(async () => {
+  const supabase = await getSupabaseServerClient();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const [periods, exceptions] = await Promise.all([
+    supabase.from("opening_periods").select(openingPeriodColumns),
+    supabase
+      .from("schedule_exceptions")
+      .select(scheduleExceptionColumns)
+      .gte("ends_on", today)
+      .order("starts_on")
+      .order("kind"),
+  ]);
+  if (periods.error || exceptions.error) throw new Error("Não foi possível carregar o horário de funcionamento.");
+  return {
+    periods: sortPeriods((periods.data as OpeningPeriodRow[]).map(toOpeningPeriod)),
+    exceptions: (exceptions.data as ScheduleExceptionRow[]).map(toScheduleException),
+  };
+});

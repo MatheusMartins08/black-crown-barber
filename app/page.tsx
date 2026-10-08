@@ -14,13 +14,14 @@ import {
 import SiteFooter from "./components/site-footer";
 import SiteHeader from "./components/site-header";
 import { localBusinessDetails, siteConfig } from "./data/site";
-import { getPublicProfessionals, getPublicServices, getPublicSiteImages } from "./lib/catalog";
+import { getPublicOpeningPeriods, getPublicProfessionals, getPublicServices, getPublicSiteImages } from "./lib/catalog";
 
 export default async function Home() {
-  const [professionals, siteImages, services] = await Promise.all([
+  const [professionals, siteImages, services, periods] = await Promise.all([
     getPublicProfessionals(),
     getPublicSiteImages(),
     getPublicServices(),
+    getPublicOpeningPeriods(),
   ]);
   const galleryImages = siteImages.filter((image) => image.slot !== "about");
   const aboutImage = siteImages.find((image) => image.slot === "about") ?? null;
@@ -60,18 +61,18 @@ export default async function Home() {
       <SiteHeader />
       <main>
         <Hero />
-        <QuickInfo />
+        <QuickInfo periods={periods} />
         <ServicesSection services={services} />
         <GallerySection images={galleryImages} />
         <AboutSection image={aboutImage} />
         <TeamSection professionals={professionals} />
         <TestimonialsSection />
         <BookingSection />
-        <LocationSection />
+        <LocationSection periods={periods} />
         <FAQSection />
         <FinalCallToAction />
       </main>
-      <SiteFooter />
+      <SiteFooter periods={periods} />
     </>
   );
 }

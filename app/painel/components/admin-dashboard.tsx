@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { CircleAlert } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
 import { bookingRules, getTodayIso } from "../../data/booking";
+import { getDayPeriods } from "../../data/hours";
 import {
   addDays,
   formatCurrency,
@@ -12,7 +13,6 @@ import {
   getHistoryStart,
   getPayout,
   getServicePrice,
-  getWeekday,
   listServicesFor,
   summarizeByBarber,
   type Appointment,
@@ -22,7 +22,7 @@ import AppointmentsTable, { type AgendaFilters } from "./appointments-table";
 import BarberProduction from "./barber-production";
 import DateNav from "./date-nav";
 import { isSubscriber } from "./membership-tag";
-import { findProfessional, usePainelProfessionals, usePainelServices } from "./painel-catalog";
+import { findProfessional, usePainelProfessionals, usePainelSchedule, usePainelServices } from "./painel-catalog";
 
 function getErrorMessage(error: unknown) {
   return error instanceof PainelApiError ? error.message : "Não foi possível falar com o banco. Tente novamente.";
@@ -53,6 +53,7 @@ export default function AdminDashboard() {
 
   const professionals = usePainelProfessionals();
   const services = usePainelServices();
+  const schedule = usePainelSchedule();
   const appointments = useMemo(() => data ?? [], [data]);
   const serviceColumns = useMemo(() => listServicesFor(services, appointments), [services, appointments]);
   const summaries = useMemo(
@@ -160,7 +161,11 @@ export default function AdminDashboard() {
       <AppointmentsTable
         appointments={appointments}
         filters={filters}
-        isClosed={getWeekday(selectedDate) === 0}
+        // Fechado sem nenhum horário marcado. Se houver agendamentos (ex.: exceção criada depois,
+        // com conflito confirmado), a agenda continua aparecendo para a equipe resolver.
+        isClosed={
+          appointments.length === 0 && getDayPeriods(selectedDate, schedule.periods, schedule.exceptions).length === 0
+        }
         onFiltersChange={setFilters}
         onUpdate={updateAppointment}
       />

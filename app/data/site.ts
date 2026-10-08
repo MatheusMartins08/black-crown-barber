@@ -82,15 +82,8 @@ export const testimonials = [
   },
 ] as const;
 
-export const openingHours = [
-  { day: "Segunda-feira", hours: "09:00–20:00", dayOfWeek: "Monday" },
-  { day: "Terça-feira", hours: "09:00–20:00", dayOfWeek: "Tuesday" },
-  { day: "Quarta-feira", hours: "09:00–20:00", dayOfWeek: "Wednesday" },
-  { day: "Quinta-feira", hours: "09:00–20:00", dayOfWeek: "Thursday" },
-  { day: "Sexta-feira", hours: "09:00–21:00", dayOfWeek: "Friday" },
-  { day: "Sábado", hours: "09:00–18:00", dayOfWeek: "Saturday" },
-  { day: "Domingo", hours: "Fechado", dayOfWeek: "Sunday" },
-] as const;
+// Horário de funcionamento: vem da tabela opening_periods (app/lib/catalog.ts), editado no
+// painel em Edição do site > Horários.
 
 export const frequentlyAskedQuestions = [
   {
