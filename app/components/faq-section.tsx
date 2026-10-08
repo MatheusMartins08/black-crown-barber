@@ -1,7 +1,11 @@
+import { describeServiceDurations, type Service } from "../data/services";
 import { frequentlyAskedQuestions } from "../data/site";
 import Reveal from "./reveal";
 
-export default function FAQSection() {
+/** `services`: serviços ativos do Supabase, para a resposta sobre duração. */
+export default function FAQSection({ services }: { services: Service[] }) {
+  const durations = describeServiceDurations(services);
+
   return (
     <section aria-labelledby="faq-title" className="section faq" id="faq">
       <div className="section__inner faq__layout">
@@ -14,7 +18,7 @@ export default function FAQSection() {
           {frequentlyAskedQuestions.map((item) => (
             <details className="faq-item" key={item.question}>
               <summary>{item.question}</summary>
-              <p>{item.answer}</p>
+              <p>{"answerFrom" in item && durations ? durations : item.answer}</p>
             </details>
           ))}
         </Reveal>

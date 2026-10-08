@@ -69,7 +69,7 @@ export default async function Home() {
         <TestimonialsSection />
         <BookingSection />
         <LocationSection periods={periods} />
-        <FAQSection />
+        <FAQSection services={services} />
         <FinalCallToAction />
       </main>
       <SiteFooter periods={periods} />

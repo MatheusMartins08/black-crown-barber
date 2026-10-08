@@ -103,8 +103,10 @@ export const frequentlyAskedQuestions = [
   },
   {
     question: "Quanto tempo dura um corte?",
-    answer:
-      "O corte masculino leva cerca de 30 minutos e o combo de corte e barba, cerca de 50 minutos. O tempo pode variar conforme o estilo escolhido.",
+    // A resposta é montada com a duração atual de cada serviço (Supabase); este texto é o
+    // reserva caso a lista de serviços venha vazia.
+    answer: "Cada serviço mostra a duração no menu e no agendamento. O tempo pode variar conforme o estilo escolhido.",
+    answerFrom: "serviceDurations",
   },
   {
     question: "Vocês atendem sem horário marcado?",

@@ -76,6 +76,16 @@ export function formatDuration(minutes: number) {
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
 
+/**
+ * Resposta do FAQ sobre duração, com o catálogo atual:
+ * "Corte masculino: cerca de 30 min. Barba: cerca de 30 min. … O tempo pode variar conforme o estilo escolhido."
+ */
+export function describeServiceDurations(services: readonly Pick<Service, "name" | "durationMinutes">[]) {
+  if (!services.length) return null;
+  const lines = services.map((service) => `${service.name}: cerca de ${formatDuration(service.durationMinutes)}.`);
+  return `${lines.join(" ")} O tempo pode variar conforme o estilo escolhido.`;
+}
+
 // --- Cadastro no painel ---
 
 export const serviceLimits = {

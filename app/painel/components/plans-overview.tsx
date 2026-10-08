@@ -165,8 +165,8 @@ export default function PlansOverview({
       )}
 
       <p className="admin-footnote">
-        Em dia, pendentes e congelados mostram a situação de hoje. Cada benefício vale de segunda a domingo; faltas e
-        cancelamentos liberam o uso. A mensalidade vence no início de cada mês do plano e, depois de{" "}
+        Em dia, pendentes e congelados mostram a situação de hoje. Cada benefício vale por semana (segunda a domingo) ou
+        por mês (o ciclo da mensalidade), conforme o plano; faltas e cancelamentos liberam o uso. A mensalidade vence no início de cada mês do plano e, depois de{" "}
         {billingRules.graceDays} dias em aberto, o plano deixa de cobrir. Para trocar o plano de um cliente, use a aba
         Assinantes.
       </p>
