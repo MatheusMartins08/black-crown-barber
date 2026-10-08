@@ -23,16 +23,48 @@ export type PaymentMethod = "pix" | "cartao" | "dinheiro";
  */
 export type MembershipStatus = "ativo" | "pendente" | "atrasado" | "congelado" | "ex_assinante" | "avulso";
 
+/** Serviço do atendimento como a agenda da equipe enxerga: sem nenhum valor. */
+export type AgendaItem = {
+  serviceId: string;
+  serviceSlug: string;
+  serviceName: string;
+  durationMinutes: number;
+};
+
+/**
+ * Atendimento operacional (RPC get_team_agenda): o que a equipe precisa para trabalhar, sem
+ * preço, cobrado, repasse ou situação de pagamento. É o que o painel dos barbeiros recebe.
+ */
+export type AgendaAppointment = {
+  id: string;
+  code: string;
+  date: string;
+  time: string;
+  clientName: string;
+  /** Nome copiado na reserva, com todos os serviços ("Corte masculino + Sobrancelha"). */
+  serviceName: string;
+  /** Serviços do atendimento, na ordem da reserva (1 a 5). */
+  items: AgendaItem[];
+  /** Profissionais pelo id (uuid estável); os nomes vêm do cadastro atual, só para exibir. */
+  bookedWithId: string;
+  bookedWith: string;
+  performedById: string;
+  performedBy: string;
+  status: AppointmentStatus;
+  /** Duração total (soma dos serviços). */
+  durationMinutes: number;
+  /** Situação do cliente no dia. Na agenda da equipe é só "ativo" (plano vale) ou "avulso". */
+  membership: MembershipStatus;
+  /** Plano vigente no dia (inclusive congelado no painel do admin). */
+  planName: string | null;
+};
+
 /**
  * Um serviço do atendimento (appointment_services), com preço e duração copiados na reserva
  * e, ao concluir, a liquidação dele: o plano cobre serviço a serviço.
  */
-export type AppointmentItem = {
-  serviceId: string;
-  serviceSlug: string;
-  serviceName: string;
+export type AppointmentItem = AgendaItem & {
   price: number;
-  durationMinutes: number;
   /** Entrou no plano: o gravado ao concluir ou, em aberto, a cobertura atual. */
   covered: boolean;
   /** Cobrado e repasse deste serviço, gravados ao concluir. `null` enquanto não concluído. */
@@ -40,37 +72,16 @@ export type AppointmentItem = {
   payout: number | null;
 };
 
-/** Atendimento como o painel enxerga (view appointment_details). */
-export type Appointment = {
-  id: string;
-  code: string;
-  date: string;
-  time: string;
+/** Atendimento completo, só do admin (view appointment_details): a agenda mais os valores. */
+export type Appointment = Omit<AgendaAppointment, "items"> & {
   clientId: string;
-  clientName: string;
-  /**
-   * Primeiro serviço pelo id (uuid) e slug. O nome é o copiado na reserva, com todos os
-   * serviços ("Corte masculino + Sobrancelha"), e não muda se um serviço for renomeado.
-   */
+  /** Primeiro serviço pelo id (uuid) e slug. */
   serviceId: string;
   serviceSlug: string;
-  serviceName: string;
-  /** Serviços do atendimento, na ordem da reserva (1 a 5). */
+  /** Serviços do atendimento, com preço e liquidação. */
   items: AppointmentItem[];
-  /** Profissionais pelo id (uuid estável); os nomes vêm do cadastro atual, só para exibir. */
-  bookedWithId: string;
-  bookedWith: string;
-  performedById: string;
-  performedBy: string;
-  status: AppointmentStatus;
   /** Preço total copiado na reserva (soma dos serviços). */
   price: number;
-  /** Duração total (soma dos serviços). */
-  durationMinutes: number;
-  /** Situação do cliente no dia do atendimento. */
-  membership: MembershipStatus;
-  /** Plano vigente no dia (inclusive congelado). */
-  planName: string | null;
   /** O plano cobriu todos os serviços: o snapshot gravado ao concluir ou, em aberto, a cobertura atual. */
   covered: boolean;
   /** Valor cobrado e repasse (somas dos serviços) gravados ao concluir. `null` enquanto não concluído. */
@@ -185,9 +196,15 @@ function getItemPayout(appointment: Appointment, item: AppointmentItem) {
   return appointment.status === "concluido" ? item.payout ?? 0 : 0;
 }
 
+/** Ids dos serviços do atendimento (sem itens, o 1º serviço do atendimento completo). */
+function getServiceIds(appointment: AgendaAppointment | Appointment) {
+  if (appointment.items.length) return appointment.items.map((item) => item.serviceId);
+  return "serviceId" in appointment ? [appointment.serviceId] : [];
+}
+
 /** O atendimento tem o serviço (filtro da agenda)? */
-export function hasService(appointment: Appointment, serviceId: string) {
-  return getAppointmentItems(appointment).some((item) => item.serviceId === serviceId);
+export function hasService(appointment: AgendaAppointment | Appointment, serviceId: string) {
+  return getServiceIds(appointment).includes(serviceId);
 }
 
 // --- Datas (strings YYYY-MM-DD, calculadas em UTC para não depender do fuso) ---
@@ -312,7 +329,8 @@ export function formatCurrency(value: number) {
   return `R$\u00a0${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${cents}`;
 }
 
-export type BarberSummary = {
+/** Produção em quantidade (o que o painel dos barbeiros mostra): nenhum valor. */
+export type TeamBarberSummary = {
   professionalId: string;
   barberName: string;
   specialty: string;
@@ -321,6 +339,9 @@ export type BarberSummary = {
   booked: number;
   /** Serviços feitos nos atendimentos concluídos (id do serviço → quantidade). */
   byService: Record<string, number>;
+};
+
+export type BarberSummary = TeamBarberSummary & {
   /** Serviços concluídos cobertos pelo plano e avulsos (cada serviço conta um). */
   planCount: number;
   walkInCount: number;
@@ -334,7 +355,10 @@ export type BarberSummary = {
  * excluídos, os que executaram algum atendimento da lista. Como a lista é a do período
  * consultado (dia, semana ou mês), um excluído aparece só nos períodos em que atendeu.
  */
-export function listProfessionalsFor(professionals: readonly Professional[], appointments: readonly Appointment[]) {
+export function listProfessionalsFor(
+  professionals: readonly Professional[],
+  appointments: readonly (AgendaAppointment | Appointment)[],
+) {
   const performers = new Set(appointments.map((appointment) => appointment.performedById));
   return professionals.filter((professional) => professional.isActive || performers.has(professional.id));
 }
@@ -343,8 +367,8 @@ export function listProfessionalsFor(professionals: readonly Professional[], app
  * Serviços que entram como colunas da agenda e do fechamento: os ativos e, mesmo inativos
  * ou excluídos, os que aparecem nos atendimentos da lista (o histórico continua visível).
  */
-export function listServicesFor(services: readonly Service[], appointments: readonly Appointment[]) {
-  const used = new Set(appointments.flatMap((appointment) => getAppointmentItems(appointment).map((item) => item.serviceId)));
+export function listServicesFor(services: readonly Service[], appointments: readonly (AgendaAppointment | Appointment)[]) {
+  const used = new Set(appointments.flatMap(getServiceIds));
   return services.filter((service) => (service.isActive && !service.deletedAt) || used.has(service.id));
 }
 
@@ -392,6 +416,31 @@ export function summarizeByBarber(
       planPayout: roundMoney(planPayout),
       walkInPayout: roundMoney(walkInPayout),
       total: roundMoney(planPayout + walkInPayout),
+    };
+  });
+}
+
+/** Produção do dia por profissional (quem executou), só em quantidade: a da equipe. */
+export function summarizeTeam(
+  appointments: readonly AgendaAppointment[],
+  professionals: readonly Professional[],
+  services: readonly Service[],
+): TeamBarberSummary[] {
+  const columns = listServicesFor(services, appointments);
+  return listProfessionalsFor(professionals, appointments).map((professional) => {
+    const own = appointments.filter((appointment) => appointment.performedById === professional.id);
+    const completed = own.filter((appointment) => appointment.status === "concluido");
+    const byService: Record<string, number> = Object.fromEntries(columns.map((service) => [service.id, 0]));
+    for (const appointment of completed) {
+      for (const serviceId of getServiceIds(appointment)) byService[serviceId] = (byService[serviceId] ?? 0) + 1;
+    }
+    return {
+      professionalId: professional.id,
+      barberName: professional.name,
+      specialty: professional.specialty,
+      completed: completed.length,
+      booked: own.filter((appointment) => appointment.status !== "cancelado").length,
+      byService,
     };
   });
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState, type FormEvent } from "react";
-import { Eye, EyeOff } from "lucide-react";
 import Dialog from "../../components/dialog";
 import { formatPhone } from "../../data/booking";
 import { describePlanBenefits, getPlan, type PlanId } from "../../data/plans";
@@ -23,7 +22,15 @@ import {
   SubscriberApiError,
   updateSubscriber,
 } from "../../lib/subscribers-api";
-import { DialogFrame, Field, FormAlert, SubmitButton, useDialogIds, type DialogIds } from "./admin-form";
+import {
+  DialogFrame,
+  Field,
+  FormAlert,
+  PasswordInput,
+  SubmitButton,
+  useDialogIds,
+  type DialogIds,
+} from "./admin-form";
 import { usePainelPlans, usePainelServices } from "./painel-catalog";
 
 const statusDescriptions: Record<SubscriptionStatus, string> = {
@@ -31,49 +38,6 @@ const statusDescriptions: Record<SubscriptionStatus, string> = {
   congelado: "O cliente entra no site, mas os benefícios ficam pausados até reativar.",
   inativo: "Assinatura encerrada. O cliente agenda pagando o valor avulso.",
 };
-
-function PasswordInput({
-  id,
-  value,
-  invalid,
-  onChange,
-  onBlur,
-}: {
-  id: string;
-  value: string;
-  invalid: boolean;
-  onChange: (value: string) => void;
-  onBlur: () => void;
-}) {
-  const [visible, setVisible] = useState(false);
-
-  return (
-    <span className="admin-password">
-      <input
-        aria-describedby={`${id}-message`}
-        aria-invalid={invalid || undefined}
-        autoCapitalize="none"
-        autoComplete="new-password"
-        id={id}
-        maxLength={passwordRules.maxLength}
-        onBlur={onBlur}
-        onChange={(event) => onChange(event.target.value)}
-        spellCheck={false}
-        type={visible ? "text" : "password"}
-        value={value}
-      />
-      <button
-        aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
-        aria-pressed={visible}
-        className="admin-password__toggle"
-        onClick={() => setVisible((current) => !current)}
-        type="button"
-      >
-        {visible ? <EyeOff aria-hidden="true" size={16} /> : <Eye aria-hidden="true" size={16} />}
-      </button>
-    </span>
-  );
-}
 
 function Segmented<T extends string>({
   label,
@@ -249,6 +213,7 @@ function SubscriberForm({
             <PasswordInput
               id={fieldId("password")}
               invalid={Boolean(visible("password"))}
+              maxLength={passwordRules.maxLength}
               onBlur={() => touch("password")}
               onChange={setPassword}
               value={password}
@@ -387,6 +352,7 @@ function ResetPasswordForm({
         <PasswordInput
           id={fieldId}
           invalid={Boolean(visibleError)}
+          maxLength={passwordRules.maxLength}
           onBlur={() => setTouched(true)}
           onChange={setPassword}
           value={password}

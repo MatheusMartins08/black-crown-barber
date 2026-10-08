@@ -1,10 +1,13 @@
-// Horário de funcionamento (opening_periods) e exceções da barbearia (schedule_exceptions).
-// O banco calcula a agenda (private.day_periods / day_blocks); as funções daqui repetem a
-// mesma regra para exibir horários no site e apontar conflitos no painel antes de salvar.
+// Horário de funcionamento (opening_periods) e exceções (schedule_exceptions), da barbearia
+// (professionalId nulo) e de cada profissional. O banco calcula a agenda
+// (private.day_periods / professional_day_periods); as funções daqui repetem a mesma regra
+// para exibir horários e apontar conflitos no painel antes de salvar.
 // Puro (sem React e sem rede). Datas YYYY-MM-DD e horas HH:MM, no fuso da barbearia.
 
 export type OpeningPeriod = {
   id: string;
+  /** null = barbearia; uuid = horário semanal próprio do profissional. */
+  professionalId: string | null;
   /** 0 = domingo … 6 = sábado (extract(dow) do Postgres). */
   weekday: number;
   opensAt: string;
@@ -15,6 +18,8 @@ export type ExceptionKind = "fechado" | "horario_especial" | "bloqueio";
 
 export type ScheduleException = {
   id: string;
+  /** null = barbearia; uuid = folga, ausência, horário especial ou bloqueio do profissional. */
+  professionalId: string | null;
   startsOn: string;
   endsOn: string;
   kind: ExceptionKind;
@@ -24,9 +29,16 @@ export type ScheduleException = {
   reason: string;
 };
 
-export type OpeningPeriodRow = { id: string; weekday: number; opens_at: string; closes_at: string };
+export type OpeningPeriodRow = {
+  id: string;
+  professional_id: string | null;
+  weekday: number;
+  opens_at: string;
+  closes_at: string;
+};
 export type ScheduleExceptionRow = {
   id: string;
+  professional_id: string | null;
   starts_on: string;
   ends_on: string;
   kind: ExceptionKind;
@@ -35,8 +47,8 @@ export type ScheduleExceptionRow = {
   reason: string | null;
 };
 
-export const openingPeriodColumns = "id, weekday, opens_at, closes_at";
-export const scheduleExceptionColumns = "id, starts_on, ends_on, kind, opens_at, closes_at, reason";
+export const openingPeriodColumns = "id, professional_id, weekday, opens_at, closes_at";
+export const scheduleExceptionColumns = "id, professional_id, starts_on, ends_on, kind, opens_at, closes_at, reason";
 
 /** "09:00:00" -> "09:00". */
 export function toHourMinute(value: string) {
@@ -44,12 +56,19 @@ export function toHourMinute(value: string) {
 }
 
 export function toOpeningPeriod(row: OpeningPeriodRow): OpeningPeriod {
-  return { id: row.id, weekday: row.weekday, opensAt: toHourMinute(row.opens_at), closesAt: toHourMinute(row.closes_at) };
+  return {
+    id: row.id,
+    professionalId: row.professional_id,
+    weekday: row.weekday,
+    opensAt: toHourMinute(row.opens_at),
+    closesAt: toHourMinute(row.closes_at),
+  };
 }
 
 export function toScheduleException(row: ScheduleExceptionRow): ScheduleException {
   return {
     id: row.id,
+    professionalId: row.professional_id,
     startsOn: row.starts_on,
     endsOn: row.ends_on,
     kind: row.kind,
@@ -145,30 +164,84 @@ export function coversDate(exception: Pick<ScheduleException, "startsOn" | "ends
   return exception.startsOn <= isoDate && isoDate <= exception.endsOn;
 }
 
-/** Períodos de atendimento da data: nenhum se "fechado"; os de "horário especial"; senão o semanal. */
-export function getDayPeriods(
-  isoDate: string,
-  periods: readonly Pick<OpeningPeriod, "weekday" | "opensAt" | "closesAt">[],
-  exceptions: readonly Pick<ScheduleException, "startsOn" | "endsOn" | "kind" | "opensAt" | "closesAt">[],
-) {
+type PeriodLike = Pick<OpeningPeriod, "weekday" | "opensAt" | "closesAt"> & { professionalId?: string | null };
+type ExceptionLike = Pick<ScheduleException, "startsOn" | "endsOn" | "kind" | "opensAt" | "closesAt"> & {
+  professionalId?: string | null;
+};
+type DayPeriod = { opensAt: string; closesAt: string };
+
+/** Linhas de um dono: a barbearia (null) ou um profissional. */
+export function ownedBy<T extends { professionalId?: string | null }>(list: readonly T[], professionalId: string | null) {
+  return list.filter((item) => (item.professionalId ?? null) === professionalId);
+}
+
+/**
+ * Períodos de um dono na data: nenhum se "fechado"; os de "horário especial"; senão o semanal.
+ * `null` quando não há exceção que decida e o dono não tem semanal (o profissional herda).
+ */
+function ownerDayPeriods(isoDate: string, periods: readonly PeriodLike[], exceptions: readonly ExceptionLike[]) {
   const today = exceptions.filter((exception) => coversDate(exception, isoDate));
   if (today.some((exception) => exception.kind === "fechado")) return [];
   const special = today.filter((exception) => exception.kind === "horario_especial");
-  if (special.length) return special.map((exception) => ({ opensAt: exception.opensAt!, closesAt: exception.closesAt! }));
+  if (special.length) {
+    return special.map((exception): DayPeriod => ({ opensAt: exception.opensAt!, closesAt: exception.closesAt! }));
+  }
+  if (!periods.length) return null;
   const weekday = getWeekdayOf(isoDate);
   return periods
     .filter((period) => period.weekday === weekday)
-    .map((period) => ({ opensAt: period.opensAt, closesAt: period.closesAt }));
+    .map((period): DayPeriod => ({ opensAt: period.opensAt, closesAt: period.closesAt }));
 }
 
-/** Trechos bloqueados da data (exceção "bloqueio"). */
-export function getDayBlocks(
-  isoDate: string,
-  exceptions: readonly Pick<ScheduleException, "startsOn" | "endsOn" | "kind" | "opensAt" | "closesAt">[],
-) {
+function ownerDayBlocks(isoDate: string, exceptions: readonly ExceptionLike[]) {
   return exceptions
     .filter((exception) => exception.kind === "bloqueio" && coversDate(exception, isoDate))
-    .map((exception) => ({ opensAt: exception.opensAt!, closesAt: exception.closesAt! }));
+    .map((exception): DayPeriod => ({ opensAt: exception.opensAt!, closesAt: exception.closesAt! }));
+}
+
+/** Períodos de atendimento da barbearia na data (as linhas de profissionais são ignoradas). */
+export function getDayPeriods(isoDate: string, periods: readonly PeriodLike[], exceptions: readonly ExceptionLike[]) {
+  return ownerDayPeriods(isoDate, ownedBy(periods, null), ownedBy(exceptions, null)) ?? [];
+}
+
+/** Trechos bloqueados da barbearia na data (exceção "bloqueio"). */
+export function getDayBlocks(isoDate: string, exceptions: readonly ExceptionLike[]) {
+  return ownerDayBlocks(isoDate, ownedBy(exceptions, null));
+}
+
+// --- Mesma regra de private.professional_day_periods / professional_day_blocks ---
+
+/**
+ * Horário efetivo do profissional na data: o próprio (folga ou ausência, horário especial ou
+ * semanal; sem semanal, segue a barbearia) limitado ao da barbearia. `periods` e `exceptions`
+ * são todas as linhas (barbearia e profissionais).
+ */
+export function getProfessionalDayPeriods(
+  isoDate: string,
+  professionalId: string,
+  periods: readonly PeriodLike[],
+  exceptions: readonly ExceptionLike[],
+) {
+  const shop = getDayPeriods(isoDate, periods, exceptions);
+  const own = ownerDayPeriods(isoDate, ownedBy(periods, professionalId), ownedBy(exceptions, professionalId));
+  if (own === null) return shop;
+
+  const result: DayPeriod[] = [];
+  for (const mine of own) {
+    for (const open of shop) {
+      const opensAt = mine.opensAt > open.opensAt ? mine.opensAt : open.opensAt;
+      const closesAt = mine.closesAt < open.closesAt ? mine.closesAt : open.closesAt;
+      if (opensAt < closesAt && !result.some((item) => item.opensAt === opensAt && item.closesAt === closesAt)) {
+        result.push({ opensAt, closesAt });
+      }
+    }
+  }
+  return result.sort((a, b) => a.opensAt.localeCompare(b.opensAt));
+}
+
+/** Bloqueios efetivos do profissional na data: os da barbearia e os dele. */
+export function getProfessionalDayBlocks(isoDate: string, professionalId: string, exceptions: readonly ExceptionLike[]) {
+  return [...getDayBlocks(isoDate, exceptions), ...ownerDayBlocks(isoDate, ownedBy(exceptions, professionalId))];
 }
 
 function toMinutes(time: string) {
@@ -181,23 +254,22 @@ export type ScheduledVisit = {
   date: string;
   time: string;
   durationMinutes: number;
+  /** Quem executa: o atendimento precisa caber no horário efetivo dele. */
+  professionalId: string;
 };
 
 /**
- * O atendimento cabe no expediente da data? Mesma regra de appointments_prepare: começa e
- * termina dentro de um único período e não encosta em trecho bloqueado.
+ * O atendimento cabe no horário efetivo de quem executa? Mesma regra de appointments_prepare:
+ * começa e termina dentro de um único período e não encosta em trecho bloqueado.
+ * `periods` e `exceptions` são todas as linhas (barbearia e profissionais).
  */
-export function fitsSchedule(
-  visit: ScheduledVisit,
-  periods: readonly Pick<OpeningPeriod, "weekday" | "opensAt" | "closesAt">[],
-  exceptions: readonly Pick<ScheduleException, "startsOn" | "endsOn" | "kind" | "opensAt" | "closesAt">[],
-) {
+export function fitsSchedule(visit: ScheduledVisit, periods: readonly PeriodLike[], exceptions: readonly ExceptionLike[]) {
   const start = toMinutes(visit.time);
   const end = start + visit.durationMinutes;
-  const inside = getDayPeriods(visit.date, periods, exceptions).some(
+  const inside = getProfessionalDayPeriods(visit.date, visit.professionalId, periods, exceptions).some(
     (period) => start >= toMinutes(period.opensAt) && end <= toMinutes(period.closesAt),
   );
-  const blocked = getDayBlocks(visit.date, exceptions).some(
+  const blocked = getProfessionalDayBlocks(visit.date, visit.professionalId, exceptions).some(
     (block) => start < toMinutes(block.closesAt) && end > toMinutes(block.opensAt),
   );
   return inside && !blocked;
@@ -235,6 +307,13 @@ export const exceptionKindLabels: Record<ExceptionKind, string> = {
   bloqueio: "Bloquear um trecho",
 };
 
+/** Os mesmos tipos, como o profissional os chama (folga e férias são "fechado" dele). */
+export const professionalExceptionKindLabels: Record<ExceptionKind, string> = {
+  fechado: "Folga ou ausência (dia todo)",
+  horario_especial: "Horário especial",
+  bloqueio: "Bloquear um trecho",
+};
+
 export type ExceptionInput = {
   startsOn: string;
   endsOn: string;
@@ -263,10 +342,13 @@ export function validateException(input: ExceptionInput, today: string): Excepti
 }
 
 /** Descrição curta de uma exceção: "15/11 · Fechado o dia todo", "20/12 a 27/12 · Horário especial 09:00–12:00". */
-export function describeException(exception: Pick<ScheduleException, "startsOn" | "endsOn" | "kind" | "opensAt" | "closesAt">) {
+export function describeException(
+  exception: Pick<ScheduleException, "startsOn" | "endsOn" | "kind" | "opensAt" | "closesAt">,
+  labels: Record<ExceptionKind, string> = exceptionKindLabels,
+) {
   const format = (isoDate: string) => isoDate.split("-").reverse().slice(0, 2).join("/");
   const dates =
     exception.startsOn === exception.endsOn ? format(exception.startsOn) : `${format(exception.startsOn)} a ${format(exception.endsOn)}`;
-  const label = exceptionKindLabels[exception.kind];
+  const label = labels[exception.kind];
   return exception.kind === "fechado" ? `${dates} · ${label}` : `${dates} · ${label} ${exception.opensAt}–${exception.closesAt}`;
 }

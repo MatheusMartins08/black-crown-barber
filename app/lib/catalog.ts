@@ -94,7 +94,10 @@ export const getPublicPlans = unstable_cache(
 /** Horário semanal (um ou mais períodos por dia). As exceções não são públicas. */
 export const getPublicOpeningPeriods = unstable_cache(
   async () => {
-    const { data, error } = await getPublicClient().from("opening_periods").select(openingPeriodColumns);
+    const { data, error } = await getPublicClient()
+      .from("opening_periods")
+      .select(openingPeriodColumns)
+      .is("professional_id", null);
     if (error) throw new Error(`Não foi possível carregar o horário: ${error.message}`);
     return sortPeriods((data as OpeningPeriodRow[]).map(toOpeningPeriod));
   },

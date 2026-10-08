@@ -3,25 +3,36 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, CalendarDays, Menu, PenLine, Users, WalletCards, X } from "lucide-react";
+import { ArrowUpRight, CalendarClock, CalendarDays, Menu, PenLine, Users, WalletCards, X } from "lucide-react";
 import type { StaffRole } from "../lib/staff";
 import SignOutButton from "./sign-out-button";
 
-export const adminSections = [
-  { href: "/painel", label: "Visão geral", description: "Agenda e produção do dia", icon: CalendarDays },
-  { href: "/painel/clientes", label: "Clientes", description: "Clientes, assinantes e planos", icon: Users },
-  { href: "/painel/fechamento", label: "Fechamento", description: "Repasse da equipe por período", icon: WalletCards },
-  {
-    href: "/painel/site",
-    label: "Edição do site",
-    description: "Imagens, barbeiros, serviços, horários e planos",
-    icon: PenLine,
-    adminOnly: true,
-  },
-] as const;
+type Section = { href: string; label: string; description: string; icon: typeof CalendarDays };
+
+// Cada papel tem as suas telas; as páginas e o banco conferem o papel de novo.
+export const sectionsByRole: Record<StaffRole, readonly Section[]> = {
+  admin: [
+    { href: "/painel", label: "Visão geral", description: "Agenda e produção do dia", icon: CalendarDays },
+    { href: "/painel/clientes", label: "Clientes", description: "Clientes, assinantes e planos", icon: Users },
+    { href: "/painel/fechamento", label: "Fechamento", description: "Repasse da equipe por período", icon: WalletCards },
+    {
+      href: "/painel/site",
+      label: "Edição do site",
+      description: "Imagens, barbeiros, serviços, horários e planos",
+      icon: PenLine,
+    },
+  ],
+  barbeiro: [
+    { href: "/painel/equipe", label: "Visão geral", description: "Agenda da equipe no dia", icon: CalendarDays },
+    { href: "/painel/equipe/horario", label: "Meu horário", description: "Horário semanal, folgas e bloqueios", icon: CalendarClock },
+  ],
+};
+
+// A tela inicial de cada papel só fica ativa nela mesma (as outras ficam abaixo dela na URL).
+const homes = new Set(["/painel", "/painel/equipe"]);
 
 function isActive(pathname: string, href: string) {
-  return href === "/painel" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  return homes.has(href) ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
 
 /**
@@ -34,8 +45,7 @@ export default function AdminNav({ role, userLabel }: { role: StaffRole; userLab
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === pathname;
   const toggleRef = useRef<HTMLButtonElement>(null);
-  // Telas só do admin somem para o barbeiro (a página e o banco também conferem).
-  const sections = adminSections.filter((section) => !("adminOnly" in section) || role === "admin");
+  const sections = sectionsByRole[role];
   const current = sections.find((section) => isActive(pathname, section.href)) ?? sections[0];
 
   useEffect(() => {

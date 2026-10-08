@@ -48,8 +48,14 @@ async function requireAdmin() {
   const userId = data?.claims?.sub;
   if (!userId) return { error: failure("not_allowed", "Sua sessão terminou. Entre novamente no painel.") };
 
-  const { data: staff } = await supabase.from("staff_members").select("role").eq("user_id", userId).maybeSingle();
-  if (staff?.role !== "admin") return { error: failure("not_allowed", "Só o administrador gerencia assinantes.") };
+  const { data: staff } = await supabase
+    .from("staff_members")
+    .select("role, is_active")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (staff?.role !== "admin" || !staff.is_active) {
+    return { error: failure("not_allowed", "Só o administrador gerencia assinantes.") };
+  }
   return { supabase };
 }
 

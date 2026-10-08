@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
 import AdminHeader from "../components/admin-header";
-import NoAccess from "../components/no-access";
+import { StaffNoAccess } from "../components/no-access";
 import { PainelCatalogProvider } from "../components/painel-catalog";
 import {
-  getCurrentStaff,
+  requireStaff,
   getStaffPlans,
   getStaffProfessionals,
   getStaffSchedule,
@@ -25,27 +24,15 @@ export const metadata: Metadata = {
 
 const roleLabels = { admin: "Administrador", barbeiro: "Barbeiro" } as const;
 
-// Área logada do painel: Visão geral, Clientes, Fechamento e Edição do site compartilham
-// o cabeçalho, que continua montado ao trocar de tela.
+// Painel do admin: Visão geral, Clientes, Fechamento e Edição do site compartilham o
+// cabeçalho, que continua montado ao trocar de tela. Só o admin entra (o barbeiro é levado ao
+// painel dos barbeiros); cada página confere de novo, e o banco também (RLS).
 export default async function PainelLayout({ children }: { children: ReactNode }) {
-  const current = await getCurrentStaff();
-  if (!current) redirect("/painel/entrar");
+  const current = await requireStaff("admin");
+  if (!current) return <StaffNoAccess />;
 
   const { staff, email } = current;
-  if (!staff) {
-    return (
-      <div className="admin">
-        <AdminHeader showSections={false} />
-        <NoAccess
-          title="Sem acesso ao painel"
-          message="Este login não faz parte da equipe. Peça ao administrador para liberar o seu acesso."
-          signOut
-        />
-      </div>
-    );
-  }
-
-  const name = staff.display_name || email;
+  const name = staff.displayName || email;
   const [professionals, services, plans, walkInRate, schedule] = await Promise.all([
     getStaffProfessionals(),
     getStaffServices(),

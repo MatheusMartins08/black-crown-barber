@@ -1,5 +1,20 @@
 import { ShieldAlert } from "lucide-react";
+import AdminHeader from "./admin-header";
 import SignOutButton from "./sign-out-button";
+
+/** Logado, mas fora da equipe (ex.: assinante) ou com o acesso desativado pelo administrador. */
+export function StaffNoAccess() {
+  return (
+    <div className="admin">
+      <AdminHeader showSections={false} />
+      <NoAccess
+        title="Sem acesso ao painel"
+        message="Este login não tem acesso ativo ao painel. Fale com o administrador da barbearia."
+        signOut
+      />
+    </div>
+  );
+}
 
 /** Cartão "Sem acesso": login fora da equipe ou tela restrita ao administrador. */
 export default function NoAccess({

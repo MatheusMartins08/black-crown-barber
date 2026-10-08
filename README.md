@@ -38,9 +38,9 @@ The site reads and writes data in Supabase (schema and setup in [`supabase/READM
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Browser and server |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser and server (public key; access is enforced by RLS) |
-| `SUPABASE_SECRET_KEY` | Server only. Creates subscriber logins and resets their passwords. Never prefix it with `NEXT_PUBLIC_` |
+| `SUPABASE_SECRET_KEY` | Server only. Creates subscriber and barber logins and resets their passwords. Never prefix it with `NEXT_PUBLIC_` |
 
-The admin panel lives at `/painel` and requires a staff login (`/painel/entrar`). It has three screens: `/painel` (overview: day indicators, team production and the day's schedule), `/painel/clientes` (clients, subscribers and plans in tabs; `?aba=assinantes` or `?aba=planos` opens a tab) and `/painel/fechamento` (team payroll by day, week or month). Dates go back 6 months (`historyRules` in `app/data/painel.ts`).
+The panel uses one staff login (`/painel/entrar`); the role in `staff_members` decides where each person lands. Barbers (`role = barbeiro`) get `/painel/equipe` (the team's schedule for the day, without any financial data) and `/painel/equipe/horario` (their own hours, days off and blocks). Admins get the full panel, which has these screens: `/painel` (overview: day indicators, team production and the day's schedule), `/painel/clientes` (clients, subscribers and plans in tabs; `?aba=assinantes` or `?aba=planos` opens a tab) and `/painel/fechamento` (team payroll by day, week or month). Dates go back 6 months (`historyRules` in `app/data/painel.ts`).
 
 Open [http://localhost:3000](http://localhost:3000) to view the site. The development server refreshes the page as you edit the source files.
 

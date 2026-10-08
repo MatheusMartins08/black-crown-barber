@@ -2,9 +2,9 @@
 
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { SiteImage } from "../../data/site-images";
-import type { PlanUsage, ProfessionalUsage, ServiceUsage } from "../lib/staff";
+import type { BarberAccess, PlanUsage, ProfessionalUsage, ServiceUsage } from "../lib/staff";
 import SiteBarbers from "./site-barbers";
-import SiteHours from "./site-hours";
+import { HoursWorkspace } from "./site-hours";
 import SiteImages from "./site-images";
 import SitePlans from "./site-plans";
 import SiteServices from "./site-services";
@@ -28,12 +28,14 @@ function isTab(value: unknown): value is Tab {
  * A troca de aba fica na URL (?aba=) sem criar entrada no histórico.
  */
 export default function SiteEditorWorkspace({
+  barberAccess,
   initialTab,
   planUsage,
   professionalUsage,
   serviceUsage,
   siteImages,
 }: {
+  barberAccess: Record<string, BarberAccess>;
   initialTab?: string;
   planUsage: Record<string, PlanUsage>;
   professionalUsage: Record<string, ProfessionalUsage>;
@@ -121,11 +123,11 @@ export default function SiteEditorWorkspace({
           {item.value === "imagens" ? (
             <SiteImages images={siteImages} />
           ) : item.value === "barbeiros" ? (
-            <SiteBarbers usage={professionalUsage} />
+            <SiteBarbers access={barberAccess} usage={professionalUsage} />
           ) : item.value === "servicos" ? (
             <SiteServices usage={serviceUsage} />
           ) : item.value === "horarios" ? (
-            <SiteHours />
+            <HoursWorkspace />
           ) : (
             <SitePlans usage={planUsage} />
           )}

@@ -23,7 +23,7 @@ import {
   type ProfessionalErrors,
 } from "../../data/professionals";
 import { uploadSiteImage } from "../lib/image-upload";
-import type { ProfessionalUsage } from "../lib/staff";
+import type { BarberAccess, ProfessionalUsage } from "../lib/staff";
 import {
   deleteProfessionalAction,
   moveProfessionalAction,
@@ -33,6 +33,7 @@ import {
 } from "../site-actions";
 import { DialogFrame, Field, FormAlert, SubmitButton, useDialogIds, type DialogIds } from "./admin-form";
 import { PhotoField, usePhotoDraft } from "./admin-photo-field";
+import BarberAccessSection from "./barber-access";
 import BarberAvatar from "./barber-avatar";
 import { usePainelProfessionals } from "./painel-catalog";
 
@@ -45,8 +46,15 @@ const unexpected = "Não foi possível falar com o servidor. Verifique a conexã
 /**
  * Edição do site > Barbeiros: a equipe que aparece na landing, no agendamento e no painel.
  * Ninguém com histórico é apagado: sai do site ao ser inativado e continua nos registros.
+ * Em Editar, a seção "Acesso ao painel" cria e mantém o login de cada barbeiro.
  */
-export default function SiteBarbers({ usage }: { usage: Record<string, ProfessionalUsage> }) {
+export default function SiteBarbers({
+  usage,
+  access,
+}: {
+  usage: Record<string, ProfessionalUsage>;
+  access: Record<string, BarberAccess>;
+}) {
   const router = useRouter();
   // Excluídos ficam só no histórico (agenda e fechamento): não aparecem aqui.
   const professionals = usePainelProfessionals().filter((professional) => professional.deletedAt === null);
@@ -148,7 +156,13 @@ export default function SiteBarbers({ usage }: { usage: Record<string, Professio
                       {professional.isActive ? "Ativo" : "Inativo"}
                     </span>
                   </p>
-                  <p className="admin-site-item__meta">{professional.specialty || "Sem especialidade"}</p>
+                  <p className="admin-site-item__meta">
+                    {professional.specialty || "Sem especialidade"}
+                    {" · "}
+                    {access[professional.id]
+                      ? `Painel: ${access[professional.id].login ?? "por e-mail"}${access[professional.id].isActive ? "" : " (inativo)"}`
+                      : "Sem acesso ao painel"}
+                  </p>
                 </div>
                 <div className="admin-site-item__actions">
                   <span className="admin-site-item__order">
@@ -219,6 +233,7 @@ export default function SiteBarbers({ usage }: { usage: Record<string, Professio
       </details>
 
       <ProfessionalFormDialog
+        access={access}
         mode={formMode}
         onClose={() => setFormOpen(false)}
         onDelete={(professional) => {
@@ -253,6 +268,7 @@ export default function SiteBarbers({ usage }: { usage: Record<string, Professio
 // --- Adicionar / editar ---
 
 function ProfessionalForm({
+  access,
   mode,
   dialogIds,
   nameRef,
@@ -260,6 +276,7 @@ function ProfessionalForm({
   onDelete,
   onSaved,
 }: {
+  access: Record<string, BarberAccess>;
   mode: FormMode;
   dialogIds: DialogIds;
   nameRef: RefObject<HTMLInputElement | null>;
@@ -420,12 +437,19 @@ function ProfessionalForm({
         />
       </Field>
 
+      {current ? (
+        <BarberAccessSection access={access[current.id] ?? null} professionalId={current.id} />
+      ) : (
+        <p className="admin-field__hint">Depois de adicionar o barbeiro, abra Editar para criar o acesso dele ao painel.</p>
+      )}
+
       <FormAlert message={formError} />
     </DialogFrame>
   );
 }
 
 function ProfessionalFormDialog({
+  access,
   open,
   openKey,
   mode,
@@ -433,6 +457,7 @@ function ProfessionalFormDialog({
   onDelete,
   onSaved,
 }: {
+  access: Record<string, BarberAccess>;
   open: boolean;
   openKey: number;
   mode: FormMode;
@@ -453,6 +478,7 @@ function ProfessionalFormDialog({
       open={open}
     >
       <ProfessionalForm
+        access={access}
         dialogIds={dialogIds}
         nameRef={nameRef}
         key={openKey}

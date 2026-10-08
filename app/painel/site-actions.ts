@@ -12,6 +12,7 @@ import {
 import {
   fitsSchedule,
   openingPeriodColumns,
+  ownedBy,
   scheduleExceptionColumns,
   toOpeningPeriod,
   toScheduleException,
@@ -31,6 +32,7 @@ import { serviceIconKeys } from "../components/service-icons";
 import { catalogTags } from "../lib/catalog";
 import { supabaseUrl } from "../lib/supabase/env";
 import { getSupabaseServerClient } from "../lib/supabase/server";
+import { getCurrentStaff } from "./lib/staff";
 
 // Edição do site > Barbeiros. Tudo roda com a sessão do próprio admin (cookie): a RLS
 // de professionals/professional_services e as políticas do bucket site-media conferem
@@ -62,8 +64,12 @@ async function requireAdmin(): Promise<{ supabase: Supabase } | { error: SiteAct
   const userId = data?.claims?.sub;
   if (!userId) return { error: failure("Sua sessão terminou. Entre novamente no painel.") };
 
-  const { data: staff } = await supabase.from("staff_members").select("role").eq("user_id", userId).maybeSingle();
-  if (staff?.role !== "admin") return { error: failure("Só o administrador edita o conteúdo do site.") };
+  const { data: staff } = await supabase
+    .from("staff_members")
+    .select("role, is_active")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (staff?.role !== "admin" || !staff.is_active) return { error: failure("Só o administrador edita o conteúdo do site.") };
   return { supabase };
 }
 
@@ -850,12 +856,16 @@ export async function deletePlanAction(id: string): Promise<SiteActionResult> {
   return { ok: true, message: `${plan.name} foi excluído. Assinaturas e mensalidades antigas continuam no painel.` };
 }
 
-// --- Edição do site > Horários ---
+// --- Horários (Edição do site > Horários e Meu horário) ---
+//
+// O mesmo conjunto de ações edita o horário da barbearia (professionalId null, só o admin) e o
+// de um profissional (o admin edita qualquer um; o barbeiro, só o próprio). A RLS de
+// opening_periods / schedule_exceptions confere de novo no banco.
 //
 // Nada aqui cancela, remarca ou apaga agendamento. Antes de gravar um horário novo ou uma
-// exceção, a ação lista os agendamentos futuros que ficariam fora do expediente (mesma regra
-// de appointments_prepare) e só grava com a confirmação explícita do admin. Os agendamentos
-// continuam marcados; a equipe decide o que fazer com cada um.
+// exceção, a ação lista os agendamentos futuros que ficariam fora do horário de quem atende
+// (mesma regra de appointments_prepare) e só grava com a confirmação explícita. Os
+// agendamentos continuam marcados; a equipe decide o que fazer com cada um.
 
 export type ScheduleConflict = {
   id: string;
@@ -876,32 +886,83 @@ function shopToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 }
 
-/** Agendamentos ainda por acontecer que não caberiam no expediente proposto. */
+/** Dono do horário vindo do navegador: null (barbearia) ou um uuid. */
+function isOwner(value: unknown): value is string | null {
+  return value === null || isUuid(value);
+}
+
+/**
+ * Quem pode editar o horário deste dono: o admin edita a barbearia e qualquer profissional; o
+ * barbeiro só o próprio (o id que vem do navegador tem de ser o da sessão).
+ */
+async function requireScheduleEditor(professionalId: string | null): Promise<{ supabase: Supabase } | { error: SiteActionResult }> {
+  const current = await getCurrentStaff();
+  if (!current) return { error: failure("Sua sessão terminou. Entre novamente no painel.") };
+  const { staff } = current;
+  if (!staff?.isActive) return { error: failure("Seu acesso ao painel não está ativo.") };
+
+  const supabase = await getSupabaseServerClient();
+  if (staff.role === "admin") {
+    if (professionalId !== null) {
+      const { data } = await supabase.from("professionals").select("id").eq("id", professionalId).is("deleted_at", null).maybeSingle();
+      if (!data) return { error: failure("Profissional não encontrado. Recarregue a página.") };
+    }
+    return { supabase };
+  }
+
+  if (professionalId === null || professionalId !== staff.professionalId) {
+    return { error: failure("Você só pode alterar o seu próprio horário.") };
+  }
+  return { supabase };
+}
+
+type AgendaRow = {
+  id: string;
+  status: string;
+  local_date: string;
+  local_time: string;
+  starts_at: string;
+  duration_minutes: number;
+  customer_name: string;
+  items: { service_name: string }[] | null;
+  performed_by_id: string;
+  performed_by_name: string;
+};
+
+/**
+ * Agendamentos ainda por acontecer que não caberiam no horário proposto de quem atende.
+ * `periods` e `exceptions` já são o conjunto proposto (barbearia e profissionais). Com
+ * `professionalId`, só os atendimentos dele contam. Lê a agenda operacional (sem valores), que
+ * o barbeiro também pode ler.
+ */
 async function findConflicts(
   supabase: Supabase,
-  periods: readonly WeekPeriodInput[],
+  periods: readonly (WeekPeriodInput & { professionalId: string | null })[],
   exceptions: readonly ScheduleException[],
+  professionalId: string | null,
   range?: { start: string; end: string },
 ): Promise<ScheduleConflict[] | null> {
-  let query = supabase
-    .from("appointment_details")
-    .select("id, local_date, local_time, starts_at, ends_at, customer_name, service_name, performed_by_name")
-    .eq("status", "agendado")
-    .gte("starts_at", new Date().toISOString())
-    .order("starts_at");
-  if (range) query = query.gte("local_date", range.start).lte("local_date", range.end);
-  const { data, error } = await query;
+  const today = shopToday();
+  const { data, error } = await supabase.rpc("get_team_agenda", {
+    p_start: range ? (range.start > today ? range.start : today) : today,
+    p_end: range?.end ?? new Date(Date.parse(`${today}T00:00:00Z`) + 366 * 86_400_000).toISOString().slice(0, 10),
+  });
   if (error) return null;
 
-  return data
+  const now = Date.now();
+  return (data as AgendaRow[])
     .filter(
       (row) =>
+        row.status === "agendado" &&
+        Date.parse(row.starts_at) >= now &&
+        (professionalId === null || row.performed_by_id === professionalId) &&
         !fitsSchedule(
           {
             id: row.id,
             date: row.local_date,
             time: row.local_time,
-            durationMinutes: Math.round((Date.parse(row.ends_at) - Date.parse(row.starts_at)) / 60000),
+            durationMinutes: row.duration_minutes,
+            professionalId: row.performed_by_id,
           },
           periods,
           exceptions,
@@ -912,11 +973,12 @@ async function findConflicts(
       date: row.local_date,
       time: row.local_time,
       clientName: row.customer_name,
-      serviceName: row.service_name,
+      serviceName: (row.items ?? []).map((item) => item.service_name).join(" + "),
       professionalName: row.performed_by_name,
     }));
 }
 
+/** Horário semanal e exceções a partir de hoje, da barbearia e de todos os profissionais. */
 async function loadSchedule(supabase: Supabase) {
   const [periods, exceptions] = await Promise.all([
     supabase.from("opening_periods").select(openingPeriodColumns),
@@ -936,14 +998,16 @@ function conflictMessage(count: number) {
 }
 
 /**
- * Salva o horário semanal mexendo só no que mudou: remove os períodos retirados e depois
- * insere os novos (a validação acontece antes, então o banco não deve recusar a inserção).
+ * Salva o horário semanal do dono mexendo só no que mudou: remove os períodos retirados e
+ * depois insere os novos (a validação acontece antes, então o banco não deve recusar).
  */
 export async function saveWeekAction(
+  professionalId: string | null,
   periods: WeekPeriodInput[],
   confirmConflicts: boolean,
 ): Promise<ScheduleActionResult> {
   if (
+    !isOwner(professionalId) ||
     !Array.isArray(periods) ||
     periods.some(
       (period) =>
@@ -953,15 +1017,24 @@ export async function saveWeekAction(
   ) {
     return failure(validateWeek(Array.isArray(periods) ? periods : []) ?? "Revise o horário semanal.");
   }
+  // Profissional sem nenhum dia seguiria o horário da barbearia: para ficar sem atender, folga.
+  if (professionalId !== null && periods.length === 0) {
+    return failure("Deixe pelo menos um dia de atendimento. Para ficar um tempo sem atender, use uma folga ou ausência.");
+  }
 
-  const auth = await requireAdmin();
+  const auth = await requireScheduleEditor(professionalId);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
   const current = await loadSchedule(supabase);
   if (!current) return failure("Não foi possível carregar o horário atual. Nada foi alterado.");
 
-  const conflicts = await findConflicts(supabase, periods, current.exceptions);
+  const owned = ownedBy(current.periods, professionalId);
+  const proposed = [
+    ...current.periods.filter((period) => period.professionalId !== professionalId),
+    ...periods.map((period) => ({ ...period, professionalId })),
+  ];
+  const conflicts = await findConflicts(supabase, proposed, current.exceptions, professionalId);
   if (!conflicts) return failure("Não foi possível conferir os agendamentos. Nada foi alterado.");
   if (conflicts.length && confirmConflicts !== true) {
     return { ok: false, message: conflictMessage(conflicts.length), conflicts };
@@ -969,40 +1042,73 @@ export async function saveWeekAction(
 
   const key = (period: WeekPeriodInput) => `${period.weekday}|${period.opensAt}|${period.closesAt}`;
   const wanted = new Set(periods.map(key));
-  const existing = new Set(current.periods.map(key));
-  const toRemove = current.periods.filter((period) => !wanted.has(key(period)));
-  const toAdd = periods.filter((period, index) => !existing.has(key(period)) && periods.findIndex((item) => key(item) === key(period)) === index);
+  const existing = new Set(owned.map(key));
+  const toRemove = owned.filter((period) => !wanted.has(key(period)));
+  const toAdd = periods.filter(
+    (period, index) => !existing.has(key(period)) && periods.findIndex((item) => key(item) === key(period)) === index,
+  );
 
   if (!toRemove.length && !toAdd.length) return { ok: true, message: "O horário semanal já estava assim." };
 
   if (toRemove.length) {
-    const { error } = await supabase.from("opening_periods").delete().in("id", toRemove.map((period) => period.id));
-    if (error) return failure("Não foi possível salvar o horário. Nada foi alterado.");
+    const { data, error } = await supabase
+      .from("opening_periods")
+      .delete()
+      .in("id", toRemove.map((period) => period.id))
+      .select("id");
+    if (error || data?.length !== toRemove.length) return failure("Não foi possível salvar o horário. Nada foi alterado.");
   }
   if (toAdd.length) {
     const { error } = await supabase.from("opening_periods").insert(
-      toAdd.map((period) => ({ weekday: period.weekday, opens_at: period.opensAt, closes_at: period.closesAt })),
+      toAdd.map((period) => ({
+        professional_id: professionalId,
+        weekday: period.weekday,
+        opens_at: period.opensAt,
+        closes_at: period.closesAt,
+      })),
     );
     if (error) {
-      updateTag(catalogTags.hours);
+      if (professionalId === null) updateTag(catalogTags.hours);
       return failure(
         "Os períodos retirados foram removidos, mas os novos não foram gravados. Confira o horário semanal e salve de novo.",
       );
     }
   }
 
-  updateTag(catalogTags.hours);
+  // O site mostra só o horário da barbearia; o agendamento online calcula tudo na hora.
+  if (professionalId === null) updateTag(catalogTags.hours);
   return {
     ok: true,
     message: conflicts.length
-      ? `Horário salvo. ${conflicts.length === 1 ? "O agendamento fora do horário continua" : `Os ${conflicts.length} agendamentos fora do horário continuam`} na agenda para você decidir o que fazer.`
-      : "Horário semanal salvo. O site e o agendamento já usam o novo horário.",
+      ? `Horário salvo. ${conflicts.length === 1 ? "O agendamento fora do horário continua" : `Os ${conflicts.length} agendamentos fora do horário continuam`} na agenda para a equipe decidir o que fazer.`
+      : professionalId === null
+        ? "Horário semanal salvo. O site e o agendamento já usam o novo horário."
+        : "Horário semanal salvo. O agendamento online já usa o novo horário.",
   };
 }
 
-export async function saveExceptionAction(input: ExceptionInput, confirmConflicts: boolean): Promise<ScheduleActionResult> {
+/**
+ * O profissional volta a seguir o horário da barbearia (apaga só o semanal próprio). Não cria
+ * conflito: o horário efetivo só aumenta (o próprio já ficava limitado ao da barbearia).
+ */
+export async function resetWeekAction(professionalId: string): Promise<SiteActionResult> {
+  if (!isUuid(professionalId)) return failure("Profissional não encontrado. Recarregue a página.");
+  const auth = await requireScheduleEditor(professionalId);
+  if ("error" in auth) return auth.error;
+
+  const { error } = await auth.supabase.from("opening_periods").delete().eq("professional_id", professionalId);
+  if (error) return failure("Não foi possível voltar ao horário da barbearia. Tente novamente.");
+  return { ok: true, message: "Pronto: o horário semanal volta a seguir o da barbearia." };
+}
+
+export async function saveExceptionAction(
+  professionalId: string | null,
+  input: ExceptionInput,
+  confirmConflicts: boolean,
+): Promise<ScheduleActionResult> {
   const today = shopToday();
   if (
+    !isOwner(professionalId) ||
     typeof input?.startsOn !== "string" ||
     typeof input.endsOn !== "string" ||
     !["fechado", "horario_especial", "bloqueio"].includes(input.kind) ||
@@ -1011,10 +1117,10 @@ export async function saveExceptionAction(input: ExceptionInput, confirmConflict
     typeof input.reason !== "string" ||
     Object.keys(validateException(input, today)).length
   ) {
-    return failure("Revise as datas e os horários da exceção.");
+    return failure("Revise as datas e os horários.");
   }
 
-  const auth = await requireAdmin();
+  const auth = await requireScheduleEditor(professionalId);
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
 
@@ -1024,6 +1130,7 @@ export async function saveExceptionAction(input: ExceptionInput, confirmConflict
   const isClosed = input.kind === "fechado";
   const proposed: ScheduleException = {
     id: "nova",
+    professionalId,
     startsOn: input.startsOn,
     endsOn: input.endsOn,
     kind: input.kind,
@@ -1031,7 +1138,7 @@ export async function saveExceptionAction(input: ExceptionInput, confirmConflict
     closesAt: isClosed ? null : input.closesAt,
     reason: input.reason.trim(),
   };
-  const conflicts = await findConflicts(supabase, current.periods, [...current.exceptions, proposed], {
+  const conflicts = await findConflicts(supabase, current.periods, [...current.exceptions, proposed], professionalId, {
     start: input.startsOn,
     end: input.endsOn,
   });
@@ -1041,6 +1148,7 @@ export async function saveExceptionAction(input: ExceptionInput, confirmConflict
   }
 
   const { error } = await supabase.from("schedule_exceptions").insert({
+    professional_id: professionalId,
     starts_on: input.startsOn,
     ends_on: input.endsOn,
     kind: input.kind,
@@ -1048,23 +1156,30 @@ export async function saveExceptionAction(input: ExceptionInput, confirmConflict
     closes_at: proposed.closesAt,
     reason: proposed.reason || null,
   });
-  if (error) return failure("Não foi possível salvar a exceção. Tente novamente.");
+  if (error) return failure("Não foi possível salvar. Tente novamente.");
 
+  const saved = professionalId === null ? "Exceção salva." : "Salvo.";
   return {
     ok: true,
     message: conflicts.length
-      ? `Exceção salva. ${conflicts.length === 1 ? "O agendamento afetado continua" : `Os ${conflicts.length} agendamentos afetados continuam`} na agenda para você decidir o que fazer.`
-      : "Exceção salva. O agendamento online já considera a mudança.",
+      ? `${saved} ${conflicts.length === 1 ? "O agendamento afetado continua" : `Os ${conflicts.length} agendamentos afetados continuam`} na agenda para a equipe decidir o que fazer.`
+      : `${saved} O agendamento online já considera a mudança.`,
   };
 }
 
 /** Remove uma exceção (o dia volta ao horário semanal). Não afeta nenhum agendamento. */
 export async function deleteExceptionAction(id: string): Promise<SiteActionResult> {
-  if (!isUuid(id)) return failure("Exceção não encontrada. Recarregue a página.");
-  const auth = await requireAdmin();
+  if (!isUuid(id)) return failure("Item não encontrado. Recarregue a página.");
+
+  // O dono vem do banco, não do navegador: é ele que decide quem pode remover.
+  const supabase = await getSupabaseServerClient();
+  const { data: row } = await supabase.from("schedule_exceptions").select("professional_id").eq("id", id).maybeSingle();
+  if (!row) return failure("Item não encontrado. Recarregue a página.");
+
+  const auth = await requireScheduleEditor(row.professional_id as string | null);
   if ("error" in auth) return auth.error;
 
   const { data, error } = await auth.supabase.from("schedule_exceptions").delete().eq("id", id).select("id");
-  if (error || !data?.length) return failure("Não foi possível remover a exceção. Tente novamente.");
-  return { ok: true, message: "Exceção removida. Esses dias voltam ao horário semanal." };
+  if (error || !data?.length) return failure("Não foi possível remover. Tente novamente.");
+  return { ok: true, message: "Removido. Esses dias voltam ao horário semanal." };
 }

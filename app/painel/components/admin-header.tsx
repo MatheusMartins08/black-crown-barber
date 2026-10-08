@@ -12,14 +12,18 @@ export default function AdminHeader({
   role?: StaffRole;
   userLabel?: string;
 }) {
+  // Barbeiro logado: painel dos barbeiros. Admin e telas sem sessão (login): painel da barbearia.
+  const team = showSections && role === "barbeiro";
+
   return (
     <header className="admin-header">
       <div className="admin-header__inner">
-        <Link className="brand" href="/painel">
+        {/* Sem sessão (login, sem acesso) não há o que pré-carregar: o painel pediria login. */}
+        <Link className="brand" href={team ? "/painel/equipe" : "/painel"} prefetch={showSections ? undefined : false}>
           <Crown aria-hidden="true" className="brand__icon" strokeWidth={1.6} />
           <span className="brand__name">
             <span>Black Crown</span>
-            <span className="brand__descriptor">Painel da barbearia</span>
+            <span className="brand__descriptor">{team ? "Painel dos barbeiros" : "Painel da barbearia"}</span>
           </span>
         </Link>
 

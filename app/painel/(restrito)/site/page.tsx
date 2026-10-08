@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import NoAccess from "../../components/no-access";
 import SiteEditorWorkspace from "../../components/site-editor-workspace";
 import {
-  getCurrentStaff,
+  getBarberAccess,
   getEditableSiteImages,
   getPlanUsage,
   getProfessionalUsage,
   getServiceUsage,
+  requireStaff,
 } from "../../lib/staff";
 
 export const metadata: Metadata = {
@@ -18,23 +18,22 @@ export default async function SiteEditorPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // O layout já garante login e equipe; esta tela é só do administrador. O menu esconde o
-  // link para o barbeiro, mas a checagem de verdade é aqui (e, na escrita, na RLS).
-  const current = await getCurrentStaff();
-  if (current?.staff?.role !== "admin") {
-    return <NoAccess title="Sem acesso a esta tela" message="Só o administrador edita o conteúdo do site." />;
-  }
+  // Só o administrador (o barbeiro é redirecionado ao painel dele); a escrita confere de novo
+  // nas Server Actions e na RLS.
+  if (!(await requireStaff("admin"))) return null;
 
   // ?aba=barbeiros (ou servicos, horarios, planos) abre direto na aba; o componente valida.
-  const [{ aba }, usage, siteImages, serviceUsage, planUsage] = await Promise.all([
+  const [{ aba }, usage, siteImages, serviceUsage, planUsage, barberAccess] = await Promise.all([
     searchParams,
     getProfessionalUsage(),
     getEditableSiteImages(),
     getServiceUsage(),
     getPlanUsage(),
+    getBarberAccess(),
   ]);
   return (
     <SiteEditorWorkspace
+      barberAccess={barberAccess}
       initialTab={typeof aba === "string" ? aba : undefined}
       planUsage={planUsage}
       professionalUsage={usage}

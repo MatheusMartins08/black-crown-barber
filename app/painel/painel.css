@@ -3533,3 +3533,139 @@
     --photo-max-height: 200px;
   }
 }
+
+/* --- Painel dos barbeiros e acesso da equipe --- */
+
+/* Status e executor só para leitura (horário de outro barbeiro): mesma altura e ícone do select. */
+.admin-status--readonly {
+  min-height: 36px;
+  padding-left: 32px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-row__performer {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .admin-table--agenda .admin-row__performed .admin-row__performer {
+    display: flex;
+    grid-area: performed;
+  }
+}
+
+/* Horário que segue o da barbearia: só leitura, nas mesmas colunas do editor. */
+.admin-week__day--readonly .admin-week__head {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.admin-week__hours {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Edição do site > Horários: de quem é o horário. */
+.admin-hours-owner {
+  display: grid;
+  gap: 6px;
+  padding: 16px 24px;
+}
+
+.admin-hours-owner select {
+  width: min(100%, 420px);
+}
+
+/* Edição do site > Barbeiros > Editar: acesso ao painel. */
+.admin-access {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  background: var(--admin-sunken);
+  padding: 14px 16px 16px;
+}
+
+.admin-access legend {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.admin-access__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-access__status .admin-tag {
+  margin: 0;
+}
+
+.admin-access__status strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.admin-access__form {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-access__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.admin-access__form .admin-access__actions {
+  justify-content: flex-end;
+}
+
+.admin-access__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--admin-success);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.admin-access__notice.is-error {
+  color: var(--accent);
+}
+
+.admin-access__notice svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+@media (max-width: 760px) {
+  .admin-week__day--readonly .admin-week__head {
+    display: flex;
+  }
+
+  .admin-week__hours {
+    text-align: right;
+  }
+
+  .admin-hours-owner {
+    padding: 14px 16px;
+  }
+
+  .admin-access__actions .admin-row__action {
+    min-height: 40px;
+  }
+}

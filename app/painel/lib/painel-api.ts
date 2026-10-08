@@ -1,6 +1,7 @@
 import { formatPhone, getTodayIso } from "../../data/booking";
 import {
   addDays,
+  type AgendaAppointment,
   type Appointment,
   type AppointmentItem,
   type AppointmentStatus,
@@ -16,9 +17,10 @@ import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 // As mensalidades só são geradas até hoje (private.generate_subscription_payments), então
 // toda mensalidade "pendente" já venceu.
 //
-// Dados do painel no Supabase, com a sessão da equipe (cookie) e a RLS valendo:
-// barbeiros leem tudo e só alteram status e executor dos próprios horários; registrar
-// mensalidade é só do admin. Cobertura, cobrado e repasse vêm calculados pelo banco.
+// Dados do painel no Supabase, com a sessão da equipe (cookie) e a RLS valendo: atendimentos
+// com valores, clientes e mensalidades são só do admin. Os barbeiros usam a agenda
+// operacional (fetchTeamAgenda / updateTeamAppointment) e só alteram status e executor dos
+// próprios horários. Cobertura, cobrado e repasse vêm calculados pelo banco.
 
 export class PainelApiError extends Error {
   constructor(message: string) {
@@ -159,6 +161,83 @@ export async function updateAppointment(
   }
   if (!data?.length) throw new PainelApiError("Você só pode alterar os seus próprios horários.");
   return fetchAppointment(id);
+}
+
+// --- Agenda da equipe (painel dos barbeiros) ---
+// RPCs get_team_agenda / update_team_appointment: só colunas operacionais, nenhum valor.
+
+type TeamAgendaRow = {
+  id: string;
+  code: string;
+  status: AppointmentStatus;
+  local_date: string;
+  local_time: string;
+  duration_minutes: number;
+  customer_name: string;
+  items: { service_id: string; service_slug: string; service_name: string; duration_minutes: number }[] | null;
+  booked_professional_id: string;
+  booked_professional_name: string;
+  performed_by_id: string;
+  performed_by_name: string;
+  plan_name: string | null;
+};
+
+function toAgendaAppointment(row: TeamAgendaRow): AgendaAppointment {
+  const items = (row.items ?? []).map((item) => ({
+    serviceId: item.service_id,
+    serviceSlug: item.service_slug,
+    serviceName: item.service_name,
+    durationMinutes: item.duration_minutes,
+  }));
+  return {
+    id: row.id,
+    code: row.code,
+    date: row.local_date,
+    time: row.local_time,
+    clientName: row.customer_name,
+    serviceName: items.map((item) => item.serviceName).join(" + "),
+    items,
+    bookedWithId: row.booked_professional_id,
+    bookedWith: row.booked_professional_name,
+    performedById: row.performed_by_id,
+    performedBy: row.performed_by_name,
+    status: row.status,
+    durationMinutes: row.duration_minutes,
+    // A agenda da equipe só sabe se o plano vale no dia (sem situação de pagamento).
+    membership: row.plan_name ? "ativo" : "avulso",
+    planName: row.plan_name,
+  };
+}
+
+/** Agenda da equipe entre duas datas (inclusive), no fuso da barbearia. */
+export async function fetchTeamAgenda(range: { start: string; end: string }): Promise<AgendaAppointment[]> {
+  const { data, error } = await getSupabaseBrowserClient().rpc("get_team_agenda", {
+    p_start: range.start,
+    p_end: range.end,
+  });
+  if (error) fail(error, "Não foi possível carregar a agenda.");
+  return (data as TeamAgendaRow[]).map(toAgendaAppointment);
+}
+
+/** Altera status e/ou quem executou (só nos próprios horários). Devolve como o banco gravou. */
+export async function updateTeamAppointment(
+  id: string,
+  changes: Partial<Pick<AgendaAppointment, "status" | "performedById">>,
+): Promise<AgendaAppointment> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.rpc("update_team_appointment", {
+    p_id: id,
+    p_status: changes.status ?? null,
+    p_performed_by: changes.performedById ?? null,
+  });
+  if (error) {
+    if (error.code === "23P01") throw new PainelApiError("Esse profissional já tem atendimento nesse horário.");
+    if (error.code === "42501") throw new PainelApiError(getRpcMessage(error, "Você só pode alterar os seus próprios horários."));
+    fail(error, "Não foi possível salvar a alteração.");
+  }
+  const { data, error: reloadError } = await supabase.rpc("get_team_agenda", { p_start: null, p_end: null, p_id: id });
+  if (reloadError || !data?.length) fail(reloadError ?? {}, "Não foi possível recarregar o atendimento.");
+  return toAgendaAppointment((data as TeamAgendaRow[])[0]);
 }
 
 type ProfileRow = {

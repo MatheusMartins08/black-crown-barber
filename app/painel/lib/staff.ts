@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { redirect } from "next/navigation";
 import {
   openingPeriodColumns,
   scheduleExceptionColumns,
@@ -16,16 +17,37 @@ import {
   toProfessional,
   type ProfessionalRow,
 } from "../../data/professionals";
-import { sortServices, staffServiceColumns, toService, type ServiceRow } from "../../data/services";
+import { serviceColumns, sortServices, staffServiceColumns, toService, type ServiceRow } from "../../data/services";
 import { siteImageColumns, toSiteImage, type SiteImageRow } from "../../data/site-images";
 import { getSupabaseServerClient } from "../../lib/supabase/server";
 
 export type StaffRole = "admin" | "barbeiro";
 
+export type StaffMember = {
+  role: StaffRole;
+  /** Profissional do barbeiro (sempre preenchido para "barbeiro"). */
+  professionalId: string | null;
+  displayName: string | null;
+  /** Usuário de login do barbeiro; null para quem entra por e-mail (admin). */
+  login: string | null;
+  isActive: boolean;
+};
+
+/** Tela inicial de cada papel, para onde o login e os redirecionamentos levam. */
+export const staffHome: Record<StaffRole, string> = { admin: "/painel", barbeiro: "/painel/equipe" };
+
+type StaffRow = {
+  role: StaffRole;
+  professional_id: string | null;
+  display_name: string | null;
+  login: string | null;
+  is_active: boolean;
+};
+
 /**
  * Usuário logado e a própria linha em staff_members (a RLS deixa cada um ler a sua).
- * Memorizado por requisição: o layout e a página compartilham a mesma consulta. Só
- * decide o que mostrar; os dados continuam protegidos pela RLS no banco.
+ * Memorizado por requisição: o layout e a página compartilham a mesma consulta. Decide o que
+ * mostrar e para onde redirecionar; os dados continuam protegidos pela RLS no banco.
  */
 export const getCurrentStaff = cache(async () => {
   const supabase = await getSupabaseServerClient();
@@ -33,17 +55,64 @@ export const getCurrentStaff = cache(async () => {
   const userId = data?.claims?.sub;
   if (!userId) return null;
 
-  const { data: staff } = await supabase
+  const { data: row } = await supabase
     .from("staff_members")
-    .select("role, display_name")
+    .select("role, professional_id, display_name, login, is_active")
     .eq("user_id", userId)
     .maybeSingle();
+  const staff = row as StaffRow | null;
 
   return {
+    userId,
     email: typeof data.claims.email === "string" ? data.claims.email : "",
-    staff: staff as { role: StaffRole; display_name: string | null } | null,
+    staff: staff
+      ? ({
+          role: staff.role,
+          professionalId: staff.professional_id,
+          displayName: staff.display_name,
+          login: staff.login,
+          isActive: staff.is_active,
+        } satisfies StaffMember)
+      : null,
   };
 });
+
+/**
+ * Confere o papel em cada página e layout (o layout não roda de novo a cada navegação).
+ * Sem sessão → /painel/entrar; papel errado → a tela inicial do próprio papel; sem cadastro na
+ * equipe ou com o acesso desativado → null (a tela mostra "Sem acesso").
+ */
+export async function requireStaff(role: StaffRole) {
+  const current = await getCurrentStaff();
+  if (!current) redirect("/painel/entrar");
+  const { staff } = current;
+  if (!staff || !staff.isActive) return null;
+  if (staff.role !== role) redirect(staffHome[staff.role]);
+  return { ...current, staff };
+}
+
+export type BarberAccess = {
+  /** Usuário de login; null se o acesso foi criado por e-mail. */
+  login: string | null;
+  isActive: boolean;
+};
+
+/** Acesso ao painel de cada profissional (id → login e status). Só o admin lê (RLS); nunca a senha. */
+export async function getBarberAccess(): Promise<Record<string, BarberAccess>> {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("staff_members")
+    .select("professional_id, login, is_active")
+    .eq("role", "barbeiro")
+    .not("professional_id", "is", null);
+  if (error) throw new Error("Não foi possível carregar os acessos da equipe.");
+  return Object.fromEntries(
+    (data as { professional_id: string; login: string | null; is_active: boolean }[]).map((row) => [
+      row.professional_id,
+      { login: row.login, isActive: row.is_active },
+    ]),
+  );
+}
 
 export type ProfessionalUsage = {
   /** Tem atendimentos, bloqueios de agenda ou login: a exclusão mantém o cadastro só para o histórico. */
@@ -111,7 +180,15 @@ export const getStaffServices = cache(async () => {
   return sortServices((data as unknown as ServiceRow[]).map(toService));
 });
 
-/** Comissão de avulso (payroll_settings), visível só para a equipe. */
+/** Serviços sem o repasse do plano: o catálogo do painel dos barbeiros. */
+export const getTeamServices = cache(async () => {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase.from("services").select(serviceColumns).order("sort_order");
+  if (error) throw new Error(`Não foi possível carregar os serviços: ${error.message}`);
+  return sortServices((data as unknown as ServiceRow[]).map(toService));
+});
+
+/** Comissão de avulso (payroll_settings), visível só para o admin. */
 export const getWalkInRate = cache(async () => {
   const supabase = await getSupabaseServerClient();
   const { data } = await supabase.from("payroll_settings").select("walk_in_commission_rate").eq("id", 1).maybeSingle();
@@ -186,8 +263,9 @@ export async function getPlanUsage(): Promise<Record<string, PlanUsage>> {
 }
 
 /**
- * Horário semanal e exceções a partir de hoje (as passadas não interessam ao painel).
- * Exceções só a equipe lê (RLS).
+ * Horário semanal e exceções a partir de hoje (as passadas não interessam ao painel), da
+ * barbearia e de todos os profissionais (professionalId). Exceções e horários dos
+ * profissionais só a equipe lê (RLS).
  */
 export const getStaffSchedule = cache(async () => {
   const supabase = await getSupabaseServerClient();

@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, type FormEvent, type ReactNode } from "react";
-import { CircleAlert, LoaderCircle, X } from "lucide-react";
+import { useId, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { CircleAlert, Eye, EyeOff, LoaderCircle, X } from "lucide-react";
 
 // Peças dos formulários em diálogo do painel (assinantes, edição do site).
 
@@ -95,5 +95,54 @@ export function FormAlert({ message }: { message: string | null }) {
       <CircleAlert aria-hidden="true" size={15} />
       {message}
     </p>
+  );
+}
+
+/** Senha nova (cadastro ou redefinição) com o botão de mostrar/ocultar. Nunca é preenchida com a atual. */
+export function PasswordInput({
+  id,
+  value,
+  invalid,
+  maxLength,
+  onChange,
+  onBlur,
+  onKeyDown,
+}: {
+  id: string;
+  value: string;
+  invalid: boolean;
+  maxLength: number;
+  onChange: (value: string) => void;
+  onBlur?: () => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <span className="admin-password">
+      <input
+        aria-describedby={`${id}-message`}
+        aria-invalid={invalid || undefined}
+        autoCapitalize="none"
+        autoComplete="new-password"
+        id={id}
+        maxLength={maxLength}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+        spellCheck={false}
+        type={visible ? "text" : "password"}
+        value={value}
+      />
+      <button
+        aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+        aria-pressed={visible}
+        className="admin-password__toggle"
+        onClick={() => setVisible((current) => !current)}
+        type="button"
+      >
+        {visible ? <EyeOff aria-hidden="true" size={16} /> : <Eye aria-hidden="true" size={16} />}
+      </button>
+    </span>
   );
 }

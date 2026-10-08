@@ -11,6 +11,7 @@ import {
   isCoveredByPlan,
   listProfessionalsFor,
   listServicesFor,
+  type AgendaAppointment,
   type Appointment,
   type AppointmentStatus,
 } from "../../data/painel";
@@ -37,15 +38,23 @@ export const statusOptions: { value: AppointmentStatus; label: string; icon: typ
   { value: "cancelado", label: "Cancelado", icon: XCircle },
 ];
 
-type AppointmentsTableProps = {
-  appointments: Appointment[];
+type AppointmentChanges = Partial<Pick<AgendaAppointment, "status" | "performedById">>;
+
+type AppointmentsTableProps<T extends AgendaAppointment> = {
+  appointments: T[];
   filters: AgendaFilters;
   isClosed: boolean;
   onFiltersChange: (filters: AgendaFilters) => void;
-  onUpdate: (id: string, changes: Partial<Pick<Appointment, "status" | "performedById">>) => void;
+  onUpdate: (id: string, changes: AppointmentChanges) => void;
+  /** Texto de valor ao lado do serviço (só no painel do admin). Sem ele, só a duração. */
+  priceNote?: (appointment: T) => string;
+  /** Linhas que a pessoa pode alterar (status e executor). As demais ficam só para leitura. */
+  canEdit?: (appointment: T) => boolean;
+  /** Filtro "Pagamento pendente" (só o admin vê situação de pagamento). */
+  paymentFilter?: boolean;
 };
 
-export function matchesFilters(appointment: Appointment, filters: AgendaFilters) {
+export function matchesFilters(appointment: AgendaAppointment, filters: AgendaFilters) {
   if (filters.barber !== "todos" && appointment.performedById !== filters.barber) return false;
   // Um atendimento com vários serviços aparece no filtro de qualquer um deles.
   if (filters.service !== "todos" && !hasService(appointment, filters.service)) return false;
@@ -58,13 +67,16 @@ export function matchesFilters(appointment: Appointment, filters: AgendaFilters)
 
 const defaultFilters: AgendaFilters = { barber: "todos", clientType: "todos", service: "todos" };
 
-export default function AppointmentsTable({
+export default function AppointmentsTable<T extends AgendaAppointment>({
   appointments,
   filters,
   isClosed,
   onFiltersChange,
   onUpdate,
-}: AppointmentsTableProps) {
+  priceNote,
+  canEdit = () => true,
+  paymentFilter = true,
+}: AppointmentsTableProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const professionals = usePainelProfessionals();
   // Ativos e quem aparece no dia (um inativo com atendimento continua filtrável).
@@ -130,7 +142,7 @@ export default function AppointmentsTable({
           >
             <option value="todos">Todos</option>
             <option value="assinante">Assinantes</option>
-            <option value="pendente">Pagamento pendente</option>
+            {paymentFilter ? <option value="pendente">Pagamento pendente</option> : null}
             <option value="avulso">Avulsos</option>
           </select>
         </label>
@@ -190,7 +202,9 @@ export default function AppointmentsTable({
                 <AppointmentRow
                   activeProfessionals={active}
                   appointment={appointment}
+                  editable={canEdit(appointment)}
                   key={appointment.id}
+                  note={priceNote?.(appointment) ?? null}
                   onUpdate={onUpdate}
                 />
               ))}
@@ -207,7 +221,7 @@ export default function AppointmentsTable({
  * fora do plano ou avulso. Com vários serviços, o plano cobre serviço a serviço e o valor a
  * cobrar é a soma dos que ficaram fora.
  */
-function getPriceNote(appointment: Appointment, plans: readonly SubscriptionPlan[]) {
+export function getPriceNote(appointment: Appointment, plans: readonly SubscriptionPlan[]) {
   const items = getAppointmentItems(appointment);
   const price = formatCurrency(getServicePrice(appointment));
   const plan = getPlanByName(plans, appointment.planName);
@@ -226,19 +240,32 @@ function getPriceNote(appointment: Appointment, plans: readonly SubscriptionPlan
   return `Fora do plano · ${price}`;
 }
 
+/** Valor do atendimento no painel do admin (precisa do catálogo de planos). */
+export function useAdminPriceNote() {
+  const plans = usePainelPlans();
+  return (appointment: Appointment) => getPriceNote(appointment, plans);
+}
+
 function AppointmentRow({
   activeProfessionals,
   appointment,
+  editable,
+  note,
   onUpdate,
 }: {
   activeProfessionals: readonly Professional[];
-  appointment: Appointment;
-  onUpdate: AppointmentsTableProps["onUpdate"];
+  appointment: AgendaAppointment;
+  editable: boolean;
+  /** Valor (admin); null mostra só a duração. */
+  note: string | null;
+  onUpdate: (id: string, changes: AppointmentChanges) => void;
 }) {
   const status = statusOptions.find((option) => option.value === appointment.status)!;
   const StatusIcon = status.icon;
   const reassigned = appointment.performedById !== appointment.bookedWithId;
-  const plans = usePainelPlans();
+  const duration = formatDuration(appointment.durationMinutes);
+  // Admin: valor (com a duração quando há vários serviços). Equipe: só a duração.
+  const detail = note === null ? duration : appointment.items.length > 1 ? `${duration} · ${note}` : note;
   // Só profissionais ativos recebem atendimentos; o atual fica na lista mesmo se inativo.
   const performerOptions = activeProfessionals.some((professional) => professional.id === appointment.performedById)
     ? activeProfessionals
@@ -255,10 +282,7 @@ function AppointmentRow({
       </td>
       <td className="admin-row__what" data-label="Serviço">
         <span className="admin-row__service">{appointment.serviceName}</span>
-        <span className="admin-row__price">
-          {appointment.items.length > 1 ? `${formatDuration(appointment.durationMinutes)} · ` : null}
-          {getPriceNote(appointment, plans)}
-        </span>
+        <span className="admin-row__price">{detail}</span>
       </td>
       <td className="admin-row__booked" data-label="Marcado com">
         <span className="admin-person">
@@ -267,23 +291,29 @@ function AppointmentRow({
         </span>
       </td>
       <td className="admin-row__performed" data-label="Executado por">
-        <label className="admin-inline-select admin-person-select">
-          <BarberAvatar professionalId={appointment.performedById} size={20} />
-          <span className="sr-only">Profissional que executou o atendimento das {appointment.time}</span>
-          <select
-            onChange={(event) =>
-              onUpdate(appointment.id, { performedById: event.target.value })
-            }
-            value={appointment.performedById}
-          >
-            {/* Primeiro nome: cabe ao lado do status no celular (a foto identifica). */}
-            {performerOptions.map((professional) => (
-              <option key={professional.id} value={professional.id}>
-                {getFirstName(professional.name)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {editable ? (
+          <label className="admin-inline-select admin-person-select">
+            <BarberAvatar professionalId={appointment.performedById} size={20} />
+            <span className="sr-only">Profissional que executou o atendimento das {appointment.time}</span>
+            <select
+              onChange={(event) => onUpdate(appointment.id, { performedById: event.target.value })}
+              value={appointment.performedById}
+            >
+              {/* Primeiro nome: cabe ao lado do status no celular (a foto identifica). */}
+              {performerOptions.map((professional) => (
+                <option key={professional.id} value={professional.id}>
+                  {getFirstName(professional.name)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          // Horário de outro profissional: a equipe vê, mas só quem atende altera.
+          <span className="admin-person admin-row__performer">
+            <BarberAvatar professionalId={appointment.performedById} size={20} />
+            {getFirstName(appointment.performedBy)}
+          </span>
+        )}
         {/* Até 960px a coluna "Marcado com" some: a troca diz com quem foi marcado. */}
         {reassigned ? (
           <span className="admin-row__note">
@@ -293,22 +323,27 @@ function AppointmentRow({
         ) : null}
       </td>
       <td className="admin-row__state" data-label="Status">
-        <label className={`admin-status admin-status--${appointment.status}`}>
-          <StatusIcon aria-hidden="true" size={15} strokeWidth={1.8} />
-          <span className="sr-only">Status do atendimento das {appointment.time}</span>
-          <select
-            onChange={(event) =>
-              onUpdate(appointment.id, { status: event.target.value as AppointmentStatus })
-            }
-            value={appointment.status}
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {editable ? (
+          <label className={`admin-status admin-status--${appointment.status}`}>
+            <StatusIcon aria-hidden="true" size={15} strokeWidth={1.8} />
+            <span className="sr-only">Status do atendimento das {appointment.time}</span>
+            <select
+              onChange={(event) => onUpdate(appointment.id, { status: event.target.value as AppointmentStatus })}
+              value={appointment.status}
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span className={`admin-status admin-status--${appointment.status} admin-status--readonly`}>
+            <StatusIcon aria-hidden="true" size={15} strokeWidth={1.8} />
+            {status.label}
+          </span>
+        )}
       </td>
     </tr>
   );
