@@ -21,7 +21,7 @@ import { evaluateCoverage, type SubscriberSession } from "../../data/subscribers
 import { fetchPlanCoverage } from "../../lib/subscribers-api";
 import { BookingApiError, createReservation, createSubscriberReservation } from "../lib/booking-api";
 import type { CoverageMap } from "../lib/plan-pricing";
-import { useBookingPlans, useBookingProfessionals, useBookingServices } from "./booking-catalog";
+import { useBookingPlans, useBookingProfessionals, useBookingServices, useHasActivePlans } from "./booking-catalog";
 import BookingProgress from "./booking-progress";
 import BookingSuccess from "./booking-success";
 import { BookingSummaryBar, BookingSummaryPanel } from "./booking-summary";
@@ -136,11 +136,14 @@ function BookingFlowContent({
   const professionals = useBookingProfessionals();
   const services = useBookingServices();
   const plans = useBookingPlans();
+  // Os planos chegam do servidor junto com a página: a primeira etapa já sai certa, sem trocar depois.
+  const hasProfileStep = useHasActivePlans();
   const [{ step, draft }, dispatch] = useBookingDraft({
     professionals,
     services,
     initialServiceId,
     initialProfessionalId,
+    hasProfileStep,
     restore,
     persist,
   });
@@ -174,9 +177,9 @@ function BookingFlowContent({
   const session = draft.customerType === "assinante" ? subscriber.session : null;
   const sessionPending = draft.customerType === "assinante" && subscriber.status === "loading";
 
-  const steps = getBookingSteps(draft.customerType);
+  const steps = getBookingSteps(draft.customerType, hasProfileStep);
   const stepIndex = steps.indexOf(step);
-  const maxReachable = getMaxReachableStep(draft);
+  const maxReachable = getMaxReachableStep(draft, hasProfileStep);
   const maxIndex = steps.indexOf(maxReachable);
   const selectedServices = getServices(services, draft.serviceIds);
   const professionalName =
@@ -365,8 +368,8 @@ function BookingFlowContent({
         <p className="section-heading__eyebrow">Agendamento online</p>
         <h1>Reserve seu horário.</h1>
         <p>
-          Poucos passos, sem cadastro. Escolha o serviço, o profissional e o melhor horário para você. Assinantes entram
-          com o telefone cadastrado na barbearia.
+          Poucos passos, sem cadastro. Escolha o serviço, o profissional e o melhor horário para você.
+          {hasProfileStep ? " Assinantes entram com o telefone cadastrado na barbearia." : null}
         </p>
       </header>
 

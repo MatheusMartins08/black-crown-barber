@@ -379,6 +379,11 @@
   border-left: 1px solid var(--line);
 }
 
+/* Sem plano ativo, o indicador de assinantes sai: 4 colunas (2 × 2 até 960px). */
+.admin-kpis--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .admin-kpis dt {
   color: var(--muted);
   font-size: 12px;
@@ -1153,6 +1158,11 @@
   margin: 10px 0 0;
   color: var(--foreground);
   font-size: 12px;
+}
+
+/* Só o repasse (nenhum plano ativo): sem a barra acima. */
+.admin-split__legend:first-child {
+  margin-top: 0;
 }
 
 .admin-split__legend > span {
@@ -2172,6 +2182,19 @@
     border-top: 1px solid var(--line);
   }
 
+  .admin-kpis--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-kpis--four > div:nth-child(3) {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .admin-kpis--four > div:nth-child(4) {
+    border-left: 1px solid var(--line);
+  }
+
   .admin-production__list {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2924,6 +2947,10 @@
 
   .admin-kpis > div:last-child {
     grid-column: 1 / -1;
+  }
+
+  .admin-kpis--four > div:last-child {
+    grid-column: auto;
   }
 
   .admin-kpis dd {

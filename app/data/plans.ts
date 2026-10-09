@@ -77,6 +77,15 @@ export function sortPlans(list: SubscriptionPlan[]) {
   return [...list].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "pt-BR"));
 }
 
+/**
+ * Algum plano aceita novos assinantes? Sem nenhum, o agendamento não pergunta se o cliente é
+ * assinante e a Visão geral do painel esconde os indicadores de planos. A edição dos planos
+ * continua disponível; reativar um plano traz tudo de volta.
+ */
+export function hasActivePlans(plans: readonly SubscriptionPlan[]) {
+  return plans.some((plan) => plan.isActive && !plan.deletedAt);
+}
+
 export function getPlan(plans: readonly SubscriptionPlan[], slug: string | null): SubscriptionPlan | null {
   return plans.find((plan) => plan.slug === slug) ?? null;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
-import type { SubscriptionPlan } from "../../data/plans";
+import { hasActivePlans, type SubscriptionPlan } from "../../data/plans";
 import type { Professional } from "../../data/professionals";
 import type { Service } from "../../data/services";
 
@@ -37,4 +37,9 @@ export function useBookingServices() {
 
 export function useBookingPlans() {
   return useContext(BookingCatalogContext).plans;
+}
+
+/** Algum plano ativo: só então o agendamento pergunta se o cliente é assinante. */
+export function useHasActivePlans() {
+  return hasActivePlans(useContext(BookingCatalogContext).plans);
 }

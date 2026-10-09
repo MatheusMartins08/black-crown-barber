@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { CircleAlert, LoaderCircle } from "lucide-react";
 import { signInStaffAction } from "../auth-actions";
 
@@ -24,7 +25,10 @@ export default function StaffSignInForm() {
         // Com sucesso, a ação redireciona para o painel do papel (sem resultado para mostrar).
         const result = await signInStaffAction(identifier, password);
         if (result && !result.ok) setError(result.message);
-      } catch {
+      } catch (error) {
+        // O redirect() do sucesso chega aqui como uma rejeição da chamada: o Next a usa para
+        // navegar e não é falha de conexão. Devolvido ao Next, o botão segue em "Entrando…" até o painel abrir.
+        unstable_rethrow(error);
         setError("Não foi possível falar com o servidor. Verifique a conexão e tente de novo.");
       }
     });

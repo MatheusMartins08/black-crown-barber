@@ -17,12 +17,19 @@ import {
   summarizeByBarber,
   type Appointment,
 } from "../../data/painel";
+import { hasActivePlans } from "../../data/plans";
 import { fetchAppointments, PainelApiError, updateAppointment as saveAppointment } from "../lib/painel-api";
 import AppointmentsTable, { useAdminPriceNote, type AgendaFilters } from "./appointments-table";
 import BarberProduction from "./barber-production";
 import DateNav from "./date-nav";
 import { isSubscriber } from "./membership-tag";
-import { findProfessional, usePainelProfessionals, usePainelSchedule, usePainelServices } from "./painel-catalog";
+import {
+  findProfessional,
+  usePainelPlans,
+  usePainelProfessionals,
+  usePainelSchedule,
+  usePainelServices,
+} from "./painel-catalog";
 
 function getErrorMessage(error: unknown) {
   return error instanceof PainelApiError ? error.message : "Não foi possível falar com o banco. Tente novamente.";
@@ -54,6 +61,8 @@ export default function AdminDashboard() {
   const professionals = usePainelProfessionals();
   const services = usePainelServices();
   const schedule = usePainelSchedule();
+  // Sem nenhum plano ativo, os indicadores de assinatura saem da tela (voltam ao reativar um plano).
+  const showPlans = hasActivePlans(usePainelPlans());
   const priceNote = useAdminPriceNote();
   const appointments = useMemo(() => data ?? [], [data]);
   const serviceColumns = useMemo(() => listServicesFor(services, appointments), [services, appointments]);
@@ -127,7 +136,7 @@ export default function AdminDashboard() {
       ) : null}
 
       <div aria-busy={!data} className={data ? undefined : "admin-loading"}>
-        <dl className="admin-kpis" aria-label="Resumo do dia">
+        <dl className={`admin-kpis${showPlans ? "" : " admin-kpis--four"}`} aria-label="Resumo do dia">
           <div>
             <dt>Horários marcados</dt>
             <dd>{active.length}</dd>
@@ -139,13 +148,15 @@ export default function AdminDashboard() {
               <span>de {active.length}</span>
             </dd>
           </div>
-          <div>
-            <dt>Assinantes · avulsos</dt>
-            <dd>
-              {subscribers}
-              <span>· {active.length - subscribers}</span>
-            </dd>
-          </div>
+          {showPlans ? (
+            <div>
+              <dt>Assinantes · avulsos</dt>
+              <dd>
+                {subscribers}
+                <span>· {active.length - subscribers}</span>
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt>Receita avulsa</dt>
             <dd>{formatCurrency(walkInRevenue)}</dd>
@@ -157,7 +168,7 @@ export default function AdminDashboard() {
         </dl>
       </div>
 
-      <BarberProduction services={serviceColumns} summaries={summaries} />
+      <BarberProduction services={serviceColumns} showPlanSplit={showPlans} summaries={summaries} />
 
       <AppointmentsTable
         appointments={appointments}

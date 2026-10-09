@@ -36,8 +36,12 @@ export const stepLabels: Record<StepId, string> = {
   confirmacao: "Confirmação",
 };
 
-/** Etapas do fluxo. O assinante já tem os dados na conta, então não passa por "Dados". */
-export function getBookingSteps(customerType: CustomerType | null): readonly StepId[] {
+/**
+ * Etapas do fluxo. O assinante já tem os dados na conta, então não passa por "Dados". Sem
+ * nenhum plano ativo (`hasProfileStep` falso) não há a pergunta de assinante: começa nos serviços.
+ */
+export function getBookingSteps(customerType: CustomerType | null, hasProfileStep: boolean): readonly StepId[] {
+  if (!hasProfileStep) return allSteps.filter((step) => step !== "perfil");
   return customerType === "assinante" ? allSteps.filter((step) => step !== "dados") : allSteps;
 }
 
@@ -61,23 +65,26 @@ const storageKey = "black-crown:booking-draft:v3";
 /** Rascunho de antes de existirem vários serviços (`serviceId`): convertido ao restaurar. */
 const legacyStorageKey = "black-crown:booking-draft:v2";
 
-/** Etapa mais avançada que as escolhas atuais permitem abrir. */
-export function getMaxReachableStep(draft: BookingDraft): StepId {
-  if (!draft.customerType) return "perfil";
+/**
+ * Etapa mais avançada que as escolhas atuais permitem abrir. Sem a etapa Perfil, o tipo de
+ * cliente fica vazio e o fluxo é o de quem não é assinante.
+ */
+export function getMaxReachableStep(draft: BookingDraft, hasProfileStep: boolean): StepId {
+  if (!draft.customerType && hasProfileStep) return "perfil";
   if (!draft.serviceIds.length) return "servico";
   if (!draft.professionalId) return "profissional";
   if (!draft.date || !draft.time) return "horario";
-  if (draft.customerType === "avulso" && hasErrors(validateCustomer(draft.customer))) return "dados";
+  if (draft.customerType !== "assinante" && hasErrors(validateCustomer(draft.customer))) return "dados";
   return "confirmacao";
 }
 
 /** Limita a etapa pedida à mais avançada permitida, dentro das etapas deste tipo de cliente. */
-function clampStep(draft: BookingDraft, step: StepId): StepId {
-  const steps = getBookingSteps(draft.customerType);
-  const maxIndex = steps.indexOf(getMaxReachableStep(draft));
+function clampStep(draft: BookingDraft, step: StepId, hasProfileStep: boolean): StepId {
+  const steps = getBookingSteps(draft.customerType, hasProfileStep);
+  const maxIndex = steps.indexOf(getMaxReachableStep(draft, hasProfileStep));
   const requested = steps.indexOf(step);
-  // "dados" não existe para assinante: segue para a confirmação.
-  const index = requested === -1 ? steps.indexOf("confirmacao") : requested;
+  // "dados" não existe para assinante: segue para a confirmação. Sem "perfil", vai para a primeira etapa.
+  const index = requested !== -1 ? requested : step === "dados" ? steps.indexOf("confirmacao") : 0;
   return steps[Math.max(0, Math.min(index, maxIndex))];
 }
 
@@ -91,19 +98,28 @@ function pickAssignee(draft: BookingDraft, slot: TimeSlot): ProfessionalId | nul
 
 const clearedTime = { time: null, assignedProfessionalId: null };
 
-/** Reducer do fluxo. Recebe os profissionais ativos para saber quem atende cada serviço. */
-function createReducer(professionals: readonly Professional[]) {
-  return (state: BookingState, action: Action) => reducer(state, action, professionals);
+/**
+ * Reducer do fluxo. Recebe os profissionais ativos para saber quem atende cada serviço e se
+ * a etapa Perfil existe (algum plano ativo).
+ */
+function createReducer(professionals: readonly Professional[], hasProfileStep: boolean) {
+  return (state: BookingState, action: Action) => reducer(state, action, professionals, hasProfileStep);
 }
 
-function reducer(state: BookingState, action: Action, professionals: readonly Professional[]): BookingState {
+function reducer(
+  state: BookingState,
+  action: Action,
+  professionals: readonly Professional[],
+  hasProfileStep: boolean,
+): BookingState {
   const { draft } = state;
 
   switch (action.type) {
     case "setCustomerType": {
-      if (draft.customerType === action.customerType) return state;
+      // Sem a etapa Perfil não há escolha de tipo de cliente.
+      if (!hasProfileStep || draft.customerType === action.customerType) return state;
       const next = { ...draft, customerType: action.customerType };
-      return { step: action.customerType ? clampStep(next, state.step) : "perfil", draft: next };
+      return { step: action.customerType ? clampStep(next, state.step, hasProfileStep) : "perfil", draft: next };
     }
     case "setServices": {
       if (action.serviceIds.join() === draft.serviceIds.join()) return state;
@@ -148,11 +164,11 @@ function reducer(state: BookingState, action: Action, professionals: readonly Pr
     case "updateCustomer":
       return { ...state, draft: { ...draft, customer: { ...draft.customer, ...action.changes } } };
     case "goTo":
-      return { ...state, step: clampStep(draft, action.step) };
+      return { ...state, step: clampStep(draft, action.step, hasProfileStep) };
     case "reset":
       // Mantém quem é o cliente e os dados de contato para um próximo agendamento.
       return {
-        step: draft.customerType ? "servico" : "perfil",
+        step: draft.customerType || !hasProfileStep ? "servico" : "perfil",
         draft: { ...emptyDraft, customerType: draft.customerType, customer: draft.customer },
       };
   }
@@ -165,6 +181,8 @@ type InitOptions = {
   services: readonly Service[];
   initialServiceId: ServiceId | null;
   initialProfessionalId: ProfessionalChoice | null;
+  /** Pergunta se o cliente é assinante: só com algum plano ativo (hasActivePlans). */
+  hasProfileStep: boolean;
   /** Lê o rascunho salvo ao montar (somente no cliente). */
   restore: boolean;
   /** Salva o rascunho a cada mudança (desligado durante a hidratação). */
@@ -239,13 +257,20 @@ export function sanitizeDraft(
   };
 }
 
-function init({ professionals, services, initialServiceId, initialProfessionalId, restore }: InitOptions): BookingState {
+function init({
+  professionals,
+  services,
+  initialServiceId,
+  initialProfessionalId,
+  hasProfileStep,
+  restore,
+}: InitOptions): BookingState {
   const stored = restore ? readStoredState() : null;
   const hasLinkSelection = Boolean(initialServiceId || initialProfessionalId);
 
   // Um link com serviço/profissional ("Agendar com Júlia") tem prioridade sobre o
-  // rascunho salvo e sempre começa pela pergunta de assinante; a resposta e os dados
-  // de contato já informados são mantidos.
+  // rascunho salvo e sempre começa pela pergunta de assinante (ou pelos serviços, sem plano
+  // ativo); a resposta e os dados de contato já informados são mantidos.
   if (hasLinkSelection || !stored) {
     const kept = stored ? sanitizeDraft(stored.draft, getTodayIso(), professionals, services) : emptyDraft;
     const professionalId =
@@ -254,10 +279,10 @@ function init({ professionals, services, initialServiceId, initialProfessionalId
         ? initialProfessionalId
         : null;
     return {
-      step: "perfil",
+      step: hasProfileStep ? "perfil" : "servico",
       draft: {
         ...emptyDraft,
-        customerType: kept.customerType,
+        customerType: hasProfileStep ? kept.customerType : null,
         serviceIds: initialServiceId ? [initialServiceId] : [],
         professionalId,
         customer: kept.customer,
@@ -265,12 +290,17 @@ function init({ professionals, services, initialServiceId, initialProfessionalId
     };
   }
 
-  const draft = sanitizeDraft(stored.draft, getTodayIso(), professionals, services);
-  return { step: clampStep(draft, isStepId(stored.step) ? stored.step : "perfil"), draft };
+  const sanitized = sanitizeDraft(stored.draft, getTodayIso(), professionals, services);
+  // Sem plano ativo, uma resposta salva antes ("assinante" ou não) deixa de valer.
+  const draft = hasProfileStep ? sanitized : { ...sanitized, customerType: null };
+  return { step: clampStep(draft, isStepId(stored.step) ? stored.step : "perfil", hasProfileStep), draft };
 }
 
 export default function useBookingDraft(options: InitOptions) {
-  const reducerWithCatalog = useMemo(() => createReducer(options.professionals), [options.professionals]);
+  const reducerWithCatalog = useMemo(
+    () => createReducer(options.professionals, options.hasProfileStep),
+    [options.professionals, options.hasProfileStep],
+  );
   const [state, dispatch] = useReducer(reducerWithCatalog, options, init);
 
   useEffect(() => {

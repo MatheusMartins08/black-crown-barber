@@ -1,6 +1,7 @@
 "use server";
 
 import "server-only";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { redirect, RedirectType } from "next/navigation";
 import { toStaffAuthEmail } from "../data/staff";
 import { getSupabaseServerClient } from "../lib/supabase/server";
@@ -15,6 +16,7 @@ import { staffHome, type StaffRole } from "./lib/staff";
 export type SignInResult = { ok: false; message: string };
 
 const invalidCredentials = "Usuário ou senha incorretos.";
+const unavailable = "Não foi possível conectar agora. Verifique a conexão e tente de novo.";
 
 export async function signInStaffAction(identifier: string, password: string): Promise<SignInResult> {
   if (typeof identifier !== "string" || typeof password !== "string" || !identifier.trim() || !password) {
@@ -31,6 +33,8 @@ export async function signInStaffAction(identifier: string, password: string): P
     if (error?.code === "user_banned") {
       return { ok: false, message: "Acesso desativado. Fale com o administrador da barbearia." };
     }
+    // Sem resposta do Supabase (rede, instabilidade): não é senha errada.
+    if (isAuthRetryableFetchError(error) || (error?.status ?? 0) >= 500) return { ok: false, message: unavailable };
     return {
       ok: false,
       message:
@@ -38,11 +42,17 @@ export async function signInStaffAction(identifier: string, password: string): P
     };
   }
 
-  const { data: staff } = await supabase
+  const { data: staff, error: staffError } = await supabase
     .from("staff_members")
     .select("role, is_active")
     .eq("user_id", data.user.id)
     .maybeSingle();
+
+  // Falha ao ler o papel: não dá para saber para onde levar, então não fica logado.
+  if (staffError) {
+    await supabase.auth.signOut({ scope: "local" });
+    return { ok: false, message: "Não foi possível verificar o seu acesso agora. Tente de novo em instantes." };
+  }
 
   // Login de assinante ou fora da equipe, ou acesso desativado: não fica logado no painel.
   if (!staff || !staff.is_active) {

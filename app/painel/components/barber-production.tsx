@@ -6,14 +6,16 @@ import BarberAvatar from "./barber-avatar";
 /**
  * `services`: colunas do dia (ativos e os que aparecem nos atendimentos, ver listServicesFor).
  * Com BarberSummary (admin) mostra plano × avulso e o repasse; com TeamBarberSummary (painel dos
- * barbeiros) só as quantidades.
+ * barbeiros) só as quantidades. `showPlanSplit` falso (nenhum plano ativo) deixa só o repasse.
  */
 export default function BarberProduction({
   summaries,
   services,
+  showPlanSplit = true,
 }: {
   summaries: readonly (BarberSummary | TeamBarberSummary)[];
   services: Service[];
+  showPlanSplit?: boolean;
 }) {
   const maxServiceCount = Math.max(
     1,
@@ -64,7 +66,7 @@ export default function BarberProduction({
               })}
             </dl>
 
-            {"total" in summary ? <PlanSplit summary={summary} /> : null}
+            {"total" in summary ? <PlanSplit showPlans={showPlanSplit} summary={summary} /> : null}
           </li>
         ))}
       </ol>
@@ -73,30 +75,36 @@ export default function BarberProduction({
 }
 
 /** Plano × avulso por serviço feito e o repasse (só no painel do admin). */
-function PlanSplit({ summary }: { summary: BarberSummary }) {
+function PlanSplit({ summary, showPlans }: { summary: BarberSummary; showPlans: boolean }) {
   // Um atendimento pode ter serviços dos dois tipos.
   const servicesDone = summary.planCount + summary.walkInCount;
   const planShare = servicesDone ? (summary.planCount / servicesDone) * 100 : 0;
 
   return (
     <div className="admin-split">
-      <span className="admin-split__track" aria-hidden="true">
-        {servicesDone ? (
+      {showPlans ? (
+        <span className="admin-split__track" aria-hidden="true">
+          {servicesDone ? (
+            <>
+              <span className="admin-split__plan" style={{ width: `${planShare}%` }} />
+              <span className="admin-split__walkin" style={{ width: `${100 - planShare}%` }} />
+            </>
+          ) : null}
+        </span>
+      ) : null}
+      <p className="admin-split__legend">
+        {showPlans ? (
           <>
-            <span className="admin-split__plan" style={{ width: `${planShare}%` }} />
-            <span className="admin-split__walkin" style={{ width: `${100 - planShare}%` }} />
+            <span>
+              <i className="admin-swatch admin-swatch--plan" aria-hidden="true" />
+              {summary.planCount} no plano
+            </span>
+            <span>
+              <i className="admin-swatch admin-swatch--walkin" aria-hidden="true" />
+              {summary.walkInCount} {summary.walkInCount === 1 ? "avulso" : "avulsos"}
+            </span>
           </>
         ) : null}
-      </span>
-      <p className="admin-split__legend">
-        <span>
-          <i className="admin-swatch admin-swatch--plan" aria-hidden="true" />
-          {summary.planCount} no plano
-        </span>
-        <span>
-          <i className="admin-swatch admin-swatch--walkin" aria-hidden="true" />
-          {summary.walkInCount} {summary.walkInCount === 1 ? "avulso" : "avulsos"}
-        </span>
         <span className="admin-split__payout">{formatCurrency(summary.total)} a repassar</span>
       </p>
     </div>
