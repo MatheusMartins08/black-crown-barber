@@ -6,7 +6,7 @@ import StaffSignInForm from "./staff-sign-in-form";
 import "../painel.css";
 
 export const metadata: Metadata = {
-  title: "Entrar | Painel Black Crown Barber",
+  title: "Entrar | Painel",
   robots: {
     index: false,
     follow: false,

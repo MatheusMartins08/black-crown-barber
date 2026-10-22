@@ -15,19 +15,22 @@ import {
   updateSubscriberAction,
   type SubscriberActionResult,
 } from "../painel/actions";
+import { getBrowserShopId } from "./browser-shop";
 import { getSupabaseBrowserClient } from "./supabase/client";
 import { getRpcMessage, type RpcError } from "./supabase/errors";
 
 // Adaptador dos assinantes, usado pelo agendamento e pelo painel. Fala com o Supabase:
 //
-//   signInSubscriber        auth.signInWithPassword (e-mail interno do telefone) + get_subscriber_session()
-//   getSubscriberSession    get_subscriber_session()
+//   signInSubscriber        auth.signInWithPassword (e-mail interno do telefone) + get_subscriber_session(p_shop)
+//   getSubscriberSession    get_subscriber_session(p_shop)
 //   signOutSubscriber       auth.signOut()
-//   fetchPlanCoverage       get_plan_coverage(p_service, p_date)
-//   listSubscribers         view subscriber_accounts
-//   changeSubscriberPlan    set_subscription(p_customer_id, p_plan, p_status)
-//   changeSubscriberStatus  set_subscription(p_customer_id, p_plan, p_status)
+//   fetchPlanCoverage       get_plan_coverage(p_shop, p_service, p_date)
+//   listSubscribers         view subscriber_accounts (a RLS só devolve os da loja do admin)
+//   changeSubscriberPlan    set_subscription(p_shop, p_customer_id, p_plan, p_status)
+//   changeSubscriberStatus  set_subscription(p_shop, p_customer_id, p_plan, p_status)
 //   createSubscriber        Server Action (auth.admin.createUser + save_subscriber + set_subscription)
+//
+// p_shop é a barbearia da aba (browser-shop.ts); o banco confere se o assinante e o admin são dela.
 //   updateSubscriber        Server Action (auth.admin.updateUserById se o telefone mudar + save_subscriber)
 //   resetSubscriberPassword Server Action (auth.admin.updateUserById)
 //
@@ -81,7 +84,7 @@ function toSession(payload: SessionPayload | null): SubscriberSession | null {
 }
 
 async function readSession() {
-  const { data, error } = await getSupabaseBrowserClient().rpc("get_subscriber_session");
+  const { data, error } = await getSupabaseBrowserClient().rpc("get_subscriber_session", { p_shop: getBrowserShopId() });
   if (error) return null;
   return toSession(data as SessionPayload | null);
 }
@@ -90,7 +93,7 @@ async function readSession() {
 export async function signInSubscriber(credentials: { phone: string; password: string }): Promise<SubscriberSession> {
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase.auth.signInWithPassword({
-    email: getSubscriberLoginEmail(credentials.phone),
+    email: getSubscriberLoginEmail(credentials.phone, getBrowserShopId()),
     password: credentials.password,
   });
 
@@ -135,6 +138,7 @@ export async function fetchPlanCoverage(query: { serviceId: ServiceId; date: str
   if (!auth.session) return null;
 
   const { data, error } = await supabase.rpc("get_plan_coverage", {
+    p_shop: getBrowserShopId(),
     p_service: query.serviceId,
     p_date: query.date,
   });
@@ -191,6 +195,7 @@ async function getAccount(id: string) {
 
 async function setSubscription(id: string, planId: PlanId, status: SubscriptionStatus) {
   const { error } = await getSupabaseBrowserClient().rpc("set_subscription", {
+    p_shop: getBrowserShopId(),
     p_customer_id: id,
     p_plan: planId,
     p_status: status,

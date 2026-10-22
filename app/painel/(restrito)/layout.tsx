@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import AdminHeader from "../components/admin-header";
+import ReadOnlyNotice from "../components/read-only-notice";
 import { StaffNoAccess } from "../components/no-access";
 import { PainelCatalogProvider } from "../components/painel-catalog";
 import {
@@ -14,7 +15,7 @@ import {
 import "../painel.css";
 
 export const metadata: Metadata = {
-  title: "Painel | Black Crown Barber",
+  title: "Painel",
   description: "Painel administrativo: agenda, clientes e fechamento da equipe.",
   robots: {
     index: false,
@@ -44,6 +45,7 @@ export default async function PainelLayout({ children }: { children: ReactNode }
   return (
     <div className="admin">
       <AdminHeader role={staff.role} userLabel={`${name} · ${roleLabels[staff.role] ?? staff.role}`} />
+      {staff.readOnly ? <ReadOnlyNotice /> : null}
       <PainelCatalogProvider
         exceptions={schedule.exceptions}
         openingPeriods={schedule.periods}

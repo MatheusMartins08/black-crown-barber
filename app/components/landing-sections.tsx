@@ -21,7 +21,7 @@ import { galleryLayouts, type SiteImage } from "../data/site-images";
 import {
   galleryComparison,
   galleryFeature,
-  siteConfig,
+  type SiteConfig,
   testimonials,
 } from "../data/site";
 
@@ -46,12 +46,12 @@ function SectionHeading({
 }
 
 /** `periods`: horário semanal do Supabase (dias de funcionamento). */
-export function QuickInfo({ periods }: { periods: OpeningPeriod[] }) {
+export function QuickInfo({ periods, site }: { periods: OpeningPeriod[]; site: SiteConfig }) {
   const details = [
-    { icon: MapPin, label: "Localização", value: siteConfig.city },
+    { icon: MapPin, label: "Localização", value: site.city },
     { icon: Clock3, label: "Funcionamento", value: describeOpenDays(periods) },
     { icon: CalendarDays, label: "Atendimento", value: "Com agendamento" },
-    { icon: MessageCircle, label: "Contato", value: siteConfig.whatsapp },
+    { icon: MessageCircle, label: "Contato", value: site.whatsapp },
   ];
 
   return (
@@ -72,7 +72,7 @@ export function QuickInfo({ periods }: { periods: OpeningPeriod[] }) {
 }
 
 /** `services`: os serviços ativos do Supabase, na ordem de exibição. */
-export function ServicesSection({ services }: { services: Service[] }) {
+export function ServicesSection({ services, site }: { services: Service[]; site: SiteConfig }) {
   return (
     <section aria-labelledby="services-title" className="section services" id="servicos">
       <div className="section__inner">
@@ -113,7 +113,7 @@ export function ServicesSection({ services }: { services: Service[] }) {
         </div>
 
         <div className="section-action">
-          <Link className="button" href={siteConfig.bookingUrl}>
+          <Link className="button" href={site.bookingUrl}>
             Agendar horário <ArrowDownRight aria-hidden="true" size={17} />
           </Link>
         </div>
@@ -173,7 +173,7 @@ export function GallerySection({ images }: { images: SiteImage[] }) {
 }
 
 /** `image`: a posição "about" de site_images (null se não houver: a seção fica sem foto). */
-export function AboutSection({ image }: { image: SiteImage | null }) {
+export function AboutSection({ image, site }: { image: SiteImage | null; site: SiteConfig }) {
   const values = ["Técnica", "Cuidado", "Estilo"];
 
   return (
@@ -189,7 +189,7 @@ export function AboutSection({ image }: { image: SiteImage | null }) {
             Um bom corte começa com uma boa conversa. Aqui, cada atendimento parte do que combina com você: o caimento, o acabamento e o tempo dedicado a cada detalhe.
           </p>
           <p className="about__text">
-            A Black Crown une a experiência de uma barbearia contemporânea às referências clássicas do ofício, com atendimento próximo e tempo para cada cliente.
+            A {site.brand.main} une a experiência de uma barbearia contemporânea às referências clássicas do ofício, com atendimento próximo e tempo para cada cliente.
           </p>
           <ul className="about__values">
             {values.map((value) => (
@@ -214,7 +214,7 @@ export function AboutSection({ image }: { image: SiteImage | null }) {
   );
 }
 
-export function TeamSection({ professionals }: { professionals: Professional[] }) {
+export function TeamSection({ professionals, site }: { professionals: Professional[]; site: SiteConfig }) {
   return (
     <section aria-labelledby="team-title" className="section team" id="equipe">
       <div className="section__inner">
@@ -246,7 +246,7 @@ export function TeamSection({ professionals }: { professionals: Professional[] }
                   <h3>{barber.name}</h3>
                 </div>
                 <p>{barber.description}</p>
-                <Link href={`${siteConfig.bookingUrl}?profissional=${barber.slug}`}>
+                <Link href={`${site.bookingUrl}?profissional=${barber.slug}`}>
                   Agendar com {getFirstName(barber.name)} <ArrowUpRight aria-hidden="true" size={15} />
                 </Link>
               </div>
@@ -289,7 +289,7 @@ export function TestimonialsSection() {
   );
 }
 
-export function BookingSection() {
+export function BookingSection({ site }: { site: SiteConfig }) {
   return (
     <section aria-labelledby="booking-title" className="booking" id="agendamento">
       <div aria-hidden="true" className="booking__media">
@@ -305,13 +305,13 @@ export function BookingSection() {
         <p className="section-heading__eyebrow" data-anchor-start>Seu próximo horário</p>
         <h2 id="booking-title">Seu próximo corte começa aqui.</h2>
         <p>
-          Escolha o serviço, encontre um horário e venha conhecer a experiência da {siteConfig.name}.
+          Escolha o serviço, encontre um horário e venha conhecer a experiência da {site.name}.
         </p>
         <div className="booking__actions">
-          <Link className="button" href={siteConfig.bookingUrl}>
+          <Link className="button" href={site.bookingUrl}>
             Agendar horário <ArrowDownRight aria-hidden="true" size={17} />
           </Link>
-          <Link className="button button--outline" href={siteConfig.whatsappUrl}>
+          <Link className="button button--outline" href={site.whatsappUrl}>
             Falar pelo WhatsApp <MessageCircle aria-hidden="true" size={17} />
           </Link>
         </div>
@@ -321,7 +321,7 @@ export function BookingSection() {
 }
 
 /** `periods`: horário semanal do Supabase; dia sem período aparece como "Fechado". */
-export function LocationSection({ periods }: { periods: OpeningPeriod[] }) {
+export function LocationSection({ periods, site }: { periods: OpeningPeriod[]; site: SiteConfig }) {
   return (
     <section aria-labelledby="location-title" className="section location" id="localizacao">
       <div className="section__inner">
@@ -338,15 +338,15 @@ export function LocationSection({ periods }: { periods: OpeningPeriod[] }) {
                 <MapPin aria-hidden="true" size={19} />
                 <div>
                   <h3>Endereço</h3>
-                  <p>{siteConfig.address}<br />{siteConfig.city}</p>
+                  <p>{site.address}<br />{site.city}</p>
                 </div>
               </div>
               <div className="location__contact-block">
                 <MessageCircle aria-hidden="true" size={19} />
                 <div>
                   <h3>Contato</h3>
-                  <p>Telefone: {siteConfig.phone}<br />WhatsApp: {siteConfig.whatsapp}</p>
-                  <p>Instagram: {siteConfig.instagram}</p>
+                  <p>Telefone: {site.phone}<br />WhatsApp: {site.whatsapp}</p>
+                  <p>Instagram: {site.instagram}</p>
                 </div>
               </div>
             </div>
@@ -371,8 +371,8 @@ export function LocationSection({ periods }: { periods: OpeningPeriod[] }) {
             <div className="map-placeholder__mark"><MapPin aria-hidden="true" size={25} /></div>
             <p className="map-placeholder__title">Como chegar</p>
             <p>Atendimento com hora marcada. Abra a rota direto no seu aplicativo de mapas.</p>
-            <span>{siteConfig.address} · {siteConfig.city}</span>
-            <a className="text-link" href={siteConfig.mapsUrl} rel="noopener noreferrer" target="_blank">
+            <span>{site.address} · {site.city}</span>
+            <a className="text-link" href={site.mapsUrl} rel="noopener noreferrer" target="_blank">
               Ver rota no Google Maps <ArrowUpRight aria-hidden="true" size={15} />
             </a>
           </aside>
@@ -382,14 +382,14 @@ export function LocationSection({ periods }: { periods: OpeningPeriod[] }) {
   );
 }
 
-export function FinalCallToAction() {
+export function FinalCallToAction({ site }: { site: SiteConfig }) {
   return (
     <section aria-labelledby="final-cta-title" className="final-cta">
       <Reveal className="final-cta__inner">
-        <p className="section-heading__eyebrow">Black Crown Barber</p>
+        <p className="section-heading__eyebrow">{site.name}</p>
         <h2 id="final-cta-title">Pronto para renovar o visual?</h2>
-        <p>Agende seu horário e venha conhecer a experiência Black Crown Barber.</p>
-        <Link className="button" href={siteConfig.bookingUrl}>
+        <p>Agende seu horário e venha conhecer a experiência {site.name}.</p>
+        <Link className="button" href={site.bookingUrl}>
           Agendar horário <ArrowDownRight aria-hidden="true" size={17} />
         </Link>
       </Reveal>

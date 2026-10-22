@@ -27,12 +27,14 @@ import {
 import { createPlanSlug, validatePlan, type PlanInput } from "../data/plans";
 import { createServiceSlug, validateService, type ServiceInput } from "../data/services";
 import { getSlotFolder, isSiteImageSlot, validateSiteImage, type SiteImageSlot } from "../data/site-images";
+import { getShopToday } from "../data/shop";
 import { getSiteMediaPath, siteMediaBucket } from "../data/site-media";
 import { serviceIconKeys } from "../components/service-icons";
-import { catalogTags } from "../lib/catalog";
+import { catalogTag, type CatalogKind } from "../lib/catalog";
+import { getCurrentShop } from "../lib/shop";
 import { supabaseUrl } from "../lib/supabase/env";
 import { getSupabaseServerClient } from "../lib/supabase/server";
-import { getCurrentStaff } from "./lib/staff";
+import { checkShopAdmin, checkShopStaff, shopStaffMessages } from "./lib/shop-admin";
 
 // Edição do site > Barbeiros. Tudo roda com a sessão do próprio admin (cookie): a RLS
 // de professionals/professional_services e as políticas do bucket site-media conferem
@@ -58,19 +60,17 @@ function isUuid(value: unknown): value is string {
   return typeof value === "string" && uuidPattern.test(value);
 }
 
-async function requireAdmin(): Promise<{ supabase: Supabase } | { error: SiteActionResult }> {
-  const supabase = await getSupabaseServerClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-  if (!userId) return { error: failure("Sua sessão terminou. Entre novamente no painel.") };
-
-  const { data: staff } = await supabase
-    .from("staff_members")
-    .select("role, is_active")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (staff?.role !== "admin" || !staff.is_active) return { error: failure("Só o administrador edita o conteúdo do site.") };
-  return { supabase };
+/** Admin desta barbearia (conferido no banco, sem cache) ou o motivo de recusa. */
+async function requireAdmin(): Promise<{ supabase: Supabase; shopId: string } | { error: SiteActionResult }> {
+  const auth = await checkShopAdmin();
+  if ("refusal" in auth) {
+    return {
+      error: failure(
+        auth.refusal === "not_staff" ? "Só o administrador edita o conteúdo do site." : shopStaffMessages[auth.refusal],
+      ),
+    };
+  }
+  return auth;
 }
 
 async function removeObject(supabase: Supabase, path: string | null) {
@@ -79,9 +79,12 @@ async function removeObject(supabase: Supabase, path: string | null) {
   return !error;
 }
 
-function refreshSite(tag: string = catalogTags.professionals) {
-  // Landing e agendamento (cache por tag); o painel recarrega pelo router.refresh() do cliente.
-  updateTag(tag);
+async function refreshSite(...kinds: CatalogKind[]) {
+  // Landing e agendamento desta barbearia (cache por tag); o painel recarrega pelo
+  // router.refresh() do cliente. A loja do domínio é a do admin (requireAdmin conferiu).
+  const shop = await getCurrentShop();
+  if (!shop) return;
+  for (const kind of kinds.length ? kinds : (["professionals"] as const)) updateTag(catalogTag(shop.id, kind));
 }
 
 export type SaveProfessionalInput = ProfessionalInput & {
@@ -101,12 +104,11 @@ export async function saveProfessionalAction(input: SaveProfessionalInput): Prom
   ) {
     return failure("Revise os dados do profissional.");
   }
-  const newImagePath = getSiteMediaPath(input.newImageUrl, supabaseUrl, "barbers");
-
   const auth = await requireAdmin();
   if ("error" in auth) {
     return auth.error;
   }
+  const newImagePath = getSiteMediaPath(input.newImageUrl, supabaseUrl, "barbers", auth.shopId);
   const { supabase } = auth;
 
   // Daqui para frente, qualquer recusa descarta a foto recém-enviada.
@@ -162,7 +164,7 @@ export async function saveProfessionalAction(input: SaveProfessionalInput): Prom
       return abort("Não foi possível ligar o profissional aos serviços. Nada foi salvo; tente novamente.");
     }
 
-    refreshSite();
+    await refreshSite();
     return { ok: true, message: `${name} foi adicionado à equipe.` };
   }
 
@@ -188,11 +190,11 @@ export async function saveProfessionalAction(input: SaveProfessionalInput): Prom
     .select("id");
   if (error || !updated?.length) return abort("Não foi possível salvar as alterações. Tente novamente.");
 
-  refreshSite();
+  await refreshSite();
 
   // Banco gravado: a foto antiga (se era nossa no bucket) não é mais usada.
   if (input.newImageUrl) {
-    const oldPath = getSiteMediaPath(current.image_url, supabaseUrl, "barbers");
+    const oldPath = getSiteMediaPath(current.image_url, supabaseUrl, "barbers", auth.shopId);
     if (!(await removeObject(supabase, oldPath))) {
       return { ok: true, message: `Dados de ${name} salvos. A foto antiga não pôde ser removida do armazenamento.` };
     }
@@ -213,7 +215,7 @@ export async function setProfessionalActiveAction(id: string, active: boolean): 
     .select("name");
   if (error || !data?.length) return failure("Não foi possível mudar o status. Tente novamente.");
 
-  refreshSite();
+  await refreshSite();
   return {
     ok: true,
     message: active
@@ -232,7 +234,7 @@ async function reorder(
   table: "professionals" | "services" | "subscription_plans",
   id: string,
   direction: -1 | 1,
-  tag: string,
+  tag: CatalogKind,
 ): Promise<SiteActionResult> {
   const { data: list, error } = await supabase
     .from(table)
@@ -255,12 +257,12 @@ async function reorder(
   for (const change of changes) {
     const { error: updateError } = await supabase.from(table).update({ sort_order: change.sort_order }).eq("id", change.id);
     if (updateError) {
-      refreshSite(tag);
+      await refreshSite(tag);
       return failure("A ordem foi salva só em parte. Confira a lista e tente de novo.");
     }
   }
 
-  refreshSite(tag);
+  await refreshSite(tag);
   return { ok: true, message: `${list[index].name} ${direction === -1 ? "subiu" : "desceu"} na ordem de exibição.` };
 }
 
@@ -268,7 +270,7 @@ export async function moveProfessionalAction(id: string, direction: -1 | 1): Pro
   if (!isUuid(id) || (direction !== -1 && direction !== 1)) return failure("Profissional não encontrado.");
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  return reorder(auth.supabase, "professionals", id, direction, catalogTags.professionals);
+  return reorder(auth.supabase, "professionals", id, direction, "professionals");
 }
 
 /**
@@ -309,8 +311,8 @@ export async function deleteProfessionalAction(id: string): Promise<SiteActionRe
     const { data: deleted, error } = await supabase.from("professionals").delete().eq("id", id).select("id");
     // Histórico criado entre a conferência e o delete (FK): cai na exclusão lógica abaixo.
     if (!error && deleted?.length) {
-      refreshSite();
-      await removeObject(supabase, getSiteMediaPath(professional.image_url, supabaseUrl, "barbers"));
+      await refreshSite();
+      await removeObject(supabase, getSiteMediaPath(professional.image_url, supabaseUrl, "barbers", auth.shopId));
       return { ok: true, message: `${professional.name} foi excluído.` };
     }
     if (error?.code !== "23503") return failure("Não foi possível excluir. Tente novamente.");
@@ -337,7 +339,7 @@ export async function deleteProfessionalAction(id: string): Promise<SiteActionRe
   if (error || !archived?.length) return failure("Não foi possível excluir. Tente novamente.");
 
   // A foto fica: o fechamento dos períodos em que ele atendeu ainda mostra o avatar.
-  refreshSite();
+  await refreshSite();
   return {
     ok: true,
     message: `${professional.name} foi excluído. Os atendimentos e fechamentos dele continuam no painel.`,
@@ -372,11 +374,10 @@ export async function saveSiteImageAction(input: SaveSiteImageInput): Promise<Si
     return failure("Revise os dados da imagem.");
   }
   const folder = getSlotFolder(input.slot);
-  const newImagePath = getSiteMediaPath(input.newImageUrl, supabaseUrl, folder);
-
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
   const { supabase } = auth;
+  const newImagePath = getSiteMediaPath(input.newImageUrl, supabaseUrl, folder, auth.shopId);
 
   async function abort(message: string) {
     await removeObject(supabase, newImagePath);
@@ -405,10 +406,10 @@ export async function saveSiteImageAction(input: SaveSiteImageInput): Promise<Si
     .select("slot");
   if (error || !updated?.length) return abort("Não foi possível salvar a imagem. A imagem atual continua no site.");
 
-  refreshSite(catalogTags.siteImages);
+  await refreshSite("site-images");
 
   if (input.newImageUrl) {
-    const oldPath = getSiteMediaPath(current.image_url, supabaseUrl, folder);
+    const oldPath = getSiteMediaPath(current.image_url, supabaseUrl, folder, auth.shopId);
     if (!(await removeObject(supabase, oldPath))) {
       return { ok: true, message: "Imagem salva. A versão antiga não pôde ser removida do armazenamento." };
     }
@@ -426,11 +427,10 @@ export async function saveSiteImageAction(input: SaveSiteImageInput): Promise<Si
 // Combos (service_components): um combo lista os serviços simples que já inclui. O
 // agendamento não deixa escolher um combo junto com uma das partes (o banco confere de novo).
 
-function refreshServices() {
+async function refreshServices() {
   // Serviços aparecem na landing e no agendamento; a lista de quem atende cada um fica no
   // catálogo de profissionais.
-  updateTag(catalogTags.services);
-  updateTag(catalogTags.professionals);
+  await refreshSite("services", "professionals");
 }
 
 export type SaveServiceInput = ServiceInput & {
@@ -564,7 +564,7 @@ export async function saveServiceAction(input: SaveServiceInput): Promise<SiteAc
       return failure("Não foi possível concluir o cadastro do serviço. Nada foi salvo; tente novamente.");
     }
 
-    refreshServices();
+    await refreshServices();
     return { ok: true, message: `${name} foi adicionado aos serviços.` };
   }
 
@@ -581,7 +581,7 @@ export async function saveServiceAction(input: SaveServiceInput): Promise<SiteAc
     .upsert({ service_id: input.id, plan_payout_amount: input.planPayout }, { onConflict: "service_id" });
   const combo = await saveComponents(supabase, input.id, input.components);
 
-  refreshServices();
+  await refreshServices();
   if (payoutError) return { ok: true, message: `${name} salvo, mas o repasse do plano não foi atualizado. Tente de novo.` };
   if (!combo) return { ok: true, message: `${name} salvo, mas os serviços do combo não foram atualizados. Tente de novo.` };
   return { ok: true, message: `${name} salvo. Os novos agendamentos já usam os dados atualizados.` };
@@ -600,7 +600,7 @@ export async function setServiceActiveAction(id: string, active: boolean): Promi
     .select("name");
   if (error || !data?.length) return failure("Não foi possível mudar o status. Tente novamente.");
 
-  refreshServices();
+  await refreshServices();
   return {
     ok: true,
     message: active
@@ -613,7 +613,7 @@ export async function moveServiceAction(id: string, direction: -1 | 1): Promise<
   if (!isUuid(id) || (direction !== -1 && direction !== 1)) return failure("Serviço não encontrado.");
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  return reorder(auth.supabase, "services", id, direction, catalogTags.services);
+  return reorder(auth.supabase, "services", id, direction, "services");
 }
 
 /**
@@ -634,7 +634,7 @@ export async function deleteServiceAction(id: string): Promise<SiteActionResult>
   const [appointments, plans] = await Promise.all([
     // Qualquer serviço do atendimento (não só o primeiro) conta como histórico.
     supabase.from("appointment_services").select("appointment_id", { count: "exact", head: true }).eq("service_id", id),
-    supabase.from("plan_services").select("subscription_plans(name)").eq("service_id", id),
+    supabase.from("plan_services").select("subscription_plans!plan_services_plan_id_fkey(name)").eq("service_id", id),
   ]);
   if (appointments.error || plans.error) return failure("Não foi possível conferir o uso do serviço. Nada foi excluído.");
 
@@ -649,7 +649,7 @@ export async function deleteServiceAction(id: string): Promise<SiteActionResult>
   if (!appointments.count) {
     const { data: deleted, error } = await supabase.from("services").delete().eq("id", id).select("id");
     if (!error && deleted?.length) {
-      refreshServices();
+      await refreshServices();
       return { ok: true, message: `${service.name} foi excluído.` };
     }
     // Atendimento criado entre a conferência e o delete (FK): cai na exclusão lógica.
@@ -663,7 +663,7 @@ export async function deleteServiceAction(id: string): Promise<SiteActionResult>
     .select("id");
   if (error || !archived?.length) return failure("Não foi possível excluir. Tente novamente.");
 
-  refreshServices();
+  await refreshServices();
   return { ok: true, message: `${service.name} foi excluído. Os atendimentos e fechamentos com ele continuam no painel.` };
 }
 
@@ -738,7 +738,7 @@ export async function savePlanAction(input: SavePlanInput): Promise<SiteActionRe
       return failure("Não foi possível salvar os serviços do plano. Nada foi salvo; tente novamente.");
     }
 
-    updateTag(catalogTags.plans);
+    await refreshSite("plans");
     return { ok: true, message: `${name} foi criado e já pode receber assinantes.` };
   }
 
@@ -765,7 +765,7 @@ export async function savePlanAction(input: SavePlanInput): Promise<SiteActionRe
         .eq("plan_id", input.id)
         .not("service_id", "in", `(${serviceIds.join(",")})`);
 
-  updateTag(catalogTags.plans);
+  await refreshSite("plans");
   if (upsertError || removeError) {
     return failure("Os dados do plano foram salvos, mas os serviços incluídos não. Confira e tente de novo.");
   }
@@ -791,7 +791,7 @@ export async function setPlanActiveAction(id: string, active: boolean): Promise<
     .select("name");
   if (error || !data?.length) return failure("Não foi possível mudar o status. Tente novamente.");
 
-  updateTag(catalogTags.plans);
+  await refreshSite("plans");
   return {
     ok: true,
     message: active
@@ -804,7 +804,7 @@ export async function movePlanAction(id: string, direction: -1 | 1): Promise<Sit
   if (!isUuid(id) || (direction !== -1 && direction !== 1)) return failure("Plano não encontrado.");
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
-  return reorder(auth.supabase, "subscription_plans", id, direction, catalogTags.plans);
+  return reorder(auth.supabase, "subscription_plans", id, direction, "plans");
 }
 
 /**
@@ -838,7 +838,7 @@ export async function deletePlanAction(id: string): Promise<SiteActionResult> {
   if (!subscriptions.length) {
     const { data: deleted, error } = await supabase.from("subscription_plans").delete().eq("id", id).select("id");
     if (!error && deleted?.length) {
-      updateTag(catalogTags.plans);
+      await refreshSite("plans");
       return { ok: true, message: `${plan.name} foi excluído.` };
     }
     // Assinatura criada entre a conferência e o delete (FK): cai na exclusão lógica.
@@ -852,7 +852,7 @@ export async function deletePlanAction(id: string): Promise<SiteActionResult> {
     .select("id");
   if (error || !archived?.length) return failure("Não foi possível excluir. Tente novamente.");
 
-  updateTag(catalogTags.plans);
+  await refreshSite("plans");
   return { ok: true, message: `${plan.name} foi excluído. Assinaturas e mensalidades antigas continuam no painel.` };
 }
 
@@ -882,8 +882,10 @@ export type ScheduleActionResult =
 
 type WeekPeriodInput = Pick<OpeningPeriod, "weekday" | "opensAt" | "closesAt">;
 
-function shopToday() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+/** Hoje no fuso da barbearia do domínio. */
+async function shopToday() {
+  const shop = await getCurrentShop();
+  return getShopToday(shop?.timezone ?? "America/Sao_Paulo");
 }
 
 /** Dono do horário vindo do navegador: null (barbearia) ou um uuid. */
@@ -896,12 +898,13 @@ function isOwner(value: unknown): value is string | null {
  * barbeiro só o próprio (o id que vem do navegador tem de ser o da sessão).
  */
 async function requireScheduleEditor(professionalId: string | null): Promise<{ supabase: Supabase } | { error: SiteActionResult }> {
-  const current = await getCurrentStaff();
-  if (!current) return { error: failure("Sua sessão terminou. Entre novamente no painel.") };
-  const { staff } = current;
-  if (!staff?.isActive) return { error: failure("Seu acesso ao painel não está ativo.") };
-
-  const supabase = await getSupabaseServerClient();
+  const auth = await checkShopStaff();
+  if ("refusal" in auth) {
+    return {
+      error: failure(auth.refusal === "not_staff" ? "Seu acesso ao painel não está ativo." : shopStaffMessages[auth.refusal]),
+    };
+  }
+  const { supabase, context: staff } = auth;
   if (staff.role === "admin") {
     if (professionalId !== null) {
       const { data } = await supabase.from("professionals").select("id").eq("id", professionalId).is("deleted_at", null).maybeSingle();
@@ -942,7 +945,7 @@ async function findConflicts(
   professionalId: string | null,
   range?: { start: string; end: string },
 ): Promise<ScheduleConflict[] | null> {
-  const today = shopToday();
+  const today = await shopToday();
   const { data, error } = await supabase.rpc("get_team_agenda", {
     p_start: range ? (range.start > today ? range.start : today) : today,
     p_end: range?.end ?? new Date(Date.parse(`${today}T00:00:00Z`) + 366 * 86_400_000).toISOString().slice(0, 10),
@@ -982,7 +985,7 @@ async function findConflicts(
 async function loadSchedule(supabase: Supabase) {
   const [periods, exceptions] = await Promise.all([
     supabase.from("opening_periods").select(openingPeriodColumns),
-    supabase.from("schedule_exceptions").select(scheduleExceptionColumns).gte("ends_on", shopToday()),
+    supabase.from("schedule_exceptions").select(scheduleExceptionColumns).gte("ends_on", await shopToday()),
   ]);
   if (periods.error || exceptions.error) return null;
   return {
@@ -1068,7 +1071,7 @@ export async function saveWeekAction(
       })),
     );
     if (error) {
-      if (professionalId === null) updateTag(catalogTags.hours);
+      if (professionalId === null) await refreshSite("hours");
       return failure(
         "Os períodos retirados foram removidos, mas os novos não foram gravados. Confira o horário semanal e salve de novo.",
       );
@@ -1076,7 +1079,7 @@ export async function saveWeekAction(
   }
 
   // O site mostra só o horário da barbearia; o agendamento online calcula tudo na hora.
-  if (professionalId === null) updateTag(catalogTags.hours);
+  if (professionalId === null) await refreshSite("hours");
   return {
     ok: true,
     message: conflicts.length
@@ -1106,7 +1109,7 @@ export async function saveExceptionAction(
   input: ExceptionInput,
   confirmConflicts: boolean,
 ): Promise<ScheduleActionResult> {
-  const today = shopToday();
+  const today = await shopToday();
   if (
     !isOwner(professionalId) ||
     typeof input?.startsOn !== "string" ||

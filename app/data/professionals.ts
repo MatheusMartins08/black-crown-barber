@@ -42,7 +42,7 @@ export type ProfessionalRow = {
 };
 
 export const professionalColumns =
-  "id, slug, name, specialty, description, image_url, image_alt, image_position, is_active, deleted_at, sort_order, professional_services(services(slug))";
+  "id, slug, name, specialty, description, image_url, image_alt, image_position, is_active, deleted_at, sort_order, professional_services!professional_services_professional_id_fkey(services!professional_services_service_id_fkey(slug))";
 
 export const defaultImagePosition = "50% 50%";
 

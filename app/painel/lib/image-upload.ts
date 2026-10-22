@@ -1,4 +1,5 @@
-import { getSiteMediaPublicPrefix, imageRules, siteMediaBucket, type SiteMediaFolder } from "../../data/site-media";
+import { getSiteMediaFolder, getSiteMediaPublicPrefix, imageRules, siteMediaBucket, type SiteMediaFolder } from "../../data/site-media";
+import { getBrowserShopId } from "../../lib/browser-shop";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { supabaseUrl } from "../../lib/supabase/env";
 
@@ -51,10 +52,13 @@ async function prepareImage(file: File): Promise<PreparedImage> {
   return converted;
 }
 
-/** Envia a imagem com nome único (uuid) e devolve a URL pública e o caminho no bucket. */
+/**
+ * Envia a imagem com nome único (uuid) para a pasta da barbearia e devolve a URL pública e o
+ * caminho no bucket. O Storage só aceita a pasta da loja do admin.
+ */
 export async function uploadSiteImage(folder: SiteMediaFolder, file: File) {
   const prepared = await prepareImage(file);
-  const path = `${folder}/${crypto.randomUUID()}.${prepared.extension}`;
+  const path = `${getSiteMediaFolder(getBrowserShopId(), folder)}/${crypto.randomUUID()}.${prepared.extension}`;
   const { error } = await getSupabaseBrowserClient()
     .storage.from(siteMediaBucket)
     .upload(path, prepared.blob, { contentType: prepared.type, cacheControl: "31536000", upsert: false });

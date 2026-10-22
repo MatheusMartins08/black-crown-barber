@@ -9,6 +9,8 @@ import {
 } from "../data/staff";
 import { getSupabaseAdminClient } from "../lib/supabase/admin";
 import { getSupabaseServerClient } from "../lib/supabase/server";
+import { identityMetadata, isShopIdentity } from "./lib/auth-identity";
+import { checkShopAdmin, shopStaffMessages } from "./lib/shop-admin";
 import type { SiteActionResult } from "./site-actions";
 
 // Edição do site > Barbeiros > Acesso ao painel. Cada barbeiro tem o próprio login, ligado ao
@@ -37,6 +39,7 @@ type AdminAuth =
   | { error: SiteActionResult }
   | {
       supabase: Supabase;
+      shopId: string;
       admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
       professional: { id: string; name: string };
     };
@@ -46,20 +49,18 @@ async function requireAdminFor(professionalId: unknown): Promise<AdminAuth> {
     return { error: failure("Profissional não encontrado. Recarregue a página.") };
   }
 
-  const supabase = await getSupabaseServerClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-  if (!userId) return { error: failure("Sua sessão terminou. Entre novamente no painel.") };
-
-  const { data: staff } = await supabase
-    .from("staff_members")
-    .select("role, is_active")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (staff?.role !== "admin" || !staff.is_active) {
-    return { error: failure("Só o administrador gerencia o acesso da equipe.") };
+  // Conferido no banco, sem cache: logo abaixo vem o Auth Admin (service role, sem RLS).
+  const auth = await checkShopAdmin();
+  if ("refusal" in auth) {
+    return {
+      error: failure(
+        auth.refusal === "not_staff" ? "Só o administrador gerencia o acesso da equipe." : shopStaffMessages[auth.refusal],
+      ),
+    };
   }
+  const { supabase, shopId } = auth;
 
+  // A RLS só devolve profissionais da loja do admin.
   const { data: professional } = await supabase
     .from("professionals")
     .select("id, name")
@@ -70,7 +71,7 @@ async function requireAdminFor(professionalId: unknown): Promise<AdminAuth> {
 
   const admin = getSupabaseAdminClient();
   if (!admin) return { error: failure(missingSecret) };
-  return { supabase, admin, professional: professional as { id: string; name: string } };
+  return { supabase, shopId, admin, professional: professional as { id: string; name: string } };
 }
 
 /** Login do barbeiro deste profissional (só o admin lê as linhas dos outros). */
@@ -95,6 +96,8 @@ function isDuplicateEmail(error: { code?: string; status?: number } | null) {
 }
 
 const loginTaken = "Esse usuário já está em uso. Escolha outro.";
+/** O vínculo local aponta para um login de outra loja ou de outro tipo: não mexe no Auth. */
+const foreignLogin = "O login deste barbeiro não pertence a esta barbearia.";
 
 export async function createBarberAccessAction(
   professionalId: string,
@@ -109,7 +112,7 @@ export async function createBarberAccessAction(
 
   const auth = await requireAdminFor(professionalId);
   if ("error" in auth) return auth.error;
-  const { supabase, admin, professional } = auth;
+  const { supabase, shopId, admin, professional } = auth;
 
   if (await getBarberLogin(supabase, professional.id)) {
     return failure("Este barbeiro já tem acesso. Use Alterar usuário ou Redefinir senha.");
@@ -118,10 +121,10 @@ export async function createBarberAccessAction(
   const normalized = normalizeStaffLogin(login);
   if (await isLoginTaken(supabase, normalized, null)) return failure(loginTaken);
   const created = await admin.auth.admin.createUser({
-    email: getStaffLoginEmail(normalized),
+    email: getStaffLoginEmail(normalized, shopId),
     password,
     email_confirm: true,
-    app_metadata: { kind: "equipe" },
+    app_metadata: identityMetadata(shopId, "equipe"),
   });
   if (created.error || !created.data.user) {
     return isDuplicateEmail(created.error)
@@ -152,7 +155,7 @@ export async function updateBarberLoginAction(professionalId: string, login: str
 
   const auth = await requireAdminFor(professionalId);
   if ("error" in auth) return auth.error;
-  const { supabase, admin, professional } = auth;
+  const { supabase, shopId, admin, professional } = auth;
 
   const current = await getBarberLogin(supabase, professional.id);
   if (!current || current.role !== "barbeiro") return failure("Este barbeiro ainda não tem acesso.");
@@ -160,9 +163,10 @@ export async function updateBarberLoginAction(professionalId: string, login: str
   const normalized = normalizeStaffLogin(login);
   if (current.login === normalized) return { ok: true, message: "O usuário já era esse." };
   if (await isLoginTaken(supabase, normalized, current.user_id)) return failure(loginTaken);
+  if (!(await isShopIdentity(admin, current.user_id, shopId, "equipe"))) return failure(foreignLogin);
 
   const updated = await admin.auth.admin.updateUserById(current.user_id, {
-    email: getStaffLoginEmail(normalized),
+    email: getStaffLoginEmail(normalized, shopId),
     email_confirm: true,
   });
   if (updated.error) {
@@ -175,7 +179,7 @@ export async function updateBarberLoginAction(professionalId: string, login: str
   if (error) {
     // Volta o Auth para o usuário antigo: os dois continuam batendo.
     if (current.login) {
-      await admin.auth.admin.updateUserById(current.user_id, { email: getStaffLoginEmail(current.login) });
+      await admin.auth.admin.updateUserById(current.user_id, { email: getStaffLoginEmail(current.login, shopId) });
     }
     return error.code === "23505" ? failure(loginTaken) : failure("Não foi possível trocar o usuário. Tente novamente.");
   }
@@ -190,10 +194,11 @@ export async function resetBarberPasswordAction(professionalId: string, password
 
   const auth = await requireAdminFor(professionalId);
   if ("error" in auth) return auth.error;
-  const { supabase, admin, professional } = auth;
+  const { supabase, shopId, admin, professional } = auth;
 
   const current = await getBarberLogin(supabase, professional.id);
   if (!current || current.role !== "barbeiro") return failure("Este barbeiro ainda não tem acesso.");
+  if (!(await isShopIdentity(admin, current.user_id, shopId, "equipe"))) return failure(foreignLogin);
 
   const updated = await admin.auth.admin.updateUserById(current.user_id, { password });
   if (updated.error) return failure("Não foi possível redefinir a senha. Tente novamente.");
@@ -205,10 +210,11 @@ export async function setBarberAccessActiveAction(professionalId: string, active
 
   const auth = await requireAdminFor(professionalId);
   if ("error" in auth) return auth.error;
-  const { supabase, admin, professional } = auth;
+  const { supabase, shopId, admin, professional } = auth;
 
   const current = await getBarberLogin(supabase, professional.id);
   if (!current || current.role !== "barbeiro") return failure("Este barbeiro ainda não tem acesso.");
+  if (!(await isShopIdentity(admin, current.user_id, shopId, "equipe"))) return failure(foreignLogin);
 
   // Primeiro o banco (corta o acesso aos dados na hora), depois o Auth (login e renovação).
   const { error } = await supabase.from("staff_members").update({ is_active: active }).eq("user_id", current.user_id);

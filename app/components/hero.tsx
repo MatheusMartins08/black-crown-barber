@@ -1,9 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowDownRight } from "lucide-react";
-import { siteConfig } from "../data/site";
+import type { SiteConfig } from "../data/site";
 
-export default function Hero() {
+export default function Hero({ site }: { site: SiteConfig }) {
   return (
     <section aria-labelledby="hero-title" className="hero" id="inicio">
       <div className="hero__media">
@@ -13,7 +13,7 @@ export default function Hero() {
           fill
           loading="eager"
           sizes="(max-width: 700px) 100vw, 64vw"
-          src={siteConfig.heroImage}
+          src={site.heroImage}
         />
         <div aria-hidden="true" className="hero__image-shade" />
       </div>
@@ -29,11 +29,11 @@ export default function Hero() {
         </p>
 
         <div className="hero__actions">
-          <Link className="button" href={siteConfig.bookingUrl}>
+          <Link className="button" href={site.bookingUrl}>
             Agendar horário
             <ArrowDownRight aria-hidden="true" size={17} strokeWidth={1.8} />
           </Link>
-          <Link className="text-link" href={siteConfig.servicesUrl}>
+          <Link className="text-link" href={site.servicesUrl}>
             Conhecer serviços
           </Link>
         </div>

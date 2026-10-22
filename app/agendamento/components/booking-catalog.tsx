@@ -12,18 +12,21 @@ type BookingCatalog = {
   services: readonly Service[];
   /** Planos não excluídos (inclusive inativos, para quem ainda assina um deles). */
   plans: readonly SubscriptionPlan[];
+  /** Endereço da barbearia, para a confirmação. */
+  location: string;
 };
 
-const BookingCatalogContext = createContext<BookingCatalog>({ professionals: [], services: [], plans: [] });
+const BookingCatalogContext = createContext<BookingCatalog>({ professionals: [], services: [], plans: [], location: "" });
 
 export function BookingCatalogProvider({
   professionals,
   services,
   plans,
+  location,
   children,
 }: BookingCatalog & { children: ReactNode }) {
   return (
-    <BookingCatalogContext.Provider value={{ professionals, services, plans }}>{children}</BookingCatalogContext.Provider>
+    <BookingCatalogContext.Provider value={{ professionals, services, plans, location }}>{children}</BookingCatalogContext.Provider>
   );
 }
 
@@ -33,6 +36,10 @@ export function useBookingProfessionals() {
 
 export function useBookingServices() {
   return useContext(BookingCatalogContext).services;
+}
+
+export function useBookingLocation() {
+  return useContext(BookingCatalogContext).location;
 }
 
 export function useBookingPlans() {

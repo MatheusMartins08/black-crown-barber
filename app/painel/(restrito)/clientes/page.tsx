@@ -3,7 +3,7 @@ import ClientsWorkspace from "../../components/clients-workspace";
 import { requireStaff } from "../../lib/staff";
 
 export const metadata: Metadata = {
-  title: "Clientes | Painel Black Crown Barber",
+  title: "Clientes | Painel",
 };
 
 export default async function ClientesPage({

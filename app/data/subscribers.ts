@@ -86,13 +86,16 @@ export function normalizePhone(value: string) {
   return value.replace(/\D/g, "");
 }
 
+const subscriberLoginDomain = "assinantes.blackcrown.app";
+
 /**
  * Login do assinante no Supabase Auth. O cliente digita telefone e senha; por baixo, o
  * Auth recebe este e-mail interno (o login por telefone exigiria provedor de SMS). Nunca
- * é mostrado ao cliente e não recebe mensagens.
+ * é mostrado ao cliente e não recebe mensagens. Leva a loja: o mesmo telefone pode ser
+ * assinante de barbearias diferentes, com contas separadas.
  */
-export function getSubscriberLoginEmail(phone: string) {
-  return `${normalizePhone(phone)}@assinantes.blackcrown.app`;
+export function getSubscriberLoginEmail(phone: string, shopId: string) {
+  return `${normalizePhone(phone)}@${shopId}.${subscriberLoginDomain}`;
 }
 
 export type SubscriberField = "name" | "phone" | "password";

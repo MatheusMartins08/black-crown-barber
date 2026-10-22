@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: siteMediaPattern,
   },
+  // O dev server registra os argumentos de cada Server Action; o login e as actions de
+  // assinante e equipe recebem senhas. Nada de senha no terminal.
+  logging: {
+    serverFunctions: false,
+  },
 };
 
 export default nextConfig;

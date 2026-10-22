@@ -2,6 +2,9 @@
 // que no Supabase Auth vira um e-mail interno nunca exibido (mesma ideia do login do
 // assinante em subscribers.ts). A senha fica só no Supabase Auth.
 // Puro (sem React e sem rede): usado pela tela de login e pelas Server Actions.
+//
+// O mesmo usuário pode existir em barbearias diferentes, então o e-mail interno leva a loja:
+// rafael@<shopId>.equipe.blackcrown.app.
 
 export const staffLoginDomain = "equipe.blackcrown.app";
 
@@ -15,14 +18,14 @@ export function normalizeStaffLogin(value: string) {
   return value.trim().toLowerCase();
 }
 
-export function getStaffLoginEmail(login: string) {
-  return `${normalizeStaffLogin(login)}@${staffLoginDomain}`;
+export function getStaffLoginEmail(login: string, shopId: string) {
+  return `${normalizeStaffLogin(login)}@${shopId}.${staffLoginDomain}`;
 }
 
-/** O que foi digitado no login: com "@" é e-mail; sem, é o usuário do barbeiro. */
-export function toStaffAuthEmail(identifier: string) {
+/** O que foi digitado no login: com "@" é o e-mail do admin; sem, é o usuário do barbeiro. */
+export function toStaffAuthEmail(identifier: string, shopId: string) {
   const value = identifier.trim();
-  return value.includes("@") ? value.toLowerCase() : getStaffLoginEmail(value);
+  return value.includes("@") ? value.toLowerCase() : getStaffLoginEmail(value, shopId);
 }
 
 /** Problema no usuário (ou undefined). Mesma regra do check de staff_members.login. */

@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import AdminHeader from "../components/admin-header";
+import ReadOnlyNotice from "../components/read-only-notice";
 import { StaffNoAccess } from "../components/no-access";
 import { PainelCatalogProvider } from "../components/painel-catalog";
 import { getStaffProfessionals, getStaffSchedule, getTeamServices, requireStaff } from "../lib/staff";
 import "../painel.css";
 
 export const metadata: Metadata = {
-  title: "Painel dos barbeiros | Black Crown Barber",
+  title: "Painel dos barbeiros",
   description: "Agenda da equipe e horário de cada barbeiro.",
   robots: {
     index: false,
@@ -32,6 +33,7 @@ export default async function EquipeLayout({ children }: { children: ReactNode }
   return (
     <div className="admin">
       <AdminHeader role="barbeiro" userLabel={`${staff.displayName || staff.login || email} · Barbeiro`} />
+      {staff.readOnly ? <ReadOnlyNotice /> : null}
       <PainelCatalogProvider
         exceptions={schedule.exceptions}
         openingPeriods={schedule.periods}

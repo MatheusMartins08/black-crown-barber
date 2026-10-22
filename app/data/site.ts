@@ -1,22 +1,38 @@
-const address = "Rua Exemplo, 123";
-const city = "Belo Horizonte - MG";
+import type { ShopProfile } from "./shop";
 
-export const siteConfig = {
-  name: "Black Crown Barber",
-  description:
-    "Cortes masculinos, barba e cuidado em uma barbearia de estilo clássico e contemporâneo.",
-  city,
-  address,
-  mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${address}, ${city}`)}`,
-  phone: "(31) 99999-9999",
-  whatsapp: "(31) 99999-9999",
-  instagram: "@blackcrownbarber",
-  bookingUrl: "/agendamento",
-  whatsappUrl: "#contato",
-  servicesUrl: "#servicos",
-  heroImage: "/gallery-barba-01.jpg",
-  isDemonstration: true,
-};
+const defaultDescription = "Cortes masculinos, barba e cuidado em uma barbearia de estilo clássico e contemporâneo.";
+
+/** Logotipo em duas linhas: "Black Crown Barber" -> "Black Crown" e "Barber". */
+export function getBrandParts(name: string) {
+  const match = /^(.+?)\s+(barber|barbearia|barbershop|barber shop)$/i.exec(name.trim());
+  return match ? { main: match[1], descriptor: match[2] } : { main: name.trim(), descriptor: "Barbearia" };
+}
+
+/** Dados do site de uma barbearia: o perfil público da loja mais os links fixos do template. */
+export function getSiteConfig(shop: ShopProfile) {
+  const address = shop.address ?? "";
+  const city = shop.city ?? "";
+  const place = [address, city].filter(Boolean).join(", ");
+
+  return {
+    name: shop.name,
+    brand: getBrandParts(shop.name),
+    description: shop.description ?? defaultDescription,
+    city,
+    address,
+    mapsUrl: shop.mapsUrl ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place || shop.name)}`,
+    phone: shop.phone ?? "",
+    whatsapp: shop.whatsapp ?? "",
+    instagram: shop.instagram ?? "",
+    bookingUrl: "/agendamento",
+    whatsappUrl: "#contato",
+    servicesUrl: "#servicos",
+    heroImage: "/gallery-barba-01.jpg",
+    isDemonstration: true,
+  };
+}
+
+export type SiteConfig = ReturnType<typeof getSiteConfig>;
 
 export const navigationItems = [
   { label: "Início", href: "#inicio" },

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { AtSign, Crown, MapPin, Phone } from "lucide-react";
 import { getWeekSchedule, type OpeningPeriod } from "../data/hours";
-import { footerNavigationItems, siteConfig } from "../data/site";
+import { footerNavigationItems, type SiteConfig } from "../data/site";
 
 /** `periods`: horário semanal do Supabase; o rodapé lista só os dias abertos. */
-export default function SiteFooter({ periods }: { periods: OpeningPeriod[] }) {
+export default function SiteFooter({ periods, site }: { periods: OpeningPeriod[]; site: SiteConfig }) {
   return (
     <footer className="site-footer">
       <div className="site-footer__main">
@@ -12,8 +12,8 @@ export default function SiteFooter({ periods }: { periods: OpeningPeriod[] }) {
           <Link className="brand" href="#inicio">
             <Crown aria-hidden="true" className="brand__icon" strokeWidth={1.6} />
             <span className="brand__name">
-              <span>Black Crown</span>
-              <span className="brand__descriptor">Barber</span>
+              <span>{site.brand.main}</span>
+              <span className="brand__descriptor">{site.brand.descriptor}</span>
             </span>
           </Link>
           <p>Barbearia de estilo clássico e contemporâneo.</p>
@@ -28,9 +28,9 @@ export default function SiteFooter({ periods }: { periods: OpeningPeriod[] }) {
 
         <div className="site-footer__contact">
           <h2>Contato</h2>
-          <p><Phone aria-hidden="true" size={15} />{siteConfig.phone}</p>
-          <p><AtSign aria-hidden="true" size={15} />{siteConfig.instagram}</p>
-          <p><MapPin aria-hidden="true" size={15} />{siteConfig.address}, {siteConfig.city}</p>
+          <p><Phone aria-hidden="true" size={15} />{site.phone}</p>
+          <p><AtSign aria-hidden="true" size={15} />{site.instagram}</p>
+          <p><MapPin aria-hidden="true" size={15} />{site.address}, {site.city}</p>
         </div>
 
         <div className="site-footer__hours">
@@ -43,7 +43,7 @@ export default function SiteFooter({ periods }: { periods: OpeningPeriod[] }) {
         </div>
       </div>
       <div className="site-footer__bottom">
-        <span>© {new Date().getFullYear()} {siteConfig.name}. Todos os direitos reservados.</span>
+        <span>© {new Date().getFullYear()} {site.name}. Todos os direitos reservados.</span>
       </div>
     </footer>
   );

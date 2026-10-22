@@ -180,3 +180,50 @@ O PostgREST devolve `code` (SQLSTATE), `message` (chave) e `hint` (texto em pt-B
 ## Ao criar novas tabelas
 
 O Supabase concede tudo a `anon` e `authenticated` em tabelas novas de `public`. Em toda migration futura, revogue esse acesso, conceda só o necessário e habilite a RLS, como em `…120400_rls_policies.sql`.
+
+## Várias barbearias (multi-tenant)
+
+Todas as barbearias dividem o mesmo banco. Cada tabela tem `shop_id`. As FKs compostas `(shop_id, x_id)` impedem que um registro aponte para outro de outra loja, e a RLS soma a loja às regras de papel que já existiam: o barbeiro continua sem ver valores e clientes, mesmo os da própria loja.
+
+**Regra de isolamento:** os dados privados (agenda, clientes, assinaturas, cobrança, repasses, equipe e configurações) ficam isolados por loja. O conteúdo publicado no site (catálogo ativo, horários e imagens do bucket público) é público.
+
+- **Loja do site:** resolvida pelo domínio (`shop_domains`, RPC `resolve_shop_host`). Com `SHOP_SLUG` no ambiente, o deploy fica preso a uma loja; é o modo do localhost.
+- **Perfil público:** RPC `get_shop_profile`. A tabela `shop_settings` não é lida pelo visitante; a carência e a retenção ficam só com a equipe.
+- **Situação da loja (`shops.status`):**
+  - `ativa`: tudo funciona.
+  - `suspensa`: site e agendamento fora do ar, painel só para consulta. O banco recusa gravações de tabela, Storage, RPCs e service role.
+  - `cancelada`: nada abre, e só a limpeza do histórico continua.
+- **RPCs do site:** recebem `p_shop`. As antigas, sem `p_shop`, são atalhos fixos na Black Crown até a etapa 5.
+- **Logins internos:** levam a loja, no formato `<login>@<shopId>.equipe.blackcrown.app` e `<telefone>@<shopId>.assinantes.blackcrown.app`.
+- **Storage:** as imagens ficam em `site-media/<shopId>/<pasta>/<arquivo>`.
+- **Cron:** roda em rodadas curtas das 03:00 às 04:45 de Brasília. Cada rodada tem um teto por loja e um teto total, e trabalha no fuso e com a retenção de cada loja.
+
+### Etapas (cada uma só depois da anterior estável)
+
+| # | o quê | como |
+| --- | --- | --- |
+| 1 | App aceita os dois formatos de login e usa hints de FK nos embeddings | deploy do app |
+| 2 | `20261022120000_multi_tenant_expand`: `shop_id`, FKs compostas, RLS, RPCs com `p_shop`, Black Crown como loja nº 1. Compatível com o app da etapa 1 | backup e SQL Editor. Desfazer: `rollback/20261022120000_multi_tenant_expand.down.sql` |
+| 3 | App multi-tenant e `scripts/migrate-auth-emails.mjs` (simula por padrão; `--apply` e `--revert`) | deploy do app e script |
+| 4 | `20261022130000_multi_tenant_release`: tira as uniques globais, cria `provision_shop`. **Sem volta para apps anteriores à etapa 3** | backup e SQL Editor |
+| 5 | `20261022140000_multi_tenant_cleanup`: remove atalhos antigos, caminhos legados do Storage e `opening_hours` (depois de mover as fotos antigas) | backup e SQL Editor, cerca de 2 semanas depois |
+
+As migrations têm `begin`/`commit` próprios e `lock_timeout` de 5 s: se o banco estiver ocupado, falham em vez de travar o site.
+
+### Cadastrar uma barbearia (depois da etapa 4)
+
+```bash
+node --env-file=.env.local scripts/provision-shop.mjs --slug barbearia-exemplo --name "Barbearia Exemplo" \
+  --admin-email dono@exemplo.com --host exemplo.suaplataforma.com.br
+```
+
+O script pede a senha do admin sem mostrá-la. Pode ser rodado de novo se algo falhar no meio. Depois, aponte o DNS do domínio para o servidor do app.
+
+### Códigos de erro novos
+
+| code | message | quando |
+| --- | --- | --- |
+| BC015 | `shop_not_found` | loja inexistente |
+| BC016 | `shop_unavailable` | loja suspensa ou cancelada para aquela operação |
+| BC017 | `host_in_use` | domínio já é de outra loja (provisionamento) |
+| BC018 | `user_in_other_shop` | o usuário já é da equipe de outra loja (provisionamento) |

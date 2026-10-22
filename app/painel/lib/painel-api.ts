@@ -375,7 +375,7 @@ export async function fetchMonthPayments(month: string): Promise<MonthPayment[]>
 
   const { data, error } = await getSupabaseBrowserClient()
     .from("subscription_payments")
-    .select("id, amount, status, customer_subscriptions!inner(subscription_plans(slug))")
+    .select("id, amount, status, customer_subscriptions!subscription_payments_subscription_id_fkey!inner(subscription_plans!customer_subscriptions_plan_id_fkey(slug))")
     .gte("due_date", start)
     .lte("due_date", end);
   if (error) fail(error, "Não foi possível carregar as mensalidades do mês.");

@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Crown, Menu, X } from "lucide-react";
-import { navigationItems, siteConfig } from "../data/site";
+import { navigationItems, type SiteConfig } from "../data/site";
 import useAnchorNavigation from "./use-anchor-navigation";
 
-export default function SiteHeader() {
+export default function SiteHeader({ site }: { site: SiteConfig }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hasScrolled, setHasScrolled] = useState(false);
 
@@ -28,8 +28,8 @@ export default function SiteHeader() {
         <Link className="brand" href="#inicio" onClick={closeMenu}>
           <Crown aria-hidden="true" className="brand__icon" strokeWidth={1.6} />
           <span className="brand__name">
-            <span>Black Crown</span>
-            <span className="brand__descriptor">Barber</span>
+            <span>{site.brand.main}</span>
+            <span className="brand__descriptor">{site.brand.descriptor}</span>
           </span>
         </Link>
 
@@ -56,7 +56,7 @@ export default function SiteHeader() {
           ))}
           <Link
             className="button button--compact primary-nav__mobile-cta"
-            href={siteConfig.bookingUrl}
+            href={site.bookingUrl}
             onClick={closeMenu}
           >
             Agendar horário
@@ -65,13 +65,13 @@ export default function SiteHeader() {
 
         <Link
           className="button button--compact site-header__cta"
-          href={siteConfig.bookingUrl}
+          href={site.bookingUrl}
         >
           Agendar horário
         </Link>
       </div>
 
-      <Link className="mobile-booking-bar" href={siteConfig.bookingUrl}>
+      <Link className="mobile-booking-bar" href={site.bookingUrl}>
         Agendar horário
       </Link>
     </header>

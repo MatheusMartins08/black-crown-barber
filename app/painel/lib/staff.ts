@@ -19,6 +19,8 @@ import {
 } from "../../data/professionals";
 import { serviceColumns, sortServices, staffServiceColumns, toService, type ServiceRow } from "../../data/services";
 import { siteImageColumns, toSiteImage, type SiteImageRow } from "../../data/site-images";
+import { getShopToday } from "../../data/shop";
+import { getCurrentShop } from "../../lib/shop";
 import { getSupabaseServerClient } from "../../lib/supabase/server";
 
 export type StaffRole = "admin" | "barbeiro";
@@ -31,12 +33,15 @@ export type StaffMember = {
   /** Usuário de login do barbeiro; null para quem entra por e-mail (admin). */
   login: string | null;
   isActive: boolean;
+  /** Barbearia suspensa: o painel abre só para consulta (o banco recusa gravações). */
+  readOnly: boolean;
 };
 
 /** Tela inicial de cada papel, para onde o login e os redirecionamentos levam. */
 export const staffHome: Record<StaffRole, string> = { admin: "/painel", barbeiro: "/painel/equipe" };
 
 type StaffRow = {
+  shop_id: string;
   role: StaffRole;
   professional_id: string | null;
   display_name: string | null;
@@ -48,19 +53,21 @@ type StaffRow = {
  * Usuário logado e a própria linha em staff_members (a RLS deixa cada um ler a sua).
  * Memorizado por requisição: o layout e a página compartilham a mesma consulta. Decide o que
  * mostrar e para onde redirecionar; os dados continuam protegidos pela RLS no banco.
+ * Só vale a equipe da barbearia deste domínio: quem é de outra loja fica sem acesso aqui.
  */
 export const getCurrentStaff = cache(async () => {
   const supabase = await getSupabaseServerClient();
-  const { data } = await supabase.auth.getClaims();
+  const [{ data }, shop] = await Promise.all([supabase.auth.getClaims(), getCurrentShop()]);
   const userId = data?.claims?.sub;
   if (!userId) return null;
 
   const { data: row } = await supabase
     .from("staff_members")
-    .select("role, professional_id, display_name, login, is_active")
+    .select("shop_id, role, professional_id, display_name, login, is_active")
     .eq("user_id", userId)
     .maybeSingle();
-  const staff = row as StaffRow | null;
+  const found = row as StaffRow | null;
+  const staff = found && shop && found.shop_id === shop.id && shop.status !== "cancelada" ? found : null;
 
   return {
     userId,
@@ -72,6 +79,7 @@ export const getCurrentStaff = cache(async () => {
           displayName: staff.display_name,
           login: staff.login,
           isActive: staff.is_active,
+          readOnly: shop?.status === "suspensa",
         } satisfies StaffMember)
       : null,
   };
@@ -191,7 +199,7 @@ export const getTeamServices = cache(async () => {
 /** Comissão de avulso (payroll_settings), visível só para o admin. */
 export const getWalkInRate = cache(async () => {
   const supabase = await getSupabaseServerClient();
-  const { data } = await supabase.from("payroll_settings").select("walk_in_commission_rate").eq("id", 1).maybeSingle();
+  const { data } = await supabase.from("payroll_settings").select("walk_in_commission_rate").maybeSingle();
   return data ? Number(data.walk_in_commission_rate) : 0;
 });
 
@@ -209,8 +217,8 @@ export async function getServiceUsage(): Promise<Record<string, ServiceUsage>> {
   const supabase = await getSupabaseServerClient();
   const [appointments, plans] = await Promise.all([
     // Por serviço do atendimento: um horário com Corte + Sobrancelha conta para os dois.
-    supabase.from("appointment_services").select("service_id, appointments(status, starts_at)"),
-    supabase.from("plan_services").select("service_id, subscription_plans(name)"),
+    supabase.from("appointment_services").select("service_id, appointments!appointment_services_appointment_id_fkey(status, starts_at)"),
+    supabase.from("plan_services").select("service_id, subscription_plans!plan_services_plan_id_fkey(name)"),
   ]);
   if (appointments.error || plans.error) throw new Error("Não foi possível carregar o uso dos serviços.");
 
@@ -269,7 +277,7 @@ export async function getPlanUsage(): Promise<Record<string, PlanUsage>> {
  */
 export const getStaffSchedule = cache(async () => {
   const supabase = await getSupabaseServerClient();
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const today = getShopToday((await getCurrentShop())?.timezone ?? "America/Sao_Paulo");
   const [periods, exceptions] = await Promise.all([
     supabase.from("opening_periods").select(openingPeriodColumns),
     supabase

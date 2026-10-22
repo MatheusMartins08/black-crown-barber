@@ -3,7 +3,7 @@ import AdminDashboard from "../components/admin-dashboard";
 import { requireStaff } from "../lib/staff";
 
 export const metadata: Metadata = {
-  title: "Visão geral | Painel Black Crown Barber",
+  title: "Visão geral | Painel",
 };
 
 export default async function VisaoGeralPage() {

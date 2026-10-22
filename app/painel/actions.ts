@@ -14,6 +14,8 @@ import {
 import { getSupabaseAdminClient } from "../lib/supabase/admin";
 import { getRpcMessage, type RpcError } from "../lib/supabase/errors";
 import { getSupabaseServerClient } from "../lib/supabase/server";
+import { identityMetadata, isShopIdentity } from "./lib/auth-identity";
+import { checkShopAdmin, shopStaffMessages } from "./lib/shop-admin";
 
 // Ações do painel que precisam da chave secreta (criar login e trocar senha no Supabase
 // Auth). Cada uma confere que quem chama é admin; o cadastro em si passa pelas RPCs
@@ -41,22 +43,18 @@ function fromRpc(error: RpcError, fallback: string): SubscriberActionResult {
   return failure("invalid_request", getRpcMessage(error, fallback));
 }
 
-/** Sessão do admin (cookie) ou o motivo de recusa. */
+/** Admin desta barbearia (conferido no banco, sem cache) ou o motivo de recusa. */
 async function requireAdmin() {
-  const supabase = await getSupabaseServerClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-  if (!userId) return { error: failure("not_allowed", "Sua sessão terminou. Entre novamente no painel.") };
-
-  const { data: staff } = await supabase
-    .from("staff_members")
-    .select("role, is_active")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (staff?.role !== "admin" || !staff.is_active) {
-    return { error: failure("not_allowed", "Só o administrador gerencia assinantes.") };
+  const auth = await checkShopAdmin();
+  if ("refusal" in auth) {
+    return {
+      error: failure(
+        "not_allowed",
+        auth.refusal === "not_staff" ? "Só o administrador gerencia assinantes." : shopStaffMessages[auth.refusal],
+      ),
+    };
   }
-  return { supabase };
+  return { supabase: auth.supabase, shopId: auth.shopId };
 }
 
 export async function createSubscriberAction(input: {
@@ -84,10 +82,11 @@ export async function createSubscriberAction(input: {
   if (!admin) return failure("not_configured", missingSecret);
 
   const created = await admin.auth.admin.createUser({
-    email: getSubscriberLoginEmail(input.phone),
+    email: getSubscriberLoginEmail(input.phone, auth.shopId),
     password: input.password,
     email_confirm: true,
     user_metadata: { name: input.name.trim(), kind: "assinante" },
+    app_metadata: identityMetadata(auth.shopId, "assinante"),
   });
   if (created.error || !created.data.user) {
     return created.error?.code === "email_exists"
@@ -97,6 +96,7 @@ export async function createSubscriberAction(input: {
   const userId = created.data.user.id;
 
   const saved = await auth.supabase.rpc("save_subscriber", {
+    p_shop: auth.shopId,
     p_customer_id: null,
     p_name: input.name,
     p_phone: input.phone,
@@ -109,6 +109,7 @@ export async function createSubscriberAction(input: {
 
   const customerId = saved.data as string;
   const subscription = await auth.supabase.rpc("set_subscription", {
+    p_shop: auth.shopId,
     p_customer_id: customerId,
     p_plan: input.planId,
     p_status: input.status,
@@ -142,8 +143,11 @@ export async function updateSubscriberAction(
   const admin = phoneChanged && current.user_id ? getSupabaseAdminClient() : null;
   if (phoneChanged && current.user_id) {
     if (!admin) return failure("not_configured", missingSecret);
+    if (!(await isShopIdentity(admin, current.user_id, auth.shopId, "assinante"))) {
+      return failure("not_allowed", "O login deste assinante não pertence a esta barbearia.");
+    }
     const updated = await admin.auth.admin.updateUserById(current.user_id, {
-      email: getSubscriberLoginEmail(changes.phone),
+      email: getSubscriberLoginEmail(changes.phone, auth.shopId),
       email_confirm: true,
     });
     if (updated.error) {
@@ -154,6 +158,7 @@ export async function updateSubscriberAction(
   }
 
   const saved = await auth.supabase.rpc("save_subscriber", {
+    p_shop: auth.shopId,
     p_customer_id: id,
     p_name: changes.name,
     p_phone: changes.phone,
@@ -161,7 +166,7 @@ export async function updateSubscriberAction(
   });
   if (saved.error) {
     if (admin && current.user_id) {
-      await admin.auth.admin.updateUserById(current.user_id, { email: getSubscriberLoginEmail(current.phone) });
+      await admin.auth.admin.updateUserById(current.user_id, { email: getSubscriberLoginEmail(current.phone, auth.shopId) });
     }
     return fromRpc(saved.error, "Não foi possível salvar o assinante.");
   }
@@ -183,10 +188,11 @@ export async function resetSubscriberPasswordAction(id: string, password: string
   if (!current.user_id) {
     // Assinante sem login (por exemplo, cadastrado antes): cria agora com esta senha.
     const created = await admin.auth.admin.createUser({
-      email: getSubscriberLoginEmail(current.phone),
+      email: getSubscriberLoginEmail(current.phone, auth.shopId),
       password,
       email_confirm: true,
       user_metadata: { kind: "assinante" },
+      app_metadata: identityMetadata(auth.shopId, "assinante"),
     });
     if (created.error || !created.data.user) {
       return failure("invalid_request", "Não foi possível criar o login. Tente novamente.");
@@ -199,6 +205,10 @@ export async function resetSubscriberPasswordAction(id: string, password: string
     return { ok: true, id };
   }
 
+  // A linha local pode ter sido alterada; o dono do login no Auth é quem decide.
+  if (!(await isShopIdentity(admin, current.user_id, auth.shopId, "assinante"))) {
+    return failure("not_allowed", "O login deste assinante não pertence a esta barbearia.");
+  }
   const updated = await admin.auth.admin.updateUserById(current.user_id, { password });
   if (updated.error) return failure("invalid_request", "Não foi possível trocar a senha. Tente novamente.");
   return { ok: true, id };

@@ -7,16 +7,26 @@ import { NextResponse, type NextRequest } from "next/server";
 // Também renova a sessão do Supabase (cookies) e manda quem não está logado para
 // /painel/entrar. É só uma checagem otimista: quem é da equipe é conferido na página
 // (staff_members) e, de verdade, pela RLS do banco.
+//
+// Painel e agendamento não entram em buscadores: toda resposta daqui (inclusive redirect) sai
+// com X-Robots-Tag, além do robots.txt e da meta tag. Só a landing pode ser indexada.
+const noRobots = "noindex, nofollow, noarchive, nosnippet, noimageindex";
+
+function withoutRobots(response: NextResponse) {
+  response.headers.set("X-Robots-Tag", noRobots);
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.toLowerCase().startsWith("/painel") && !pathname.startsWith("/painel")) {
-    return NextResponse.redirect(new URL(`/painel${pathname.slice("/painel".length)}`, request.url));
+    return withoutRobots(NextResponse.redirect(new URL(`/painel${pathname.slice("/painel".length)}`, request.url)));
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return NextResponse.next();
+  if (!url || !key) return withoutRobots(NextResponse.next());
 
   let response = NextResponse.next({ request });
   const supabase = createServerClient(url, key, {
@@ -37,10 +47,10 @@ export async function proxy(request: NextRequest) {
   const isLoginPage = pathname === "/painel/entrar";
 
   if (pathname.startsWith("/painel") && !isLoginPage && !data?.claims) {
-    return NextResponse.redirect(new URL("/painel/entrar", request.url));
+    return withoutRobots(NextResponse.redirect(new URL("/painel/entrar", request.url)));
   }
 
-  return response;
+  return withoutRobots(response);
 }
 
 export const config = {

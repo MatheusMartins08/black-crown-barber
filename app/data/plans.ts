@@ -50,7 +50,7 @@ export type PlanRow = {
 };
 
 export const planColumns =
-  "id, slug, name, description, monthly_price, is_active, deleted_at, sort_order, plan_services(weekly_limit, period, services(slug))";
+  "id, slug, name, description, monthly_price, is_active, deleted_at, sort_order, plan_services!plan_services_plan_id_fkey(weekly_limit, period, services!plan_services_service_id_fkey(slug))";
 
 export function getShortName(name: string) {
   return name.replace(/^plano\s+/i, "").trim() || name;

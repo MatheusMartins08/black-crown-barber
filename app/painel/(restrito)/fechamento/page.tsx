@@ -3,7 +3,7 @@ import PayrollPage from "../../components/payroll-page";
 import { requireStaff } from "../../lib/staff";
 
 export const metadata: Metadata = {
-  title: "Fechamento | Painel Black Crown Barber",
+  title: "Fechamento | Painel",
 };
 
 export default async function FechamentoPage() {

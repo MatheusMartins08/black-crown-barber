@@ -50,7 +50,7 @@ export const serviceColumns =
   "id, slug, name, description, duration_minutes, price, icon, is_popular, is_active, deleted_at, sort_order, service_components!service_components_service_id_fkey(component_id)";
 
 /** Com o repasse do plano (só a equipe pode ler service_payouts). */
-export const staffServiceColumns = `${serviceColumns}, service_payouts(plan_payout_amount)`;
+export const staffServiceColumns = `${serviceColumns}, service_payouts!service_payouts_service_id_fkey(plan_payout_amount)`;
 
 export function toService(row: ServiceRow): Service {
   const payout = Array.isArray(row.service_payouts) ? row.service_payouts[0] : row.service_payouts;

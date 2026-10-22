@@ -10,12 +10,14 @@ import {
   type ServiceId,
   type TimeSlot,
 } from "../../data/booking";
+import { getBrowserShopId } from "../../lib/browser-shop";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 
 // Adaptador da agenda: cada função chama uma RPC pública do Supabase
 // (supabase/migrations/…120500_booking_rpc.sql, …121000_subscriber_accounts.sql e
 // …20261009130000_multi_service_booking.sql, que recebe a lista de serviços em p_services).
+// Todas recebem a barbearia da aba em p_shop (…20261022120000_multi_tenant_expand.sql).
 // O banco revalida tudo: serviços e combos, expediente, bloqueios, antecedência, horário
 // livre (pela duração somada) e plano.
 
@@ -57,6 +59,7 @@ function toSlot(row: SlotRow): TimeSlot {
 /** Horários livres de um dia. */
 export async function fetchDayAvailability(query: AvailabilityQuery & { date: string }): Promise<TimeSlot[]> {
   const { data, error } = await getSupabaseBrowserClient().rpc("get_day_availability", {
+    p_shop: getBrowserShopId(),
     p_services: query.serviceIds,
     p_professional: query.professionalId,
     p_date: query.date,
@@ -68,6 +71,7 @@ export async function fetchDayAvailability(query: AvailabilityQuery & { date: st
 /** Resumo de disponibilidade para a janela de datas exibida no calendário. */
 export async function fetchDaySummaries(query: AvailabilityQuery & { startDate: string; days: number }): Promise<DaySummary[]> {
   const { data, error } = await getSupabaseBrowserClient().rpc("get_day_summaries", {
+    p_shop: getBrowserShopId(),
     p_services: query.serviceIds,
     p_professional: query.professionalId,
     p_start: query.startDate,
@@ -84,6 +88,7 @@ export async function fetchDaySummaries(query: AvailabilityQuery & { startDate: 
 /** Primeiro horário livre a partir de uma data, dentro da janela de agendamento. */
 export async function findNextAvailable(query: AvailabilityQuery & { fromDate: string }) {
   const { data, error } = await getSupabaseBrowserClient().rpc("find_next_available", {
+    p_shop: getBrowserShopId(),
     p_services: query.serviceIds,
     p_professional: query.professionalId,
     p_from: query.fromDate,
@@ -99,6 +104,7 @@ function getSlotParams(draft: BookingDraft) {
     throw new BookingApiError("Revise os dados do agendamento antes de confirmar.", "invalid_request");
   }
   return {
+    p_shop: getBrowserShopId(),
     p_services: serviceIds,
     p_professional: professionalId,
     p_date: date,

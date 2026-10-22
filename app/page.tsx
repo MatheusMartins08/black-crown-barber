@@ -13,15 +13,21 @@ import {
 } from "./components/landing-sections";
 import SiteFooter from "./components/site-footer";
 import SiteHeader from "./components/site-header";
-import { localBusinessDetails, siteConfig } from "./data/site";
+import ShopUnavailable, { suspendedShopText } from "./components/shop-unavailable";
+import { getSiteConfig, localBusinessDetails } from "./data/site";
 import { getPublicOpeningPeriods, getPublicProfessionals, getPublicServices, getPublicSiteImages } from "./lib/catalog";
+import { requireCurrentShop } from "./lib/shop";
 
 export default async function Home() {
+  const shop = await requireCurrentShop();
+  if (shop.status !== "ativa") return <ShopUnavailable {...suspendedShopText} />;
+
+  const site = getSiteConfig(shop);
   const [professionals, siteImages, services, periods] = await Promise.all([
-    getPublicProfessionals(),
-    getPublicSiteImages(),
-    getPublicServices(),
-    getPublicOpeningPeriods(),
+    getPublicProfessionals(shop.id),
+    getPublicSiteImages(shop.id),
+    getPublicServices(shop.id),
+    getPublicOpeningPeriods(shop.id),
   ]);
   const galleryImages = siteImages.filter((image) => image.slot !== "about");
   const aboutImage = siteImages.find((image) => image.slot === "about") ?? null;
@@ -29,7 +35,7 @@ export default async function Home() {
     ? {
         "@context": "https://schema.org",
         "@type": "BarberShop",
-        name: siteConfig.name,
+        name: site.name,
         url: localBusinessDetails.url,
         telephone: localBusinessDetails.telephone,
         image: localBusinessDetails.image,
@@ -58,21 +64,21 @@ export default async function Home() {
           }}
         />
       ) : null}
-      <SiteHeader />
+      <SiteHeader site={site} />
       <main>
-        <Hero />
-        <QuickInfo periods={periods} />
-        <ServicesSection services={services} />
+        <Hero site={site} />
+        <QuickInfo periods={periods} site={site} />
+        <ServicesSection services={services} site={site} />
         <GallerySection images={galleryImages} />
-        <AboutSection image={aboutImage} />
-        <TeamSection professionals={professionals} />
+        <AboutSection image={aboutImage} site={site} />
+        <TeamSection professionals={professionals} site={site} />
         <TestimonialsSection />
-        <BookingSection />
-        <LocationSection periods={periods} />
+        <BookingSection site={site} />
+        <LocationSection periods={periods} site={site} />
         <FAQSection services={services} />
-        <FinalCallToAction />
+        <FinalCallToAction site={site} />
       </main>
-      <SiteFooter periods={periods} />
+      <SiteFooter periods={periods} site={site} />
     </>
   );
 }

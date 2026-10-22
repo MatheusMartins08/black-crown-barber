@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import { ArrowUpRight, CalendarPlus, Check, CalendarClock, CalendarX2, MessageCircle } from "lucide-react";
-import { siteConfig } from "../../data/site";
 import {
   formatCurrency,
   formatLongDate,
@@ -13,7 +12,7 @@ import {
 } from "../../data/booking";
 import { formatDuration } from "../../data/services";
 import { reservationActions, type ReservationActionId } from "../lib/booking-integrations";
-import { useBookingProfessionals } from "./booking-catalog";
+import { useBookingLocation, useBookingProfessionals } from "./booking-catalog";
 import ProfessionalAvatar from "./professional-avatar";
 
 const actionIcons: Record<ReservationActionId, typeof MessageCircle> = {
@@ -31,6 +30,7 @@ type BookingSuccessProps = {
 
 export default function BookingSuccess({ reservation, onBookAnother, headingRef }: BookingSuccessProps) {
   const professional = getProfessional(useBookingProfessionals(), reservation.professionalId);
+  const location = useBookingLocation();
   const endTime = toTime(toMinutes(reservation.time) + reservation.durationMinutes);
   // Valores copiados pelo banco na reserva. O assinante paga só o que o plano não cobre.
   const items = reservation.services ?? [];
@@ -74,7 +74,7 @@ export default function BookingSuccess({ reservation, onBookAnother, headingRef 
     { label: "Data", value: formatLongDate(reservation.date) },
     { label: "Horário", value: `${reservation.time} às ${endTime}` },
     { label: "Duração", value: formatDuration(reservation.durationMinutes) },
-    { label: "Local", value: `${siteConfig.address}, ${siteConfig.city}` },
+    { label: "Local", value: location },
     {
       label: reservation.plan ? "Assinante" : "Cliente",
       value: (

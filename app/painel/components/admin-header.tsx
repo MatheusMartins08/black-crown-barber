@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ArrowUpRight, Crown } from "lucide-react";
+import { getBrandParts } from "../../data/site";
+import { getCurrentShop } from "../../lib/shop";
 import type { StaffRole } from "../lib/staff";
 import AdminNav from "./admin-nav";
 
-export default function AdminHeader({
+export default async function AdminHeader({
   showSections = true,
   role = "barbeiro",
   userLabel,
@@ -14,6 +16,7 @@ export default function AdminHeader({
 }) {
   // Barbeiro logado: painel dos barbeiros. Admin e telas sem sessão (login): painel da barbearia.
   const team = showSections && role === "barbeiro";
+  const shop = await getCurrentShop();
 
   return (
     <header className="admin-header">
@@ -22,7 +25,7 @@ export default function AdminHeader({
         <Link className="brand" href={team ? "/painel/equipe" : "/painel"} prefetch={showSections ? undefined : false}>
           <Crown aria-hidden="true" className="brand__icon" strokeWidth={1.6} />
           <span className="brand__name">
-            <span>Black Crown</span>
+            <span>{getBrandParts(shop?.name ?? "Barbearia").main}</span>
             <span className="brand__descriptor">{team ? "Painel dos barbeiros" : "Painel da barbearia"}</span>
           </span>
         </Link>

@@ -41,15 +41,20 @@ export function getSiteMediaPublicPrefix(supabaseUrl: string) {
 
 const objectNamePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|avif)$/;
 
+/** Pasta da loja no bucket: "<shopId>/barbers". */
+export function getSiteMediaFolder(shopId: string, folder: SiteMediaFolder) {
+  return `${shopId}/${folder}`;
+}
+
 /**
- * Caminho do objeto no bucket ("barbers/<uuid>.webp") se a URL for uma imagem nossa
- * nessa pasta; senão null. Evita gravar URLs arbitrárias e apagar o que não é nosso.
+ * Caminho do objeto no bucket ("<shopId>/barbers/<uuid>.webp") se a URL for uma imagem da
+ * loja nessa pasta; senão null. Evita gravar URLs arbitrárias e apagar o que não é da loja.
  */
-export function getSiteMediaPath(url: string | null, supabaseUrl: string, folder: SiteMediaFolder) {
+export function getSiteMediaPath(url: string | null, supabaseUrl: string, folder: SiteMediaFolder, shopId: string) {
   if (!url) return null;
   const prefix = getSiteMediaPublicPrefix(supabaseUrl);
   if (!url.startsWith(prefix)) return null;
   const path = url.slice(prefix.length);
-  const [first, name, ...rest] = path.split("/");
-  return first === folder && name && rest.length === 0 && objectNamePattern.test(name) ? path : null;
+  const [shop, first, name, ...rest] = path.split("/");
+  return shop === shopId && first === folder && name && rest.length === 0 && objectNamePattern.test(name) ? path : null;
 }

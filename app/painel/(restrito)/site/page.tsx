@@ -10,7 +10,7 @@ import {
 } from "../../lib/staff";
 
 export const metadata: Metadata = {
-  title: "Edição do site | Painel Black Crown Barber",
+  title: "Edição do site | Painel",
 };
 
 export default async function SiteEditorPage({

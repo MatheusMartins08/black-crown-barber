@@ -4,6 +4,7 @@ import "server-only";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { redirect, RedirectType } from "next/navigation";
 import { toStaffAuthEmail } from "../data/staff";
+import { getCurrentShop } from "../lib/shop";
 import { getSupabaseServerClient } from "../lib/supabase/server";
 import { staffHome, type StaffRole } from "./lib/staff";
 
@@ -23,9 +24,13 @@ export async function signInStaffAction(identifier: string, password: string): P
     return { ok: false, message: "Informe o usuário (ou e-mail) e a senha." };
   }
 
+  // O usuário do barbeiro vira um e-mail interno com a loja do domínio.
+  const shop = await getCurrentShop();
+  if (!shop) return { ok: false, message: invalidCredentials };
+
   const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: toStaffAuthEmail(identifier),
+    email: toStaffAuthEmail(identifier, shop.id),
     password,
   });
 
@@ -44,7 +49,7 @@ export async function signInStaffAction(identifier: string, password: string): P
 
   const { data: staff, error: staffError } = await supabase
     .from("staff_members")
-    .select("role, is_active")
+    .select("shop_id, role, is_active")
     .eq("user_id", data.user.id)
     .maybeSingle();
 
@@ -54,12 +59,14 @@ export async function signInStaffAction(identifier: string, password: string): P
     return { ok: false, message: "Não foi possível verificar o seu acesso agora. Tente de novo em instantes." };
   }
 
-  // Login de assinante ou fora da equipe, ou acesso desativado: não fica logado no painel.
-  if (!staff || !staff.is_active) {
+  // Login de assinante, de outra barbearia ou fora da equipe, ou acesso desativado: não fica
+  // logado no painel. Outra barbearia responde como senha errada (não revela que a conta existe).
+  const ownShop = staff?.shop_id === shop.id;
+  if (!staff || !ownShop || !staff.is_active || shop.status === "cancelada") {
     await supabase.auth.signOut({ scope: "local" });
     return {
       ok: false,
-      message: staff ? "Acesso desativado. Fale com o administrador da barbearia." : invalidCredentials,
+      message: staff && ownShop ? "Acesso desativado. Fale com o administrador da barbearia." : invalidCredentials,
     };
   }
 
