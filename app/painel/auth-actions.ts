@@ -2,19 +2,21 @@
 
 import "server-only";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
-import { redirect, RedirectType } from "next/navigation";
 import { toStaffAuthEmail } from "../data/staff";
 import { getCurrentShop } from "../lib/shop";
 import { getSupabaseServerClient } from "../lib/supabase/server";
 import { staffHome, type StaffRole } from "./lib/staff";
 
-// Entrada e saída do painel no servidor. O login grava a sessão nos cookies da própria
-// resposta e termina com redirect() para a tela do papel: gravar cookies numa Server Action
-// invalida o cache do roteador do navegador. Antes o login era feito no navegador e seguido de
-// router.replace("/painel"), que reaproveitava o prefetch de /painel feito ainda sem sessão
-// (um redirect para /painel/entrar) e "recarregava" a tela de login em produção.
+// Entrada e saída do painel no servidor. A action só grava (ou apaga) a sessão nos cookies da
+// própria resposta e devolve o destino; o navegador navega de verdade (location.replace).
+//
+// Sem redirect() aqui: numa Server Action ele renderiza o destino por um fetch interno para a
+// origem do servidor (localhost no dev), que perde o domínio da loja. O layout não acha a
+// barbearia e mostra "Página não encontrada" (ou o fetch trava resolvendo *.localhost).
+// A navegação completa também não usa o cache do roteador: o router.replace antigo
+// reaproveitava o prefetch de /painel feito sem sessão e "recarregava" a tela de login.
 
-export type SignInResult = { ok: false; message: string };
+export type SignInResult = { ok: true; href: string } | { ok: false; message: string };
 
 const invalidCredentials = "Usuário ou senha incorretos.";
 const unavailable = "Não foi possível conectar agora. Verifique a conexão e tente de novo.";
@@ -70,12 +72,10 @@ export async function signInStaffAction(identifier: string, password: string): P
     };
   }
 
-  // replace: o "voltar" do navegador não leva de novo à tela de login.
-  redirect(staffHome[staff.role as StaffRole], RedirectType.replace);
+  return { ok: true, href: staffHome[staff.role as StaffRole] };
 }
 
 export async function signOutStaffAction() {
   const supabase = await getSupabaseServerClient();
   await supabase.auth.signOut({ scope: "local" });
-  redirect("/painel/entrar", RedirectType.replace);
 }
