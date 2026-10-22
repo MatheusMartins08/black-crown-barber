@@ -42,7 +42,7 @@ The site reads and writes data in Supabase (schema and setup in [`supabase/READM
 
 The panel uses one staff login (`/painel/entrar`); the role in `staff_members` decides where each person lands. Barbers (`role = barbeiro`) get `/painel/equipe` (the team's schedule for the day, without any financial data) and `/painel/equipe/horario` (their own hours, days off and blocks). Admins get the full panel, which has these screens: `/painel` (overview: day indicators, team production and the day's schedule), `/painel/clientes` (clients, subscribers and plans in tabs; `?aba=assinantes` or `?aba=planos` opens a tab) and `/painel/fechamento` (team payroll by day, week or month). Dates go back 6 months (`historyRules` in `app/data/painel.ts`).
 
-Open [http://localhost:3000](http://localhost:3000) to view the site. The development server refreshes the page as you edit the source files.
+The barbershop is picked by the domain (`shop_domains` table), so open it through a `localhost` subdomain registered for it, such as [http://blackcrown.localhost:3000](http://blackcrown.localhost:3000) or [http://demo.localhost:3000](http://demo.localhost:3000). Plain `localhost:3000` shows "Página não encontrada". The development server refreshes the page as you edit the source files.
 
 ## Available commands
 
@@ -87,4 +87,4 @@ public/             Photos and other static assets
 
 ## Deployment
 
-This is a standard Next.js application and can be deployed to a platform that supports Next.js, such as [Vercel](https://vercel.com/). On Vercel, add the three Supabase variables above in **Settings → Environment Variables** (mark `SUPABASE_SECRET_KEY` as Sensitive) and redeploy. Follow the deployment instructions for your chosen provider, and verify the production URL, metadata, contact links, and indexing settings after deployment.
+This is a standard Next.js application and can be deployed to a platform that supports Next.js, such as [Vercel](https://vercel.com/). On Vercel, add the three Supabase variables above in **Settings → Environment Variables** (mark `SUPABASE_SECRET_KEY` as Sensitive) and redeploy. Every domain that serves the site, including the `*.vercel.app` one, must be registered in `shop_domains`; adding a barbershop, its domains, preview deployments and per-client templates are covered in [`docs/nova-barbearia.md`](docs/nova-barbearia.md). Follow the deployment instructions for your chosen provider, and verify the production URL, metadata, contact links, and indexing settings after deployment.

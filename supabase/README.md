@@ -219,6 +219,8 @@ node --env-file=.env.local scripts/provision-shop.mjs --slug barbearia-exemplo -
 
 O script pede a senha do admin sem mostrá-la. Pode ser rodado de novo se algo falhar no meio. Depois, aponte o DNS do domínio para o servidor do app.
 
+Passo a passo completo (domínio na Vercel, `*.localhost`, dados de contato, previews e cópias do template com visual próprio): [`docs/nova-barbearia.md`](../docs/nova-barbearia.md). Para uma loja de demonstração preenchida, rode `scripts/seed-demo-shop.sql` depois do script.
+
 ### Códigos de erro novos
 
 | code | message | quando |
