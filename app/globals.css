@@ -941,9 +941,14 @@ button:focus-visible {
   line-height: 1.7;
 }
 
+/*
+ * Desktop: 4 linhas sem buracos. "dense" deixa a 5ª foto subir para o vão ao lado da 3ª:
+ * [grande | vertical | 3 e 5] em cima, [larga | 6 e 8 | vertical] embaixo.
+ */
 .gallery__grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-flow: dense;
   grid-auto-rows: 154px;
   gap: 12px;
 }
@@ -959,7 +964,7 @@ button:focus-visible {
 }
 
 .gallery-item--large {
-  grid-column: span 5;
+  grid-column: span 6;
   grid-row: span 2;
 }
 
@@ -969,7 +974,7 @@ button:focus-visible {
 }
 
 .gallery-item--wide {
-  grid-column: span 4;
+  grid-column: span 6;
   grid-row: span 2;
 }
 
@@ -2553,8 +2558,10 @@ button:focus-visible,
   color: #eee6dd;
 }
 
+/* O fundo precisa ser repetido aqui: o .button acima volta a pintar o fundo de vinho. */
 .button--outline {
   border-color: rgb(255 250 244 / 62%);
+  background: transparent;
   color: #fffaf4;
 }
 

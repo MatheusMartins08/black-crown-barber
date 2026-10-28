@@ -311,9 +311,15 @@ export function BookingSection({ site }: { site: SiteConfig }) {
           <Link className="button" href={site.bookingUrl}>
             Agendar horário <ArrowDownRight aria-hidden="true" size={17} />
           </Link>
-          <Link className="button button--outline" href={site.whatsappUrl}>
-            Falar pelo WhatsApp <MessageCircle aria-hidden="true" size={17} />
-          </Link>
+          {site.whatsappUrl.startsWith("https://") ? (
+            <a className="button button--outline" href={site.whatsappUrl} rel="noopener noreferrer" target="_blank">
+              Falar pelo WhatsApp <MessageCircle aria-hidden="true" size={17} />
+            </a>
+          ) : (
+            <Link className="button button--outline" href={site.whatsappUrl}>
+              Falar pelo WhatsApp <MessageCircle aria-hidden="true" size={17} />
+            </Link>
+          )}
         </div>
       </Reveal>
     </section>

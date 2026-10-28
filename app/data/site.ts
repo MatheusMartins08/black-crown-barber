@@ -8,6 +8,13 @@ export function getBrandParts(name: string) {
   return match ? { main: match[1], descriptor: match[2] } : { main: name.trim(), descriptor: "Barbearia" };
 }
 
+/** "(31) 99999-9999" -> "https://wa.me/5531999999999"; sem número válido, leva ao bloco de contato. */
+function getWhatsappUrl(whatsapp: string) {
+  const digits = whatsapp.replace(/\D/g, "");
+  if (digits.length < 10) return "#contato";
+  return `https://wa.me/${digits.length <= 11 ? `55${digits}` : digits}`;
+}
+
 /** Dados do site de uma barbearia: o perfil público da loja mais os links fixos do template. */
 export function getSiteConfig(shop: ShopProfile) {
   const address = shop.address ?? "";
@@ -25,7 +32,7 @@ export function getSiteConfig(shop: ShopProfile) {
     whatsapp: shop.whatsapp ?? "",
     instagram: shop.instagram ?? "",
     bookingUrl: "/agendamento",
-    whatsappUrl: "#contato",
+    whatsappUrl: getWhatsappUrl(shop.whatsapp ?? ""),
     servicesUrl: "#servicos",
     heroImage: "/gallery-barba-01.jpg",
     isDemonstration: true,

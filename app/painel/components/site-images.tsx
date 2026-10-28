@@ -26,9 +26,9 @@ const unexpected = "Não foi possível falar com o servidor. Verifique a conexã
 
 // Proporção aproximada de cada formato no site (desktop), só para a prévia do painel.
 const previewRatios: Record<string, number> = {
-  "gallery-item--large": 1.3,
+  "gallery-item--large": 1.45,
   "gallery-item--portrait": 0.7,
-  "gallery-item--wide": 0.9,
+  "gallery-item--wide": 1.45,
 };
 
 function getPreviewRatio(image: SiteImage) {
