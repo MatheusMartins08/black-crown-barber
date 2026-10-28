@@ -3,7 +3,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { CircleAlert } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
-import { getTodayIso } from "../../data/booking";
 import {
   formatFullDate,
   formatPeriodLabel,
@@ -16,7 +15,7 @@ import {
 } from "../../data/painel";
 import { fetchAppointments, PainelApiError } from "../lib/painel-api";
 import DateNav from "./date-nav";
-import { usePainelProfessionals, usePainelServices } from "./painel-catalog";
+import { usePainelProfessionals, usePainelServices, usePainelToday } from "./painel-catalog";
 import PayrollSummary from "./payroll-summary";
 
 const stepLabels: Record<Period, { previous: string; next: string }> = {
@@ -31,7 +30,7 @@ function getErrorMessage(error: unknown) {
 
 /** Fechamento: repasse da equipe no dia, na semana ou no mês da data escolhida. */
 export default function PayrollPage() {
-  const today = getTodayIso();
+  const today = usePainelToday();
   const minDate = getHistoryStart(today);
   const [selectedDate, setSelectedDate] = useState(today);
   const [period, setPeriod] = useState<Period>("semana");

@@ -5,6 +5,7 @@ import ReadOnlyNotice from "../components/read-only-notice";
 import { StaffNoAccess } from "../components/no-access";
 import { PainelCatalogProvider } from "../components/painel-catalog";
 import { getStaffProfessionals, getStaffSchedule, getTeamServices, requireStaff } from "../lib/staff";
+import { getCurrentShop } from "../../lib/shop";
 import "../painel.css";
 
 export const metadata: Metadata = {
@@ -24,10 +25,11 @@ export default async function EquipeLayout({ children }: { children: ReactNode }
   if (!current) return <StaffNoAccess />;
 
   const { staff, email } = current;
-  const [professionals, services, schedule] = await Promise.all([
+  const [professionals, services, schedule, shop] = await Promise.all([
     getStaffProfessionals(),
     getTeamServices(),
     getStaffSchedule(),
+    getCurrentShop(),
   ]);
 
   return (
@@ -40,6 +42,7 @@ export default async function EquipeLayout({ children }: { children: ReactNode }
         plans={[]}
         professionals={professionals}
         services={services}
+        timezone={shop?.timezone ?? "America/Sao_Paulo"}
         walkInRate={0}
       >
         {children}

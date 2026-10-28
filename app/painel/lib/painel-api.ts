@@ -1,4 +1,4 @@
-import { formatPhone, getTodayIso } from "../../data/booking";
+import { formatPhone } from "../../data/booking";
 import {
   addDays,
   type AgendaAppointment,
@@ -11,6 +11,7 @@ import {
   type CyclePayment,
   type PaymentMethod,
 } from "../../data/painel";
+import { getShopToday } from "../../data/shop";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 
@@ -31,6 +32,25 @@ export class PainelApiError extends Error {
 
 function fail(error: RpcError, fallback: string): never {
   throw new PainelApiError(error.code === "42501" ? "Seu usuário não tem permissão para esta ação." : getRpcMessage(error, fallback));
+}
+
+// A API do Supabase devolve no máximo "Max rows" linhas por consulta (1000 por padrão) e
+// corta o resto sem erro. Listas que crescem com o tempo (atendimentos de um mês, clientes,
+// mensalidades) são lidas em páginas até a última vir incompleta. A ordem de cada consulta
+// precisa ser total (desempate por id), senão uma linha pode repetir ou sumir entre páginas.
+const pageSize = 1000;
+
+async function fetchAllPages<Row>(
+  page: (from: number, to: number) => PromiseLike<{ data: unknown; error: RpcError | null }>,
+): Promise<{ data: Row[]; error: null } | { data: null; error: RpcError }> {
+  const rows: Row[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await page(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    const chunk = (data ?? []) as Row[];
+    rows.push(...chunk);
+    if (chunk.length < pageSize) return { data: rows, error: null };
+  }
 }
 
 type AppointmentRow = {
@@ -123,16 +143,21 @@ function toAppointment(row: AppointmentRow): Appointment {
  * só deixa o banco usar o índice de starts_at antes de calcular as colunas da view.
  */
 export async function fetchAppointments(range: { start: string; end: string }): Promise<Appointment[]> {
-  const { data, error } = await getSupabaseBrowserClient()
-    .from("appointment_details")
-    .select(appointmentColumns)
-    .gte("starts_at", `${addDays(range.start, -1)}T00:00:00Z`)
-    .lt("starts_at", `${addDays(range.end, 2)}T00:00:00Z`)
-    .gte("local_date", range.start)
-    .lte("local_date", range.end)
-    .order("starts_at");
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await fetchAllPages<AppointmentRow>((from, to) =>
+    supabase
+      .from("appointment_details")
+      .select(appointmentColumns)
+      .gte("starts_at", `${addDays(range.start, -1)}T00:00:00Z`)
+      .lt("starts_at", `${addDays(range.end, 2)}T00:00:00Z`)
+      .gte("local_date", range.start)
+      .lte("local_date", range.end)
+      .order("starts_at")
+      .order("id")
+      .range(from, to),
+  );
   if (error) fail(error, "Não foi possível carregar a agenda.");
-  return (data as AppointmentRow[]).map(toAppointment);
+  return data.map(toAppointment);
 }
 
 async function fetchAppointment(id: string) {
@@ -290,49 +315,62 @@ function toCyclePayment(row: CyclePaymentRow, clientId: string): CyclePayment {
 
 /**
  * Perfis de todos os clientes com a mensalidade em aberto mais antiga e a do ciclo atual
- * (a que contém hoje, paga ou não) de cada um.
+ * (a que contém hoje, paga ou não) de cada um. `timezone` é o fuso da barbearia: define o
+ * "hoje" do ciclo atual e o dia da última visita.
  */
-export async function fetchClientProfiles(): Promise<ClientProfile[]> {
+export async function fetchClientProfiles(timezone: string): Promise<ClientProfile[]> {
   const supabase = getSupabaseBrowserClient();
-  const today = getTodayIso();
+  const today = getShopToday(timezone);
   const [profiles, open, current] = await Promise.all([
-    supabase
-      .from("customer_profiles")
-      .select(
-        "id, name, phone, whatsapp_opt_in, membership_status, plan_slug, plan_name, monthly_price, subscribed_since, last_subscription_ended_at, open_amount, oldest_due_date, days_overdue, last_paid_at, last_payment_method, last_payment_amount, last_visit_at, visit_count",
-      )
-      .order("name"),
-    supabase
-      .from("subscription_payments")
-      .select(cyclePaymentColumns)
-      .eq("status", "pendente")
-      .order("due_date"),
-    supabase
-      .from("subscription_payments")
-      .select(cyclePaymentColumns)
-      .neq("status", "cancelado")
-      .lte("period_start", today)
-      .gte("period_end", today)
-      .order("period_start"),
+    fetchAllPages<ProfileRow>((from, to) =>
+      supabase
+        .from("customer_profiles")
+        .select(
+          "id, name, phone, whatsapp_opt_in, membership_status, plan_slug, plan_name, monthly_price, subscribed_since, last_subscription_ended_at, open_amount, oldest_due_date, days_overdue, last_paid_at, last_payment_method, last_payment_amount, last_visit_at, visit_count",
+        )
+        .order("name")
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllPages<CyclePaymentRow>((from, to) =>
+      supabase
+        .from("subscription_payments")
+        .select(cyclePaymentColumns)
+        .eq("status", "pendente")
+        .order("due_date")
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllPages<CyclePaymentRow>((from, to) =>
+      supabase
+        .from("subscription_payments")
+        .select(cyclePaymentColumns)
+        .neq("status", "cancelado")
+        .lte("period_start", today)
+        .gte("period_end", today)
+        .order("period_start")
+        .order("id")
+        .range(from, to),
+    ),
   ]);
   if (profiles.error) fail(profiles.error, "Não foi possível carregar os clientes.");
   if (open.error) fail(open.error, "Não foi possível carregar as mensalidades.");
   if (current.error) fail(current.error, "Não foi possível carregar as mensalidades.");
 
   const oldestByClient = new Map<string, CyclePayment>();
-  for (const row of open.data as unknown as CyclePaymentRow[]) {
+  for (const row of open.data) {
     const clientId = row.customer_subscriptions?.customer_id;
     if (clientId && !oldestByClient.has(clientId)) oldestByClient.set(clientId, toCyclePayment(row, clientId));
   }
 
   // Em ordem de início: se houver mais de um período hoje (troca de plano), fica o mais novo.
   const currentByClient = new Map<string, CyclePayment>();
-  for (const row of current.data as unknown as CyclePaymentRow[]) {
+  for (const row of current.data) {
     const clientId = row.customer_subscriptions?.customer_id;
     if (clientId) currentByClient.set(clientId, toCyclePayment(row, clientId));
   }
 
-  return (profiles.data as ProfileRow[]).map((row) => {
+  return profiles.data.map((row) => {
     const next = oldestByClient.get(row.id) ?? null;
     return {
       id: row.id,
@@ -351,8 +389,8 @@ export async function fetchClientProfiles(): Promise<ClientProfile[]> {
       lastPaidAt: row.last_paid_at ? row.last_paid_at.slice(0, 10) : null,
       lastPaymentMethod: row.last_payment_method,
       lastPaymentAmount: row.last_payment_amount === null ? null : Number(row.last_payment_amount),
-      // Data local do navegador, como o "hoje" do painel.
-      lastVisitAt: row.last_visit_at ? getTodayIso(new Date(row.last_visit_at)) : null,
+      // Dia da visita no fuso da barbearia, como o "hoje" do painel.
+      lastVisitAt: row.last_visit_at ? getShopToday(timezone, new Date(row.last_visit_at)) : null,
       visitCount: Number(row.visit_count ?? 0),
       nextToReceive: next,
       currentCycle: currentByClient.get(row.id) ?? null,
@@ -373,14 +411,19 @@ export async function fetchMonthPayments(month: string): Promise<MonthPayment[]>
   const [year, monthNumber] = month.split("-").map(Number);
   const end = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
 
-  const { data, error } = await getSupabaseBrowserClient()
-    .from("subscription_payments")
-    .select("id, amount, status, customer_subscriptions!subscription_payments_subscription_id_fkey!inner(subscription_plans!customer_subscriptions_plan_id_fkey(slug))")
-    .gte("due_date", start)
-    .lte("due_date", end);
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await fetchAllPages<MonthPaymentRow>((from, to) =>
+    supabase
+      .from("subscription_payments")
+      .select("id, amount, status, customer_subscriptions!subscription_payments_subscription_id_fkey!inner(subscription_plans!customer_subscriptions_plan_id_fkey(slug))")
+      .gte("due_date", start)
+      .lte("due_date", end)
+      .order("id")
+      .range(from, to),
+  );
   if (error) fail(error, "Não foi possível carregar as mensalidades do mês.");
 
-  return (data as unknown as MonthPaymentRow[]).map((row) => {
+  return data.map((row) => {
     const slug = row.customer_subscriptions?.subscription_plans?.slug ?? null;
     return { id: row.id, amount: Number(row.amount), status: row.status, planId: slug };
   });

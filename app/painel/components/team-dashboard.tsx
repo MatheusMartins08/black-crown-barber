@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { CircleAlert } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
-import { bookingRules, getTodayIso } from "../../data/booking";
+import { bookingRules } from "../../data/booking";
 import { getDayPeriods } from "../../data/hours";
 import {
   addDays,
@@ -18,7 +18,13 @@ import { fetchTeamAgenda, PainelApiError, updateTeamAppointment } from "../lib/p
 import AppointmentsTable, { type AgendaFilters } from "./appointments-table";
 import BarberProduction from "./barber-production";
 import DateNav from "./date-nav";
-import { findProfessional, usePainelProfessionals, usePainelSchedule, usePainelServices } from "./painel-catalog";
+import {
+  findProfessional,
+  usePainelProfessionals,
+  usePainelSchedule,
+  usePainelServices,
+  usePainelToday,
+} from "./painel-catalog";
 
 function getErrorMessage(error: unknown) {
   return error instanceof PainelApiError ? error.message : "Não foi possível falar com o banco. Tente novamente.";
@@ -30,7 +36,7 @@ function getErrorMessage(error: unknown) {
  * Status e executor só podem ser alterados nos horários do próprio barbeiro.
  */
 export default function TeamDashboard({ professionalId }: { professionalId: string | null }) {
-  const today = getTodayIso();
+  const today = usePainelToday();
   const minDate = getHistoryStart(today);
   const maxDate = addDays(today, bookingRules.windowDays - 1);
   const [selectedDate, setSelectedDate] = useState(today);

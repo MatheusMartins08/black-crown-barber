@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useRef, useState, type KeyboardEvent } from "react";
 import { CircleAlert } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
-import { getTodayIso } from "../../data/booking";
 import type { ClientProfile, PaymentMethod } from "../../data/painel";
 import { fetchClientProfiles, PainelApiError, savePaymentStatus } from "../lib/painel-api";
 import ClientsOverview from "./clients-overview";
+import { usePainelTimezone, usePainelToday } from "./painel-catalog";
 import PlansOverview from "./plans-overview";
 import SubscribersOverview from "./subscribers-overview";
 
@@ -31,7 +31,8 @@ function getErrorMessage(error: unknown) {
  * visita e continua montada (filtros e listas preservados ao alternar).
  */
 export default function ClientsWorkspace({ initialTab }: { initialTab?: string }) {
-  const today = getTodayIso();
+  const timezone = usePainelTimezone();
+  const today = usePainelToday();
   const firstTab = isTab(initialTab) ? initialTab : "clientes";
   const [tab, setTab] = useState<Tab>(firstTab);
   const [visited, setVisited] = useState<Tab[]>([firstTab]);
@@ -45,7 +46,8 @@ export default function ClientsWorkspace({ initialTab }: { initialTab?: string }
 
   // Perfis compartilhados por Clientes e Planos. Ao recarregar, a lista anterior fica na
   // tela até chegar a nova.
-  const loaded = useAsyncData(fetchClientProfiles);
+  const loader = useCallback(() => fetchClientProfiles(timezone), [timezone]);
+  const loaded = useAsyncData(loader);
   const [previous, setPrevious] = useState<ClientProfile[] | null>(null);
   const profiles = loaded.status === "success" ? loaded.data : previous;
   const subscriberCount = profiles?.filter((profile) => profile.membership !== "avulso").length;

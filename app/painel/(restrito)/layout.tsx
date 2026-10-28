@@ -12,6 +12,7 @@ import {
   getStaffServices,
   getWalkInRate,
 } from "../lib/staff";
+import { getCurrentShop } from "../../lib/shop";
 import "../painel.css";
 
 export const metadata: Metadata = {
@@ -34,12 +35,13 @@ export default async function PainelLayout({ children }: { children: ReactNode }
 
   const { staff, email } = current;
   const name = staff.displayName || email;
-  const [professionals, services, plans, walkInRate, schedule] = await Promise.all([
+  const [professionals, services, plans, walkInRate, schedule, shop] = await Promise.all([
     getStaffProfessionals(),
     getStaffServices(),
     getStaffPlans(),
     getWalkInRate(),
     getStaffSchedule(),
+    getCurrentShop(),
   ]);
 
   return (
@@ -52,6 +54,7 @@ export default async function PainelLayout({ children }: { children: ReactNode }
         plans={plans}
         professionals={professionals}
         services={services}
+        timezone={shop?.timezone ?? "America/Sao_Paulo"}
         walkInRate={walkInRate}
       >
         {children}

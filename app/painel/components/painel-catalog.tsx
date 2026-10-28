@@ -2,6 +2,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 import type { OpeningPeriod, ScheduleException } from "../../data/hours";
+import { getShopToday } from "../../data/shop";
 import type { SubscriptionPlan } from "../../data/plans";
 import type { Professional } from "../../data/professionals";
 import type { Service } from "../../data/services";
@@ -20,6 +21,8 @@ type PainelCatalog = {
   openingPeriods: readonly OpeningPeriod[];
   /** Exceções da barbearia de hoje em diante (schedule_exceptions). */
   exceptions: readonly ScheduleException[];
+  /** Fuso da barbearia (IANA): o "hoje" do painel é o dela, não o do navegador. */
+  timezone: string;
 };
 
 const PainelCatalogContext = createContext<PainelCatalog>({
@@ -29,6 +32,7 @@ const PainelCatalogContext = createContext<PainelCatalog>({
   walkInRate: 0,
   openingPeriods: [],
   exceptions: [],
+  timezone: "America/Sao_Paulo",
 });
 
 export function PainelCatalogProvider({ children, ...catalog }: PainelCatalog & { children: ReactNode }) {
@@ -51,6 +55,16 @@ export function usePainelPlans() {
 export function usePainelSchedule() {
   const { openingPeriods, exceptions } = useContext(PainelCatalogContext);
   return { periods: openingPeriods, exceptions };
+}
+
+/** Fuso da barbearia. */
+export function usePainelTimezone() {
+  return useContext(PainelCatalogContext).timezone;
+}
+
+/** Data de hoje (aaaa-mm-dd) no fuso da barbearia, como o servidor calcula. */
+export function usePainelToday() {
+  return getShopToday(usePainelTimezone());
 }
 
 export function useWalkInRate() {

@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { CircleAlert } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
-import { bookingRules, getTodayIso } from "../../data/booking";
+import { bookingRules } from "../../data/booking";
 import { getDayPeriods } from "../../data/hours";
 import {
   addDays,
@@ -29,6 +29,7 @@ import {
   usePainelProfessionals,
   usePainelSchedule,
   usePainelServices,
+  usePainelToday,
 } from "./painel-catalog";
 
 function getErrorMessage(error: unknown) {
@@ -37,7 +38,7 @@ function getErrorMessage(error: unknown) {
 
 /** Visão geral: a operação do dia (indicadores, produção da equipe e agenda). */
 export default function AdminDashboard() {
-  const today = getTodayIso();
+  const today = usePainelToday();
   // Histórico de historyRules.months para trás; para frente, a mesma janela do agendamento online.
   const minDate = getHistoryStart(today);
   const maxDate = addDays(today, bookingRules.windowDays - 1);

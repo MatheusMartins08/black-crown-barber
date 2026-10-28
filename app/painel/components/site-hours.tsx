@@ -4,7 +4,6 @@ import { useId, useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, CalendarX2, CircleAlert, CircleCheck, Plus, RotateCcw, Trash2, Undo2, X } from "lucide-react";
 import Dialog from "../../components/dialog";
-import { getTodayIso } from "../../data/booking";
 import {
   describeException,
   exceptionKindLabels,
@@ -32,7 +31,7 @@ import {
   type SiteActionResult,
 } from "../site-actions";
 import { DialogFrame, Field, FormAlert, SubmitButton, useDialogIds, type DialogIds } from "./admin-form";
-import { usePainelProfessionals, usePainelSchedule } from "./painel-catalog";
+import { usePainelProfessionals, usePainelSchedule, usePainelToday } from "./painel-catalog";
 
 type Notice = { tone: "success" | "error"; message: string } | null;
 type DraftPeriod = { key: number; weekday: number; opensAt: string; closesAt: string };
@@ -582,7 +581,7 @@ function ExceptionForm({
   const ids = useId();
   const labels = scope ? professionalExceptionKindLabels : exceptionKindLabels;
   const descriptions = scope ? professionalKindDescriptions : kindDescriptions;
-  const today = useMemo(() => getTodayIso(), []);
+  const today = usePainelToday();
   const [kind, setKind] = useState<ExceptionKind>("fechado");
   const [startsOn, setStartsOn] = useState(today);
   const [endsOn, setEndsOn] = useState(today);
