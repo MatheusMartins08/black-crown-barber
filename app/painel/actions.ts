@@ -114,7 +114,14 @@ export async function createSubscriberAction(input: {
     p_plan: input.planId,
     p_status: input.status,
   });
-  if (subscription.error) return fromRpc(subscription.error, "Assinante salvo, mas o plano não foi aplicado.");
+  if (subscription.error) {
+    // Sem plano o cliente não aparece em Assinantes, e o login criado travaria o telefone
+    // ("já existe um assinante"). Apagar o login solta o cadastro (customers.user_id vira
+    // null): fica só o cliente, como antes, e o admin pode cadastrar de novo.
+    await admin.auth.admin.deleteUser(userId);
+    const refused = fromRpc(subscription.error, "Não foi possível aplicar o plano.");
+    return refused.ok ? refused : { ...refused, message: `${refused.message} O assinante não foi cadastrado.` };
+  }
 
   return { ok: true, id: customerId };
 }
