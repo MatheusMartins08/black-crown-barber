@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -73,6 +74,11 @@ export function QuickInfo({ periods, site }: { periods: OpeningPeriod[]; site: S
 
 /** `services`: os serviços ativos do Supabase, na ordem de exibição. */
 export function ServicesSection({ services, site }: { services: Service[]; site: SiteConfig }) {
+  // Colunas do desktop pela quantidade: até 4 numa linha; acima disso, linhas equilibradas
+  // (5 → 3+2, 6 → 3+3, 7 → 4+3). A última linha estica e não sobra vão (globals.css).
+  const rows = Math.ceil(services.length / 4);
+  const columns = Math.max(1, Math.ceil(services.length / Math.max(rows, 1)));
+
   return (
     <section aria-labelledby="services-title" className="section services" id="servicos">
       <div className="section__inner">
@@ -82,7 +88,7 @@ export function ServicesSection({ services, site }: { services: Service[]; site:
           id="services-title"
           title="Escolha seu próximo visual"
         />
-        <div className="services__grid">
+        <div className="services__grid" style={{ "--service-cols": columns } as CSSProperties}>
           {services.map((service, index) => {
             const Icon = serviceIcons[service.icon] ?? DefaultServiceIcon;
 

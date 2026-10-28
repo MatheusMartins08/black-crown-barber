@@ -2858,3 +2858,35 @@ button:focus-visible,
     background: linear-gradient(0deg, rgb(var(--brown-ink-rgb) / 88%) 0%, rgb(var(--brown-ink-rgb) / 62%) 55%, rgb(var(--brown-ink-rgb) / 35%) 100%);
   }
 }
+
+/*
+ * Serviços: o número de colunas vem da quantidade (--service-cols, landing-sections.tsx) e a
+ * última linha estica para ocupar a largura toda, sem vão sobrando ao incluir ou tirar serviços.
+ */
+.services__grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.services__grid > * {
+  flex: 1 1 calc((100% - (var(--service-cols, 4) - 1) * 12px) / var(--service-cols, 4));
+  min-width: 0;
+}
+
+@media (max-width: 1000px) {
+  .services__grid > * {
+    flex-basis: calc((100% - 12px) / 2);
+  }
+}
+
+@media (max-width: 700px) {
+  .services__grid > * {
+    flex-basis: calc((100% - 9px) / 2);
+  }
+}
+
+@media (max-width: 380px) {
+  .services__grid > * {
+    flex-basis: 100%;
+  }
+}

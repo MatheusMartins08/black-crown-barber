@@ -3696,3 +3696,40 @@
     min-height: 40px;
   }
 }
+
+/*
+ * Combo: os checkboxes não herdam o tamanho dos campos de texto do diálogo
+ * (.admin-dialog .admin-field input), que os esticava e criava rolagem lateral.
+ */
+.admin-dialog .admin-field .admin-check input {
+  width: 18px;
+  min-height: 0;
+  height: 18px;
+  padding: 0;
+  border: 0;
+}
+
+.admin-combo {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--admin-sunken);
+  padding: 12px;
+}
+
+.admin-combo .admin-check {
+  align-items: center;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: var(--admin-panel);
+  padding: 8px 12px;
+}
+
+.admin-combo .admin-check span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-combo .admin-check:has(input:checked) {
+  border-color: var(--accent);
+}
