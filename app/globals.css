@@ -2792,3 +2792,69 @@ button:focus-visible,
   overflow: hidden;
   scrollbar-gutter: stable;
 }
+
+/*
+ * Hero alinhado à esquerda, na mesma margem do logo. A foto tem a navalha e a mão tatuada à
+ * direita; o lado esquerdo (cabelo escuro) recebe o texto, com a sombra mais forte ali.
+ * Cada .hero__line é uma linha inteira: a quebra cai só no ponto de sentido.
+ */
+.hero__content {
+  width: min(100% - 48px, var(--content-width));
+  max-width: none;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.hero .eyebrow {
+  justify-content: flex-start;
+}
+
+.hero h1,
+.hero__description {
+  max-width: none;
+  margin-inline: 0;
+  text-wrap: wrap;
+}
+
+.hero__line {
+  display: block;
+}
+
+.hero__actions {
+  justify-content: flex-start;
+}
+
+.hero__actions .text-link {
+  justify-content: flex-start;
+  padding-inline: 0;
+}
+
+.hero__image-shade {
+  background:
+    linear-gradient(90deg, rgb(var(--brown-ink-rgb) / 90%) 0%, rgb(var(--brown-ink-rgb) / 72%) 38%, rgb(var(--brown-ink-rgb) / 20%) 72%, transparent 100%),
+    linear-gradient(0deg, rgb(var(--brown-ink-rgb) / 45%), transparent 50%);
+}
+
+@media (max-width: 700px) {
+  /* Celular: texto na base da foto (área mais escura), a cena fica visível em cima. */
+  .hero {
+    align-items: flex-end;
+  }
+
+  .hero__content {
+    width: calc(100% - 40px);
+    padding: 120px 0 112px;
+  }
+
+  .hero h1 {
+    font-size: clamp(34px, 10vw, 46px);
+  }
+
+  .hero__actions {
+    align-items: flex-start;
+  }
+
+  .hero__image-shade {
+    background: linear-gradient(0deg, rgb(var(--brown-ink-rgb) / 88%) 0%, rgb(var(--brown-ink-rgb) / 62%) 55%, rgb(var(--brown-ink-rgb) / 35%) 100%);
+  }
+}

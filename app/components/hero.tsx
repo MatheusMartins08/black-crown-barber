@@ -23,9 +23,14 @@ export default function Hero({ site }: { site: SiteConfig }) {
           <span aria-hidden="true" className="eyebrow__rule" />
           Barbearia <span aria-hidden="true">/</span> Estilo <span aria-hidden="true">/</span> Precisão
         </p>
-        <h1 id="hero-title">Seu estilo começa na cadeira.</h1>
+        {/* Quebras fixas nos pontos de sentido (globals.css: .hero__line). */}
+        <h1 id="hero-title">
+          <span className="hero__line">Seu estilo começa</span>{" "}
+          <span className="hero__line">na cadeira.</span>
+        </h1>
         <p className="hero__description">
-          Mais do que um corte, uma experiência pensada nos mínimos detalhes.
+          <span className="hero__line">Mais do que um corte,</span>{" "}
+          <span className="hero__line">uma experiência pensada nos mínimos detalhes.</span>
         </p>
 
         <div className="hero__actions">
