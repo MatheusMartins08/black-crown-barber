@@ -2860,16 +2860,17 @@ button:focus-visible,
 }
 
 /*
- * Serviços: o número de colunas vem da quantidade (--service-cols, landing-sections.tsx) e a
- * última linha estica para ocupar a largura toda, sem vão sobrando ao incluir ou tirar serviços.
+ * Serviços: o número de colunas vem da quantidade (--service-cols, landing-sections.tsx). Todos
+ * os cards têm o mesmo tamanho; a última linha incompleta fica centralizada (5 → 3 + 2 no meio).
  */
 .services__grid {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .services__grid > * {
-  flex: 1 1 calc((100% - (var(--service-cols, 4) - 1) * 12px) / var(--service-cols, 4));
+  flex: 0 0 calc((100% - (var(--service-cols, 4) - 1) * 12px) / var(--service-cols, 4));
   min-width: 0;
 }
 

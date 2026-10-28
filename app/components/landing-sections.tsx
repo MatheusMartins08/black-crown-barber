@@ -75,7 +75,7 @@ export function QuickInfo({ periods, site }: { periods: OpeningPeriod[]; site: S
 /** `services`: os serviços ativos do Supabase, na ordem de exibição. */
 export function ServicesSection({ services, site }: { services: Service[]; site: SiteConfig }) {
   // Colunas do desktop pela quantidade: até 4 numa linha; acima disso, linhas equilibradas
-  // (5 → 3+2, 6 → 3+3, 7 → 4+3). A última linha estica e não sobra vão (globals.css).
+  // (5 → 3+2, 6 → 3+3, 7 → 4+3). Cards do mesmo tamanho; a última linha fica centralizada.
   const rows = Math.ceil(services.length / 4);
   const columns = Math.max(1, Math.ceil(services.length / Math.max(rows, 1)));
 
