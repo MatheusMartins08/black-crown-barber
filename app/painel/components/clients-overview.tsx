@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { LoaderCircle, RotateCw, Users } from "lucide-react";
+import { CircleCheck, LoaderCircle, RotateCw, Users } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
+import { bookingRules } from "../../data/booking";
 import {
   addDays,
   billingRules,
@@ -20,6 +21,8 @@ import {
   type Period,
 } from "../../data/painel";
 import { fetchAppointments, PainelApiError } from "../lib/painel-api";
+import { NewAppointmentDialog } from "./appointment-dialogs";
+import ClientRecordDialog from "./client-record";
 import MembershipTag from "./membership-tag";
 import ShowMore, { listPageSize } from "./show-more";
 
@@ -155,6 +158,16 @@ export default function ClientsOverview({
   const [visitDate, setVisitDate] = useState(date);
   const [limit, setLimit] = useState(listPageSize);
   const minDate = getHistoryStart(date);
+  // Ficha do cliente e o Novo horário aberto a partir dela.
+  const [record, setRecord] = useState<{ profile: ClientProfile; open: boolean } | null>(null);
+  const [booking, setBooking] = useState<{ phone: string; open: boolean; key: number } | null>(null);
+  const [dialogKey, setDialogKey] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function openRecord(profile: ClientProfile) {
+    setDialogKey((key) => key + 1);
+    setRecord({ profile, open: true });
+  }
 
   // Com um período escolhido, a lista mostra só quem foi atendido nele.
   const range = visitPeriod === "base" ? null : getPeriodRange(visitDate, visitPeriod);
@@ -214,12 +227,22 @@ export default function ClientsOverview({
           <h2 id="clientes-title">Clientes</h2>
           <p>
             {visitPeriod === "base"
-              ? `Situação em ${formatShortDate(date)}.`
+              ? `Situação em ${formatShortDate(date)}. Toque no nome para abrir a ficha do cliente.`
               : `Atendidos · ${formatPeriodLabel(visitDate, visitPeriod).toLowerCase()}: ${plural(byPeriod.length, "cliente", "clientes")}.`}
             {overdueCount ? ` ${overdueCount} com o plano bloqueado por atraso.` : ""}
           </p>
         </div>
       </div>
+
+      {notice ? (
+        <div className="admin-alert admin-alert--success" role="status">
+          <CircleCheck aria-hidden="true" size={16} />
+          <span>{notice}</span>
+          <button className="admin-text-button" onClick={() => setNotice(null)} type="button">
+            Fechar
+          </button>
+        </div>
+      ) : null}
 
       <div className="admin-filters admin-filters--clients" role="group" aria-label="Filtrar clientes">
         <div className="admin-segmented admin-clients__segmented" role="radiogroup" aria-label="Situação do cliente">
@@ -331,6 +354,7 @@ export default function ClientsOverview({
                   <ClientRow
                     chosenMethods={chosenMethods}
                     key={profile.id}
+                    onOpenRecord={() => openRecord(profile)}
                     onRegisterPayment={onRegisterPayment}
                     savingPayments={savingPayments}
                     profile={profile}
@@ -347,6 +371,31 @@ export default function ClientsOverview({
           />
         </>
       )}
+
+      <ClientRecordDialog
+        // O Novo horário abre por cima da ficha; ao marcar, a ficha recarrega com o horário.
+        onBook={(profile) => setBooking({ phone: profile.phone, open: true, key: dialogKey + 1 })}
+        onClose={() => setRecord((current) => (current ? { ...current, open: false } : current))}
+        open={Boolean(record?.open)}
+        openKey={dialogKey}
+        profile={record?.profile ?? null}
+      />
+      <NewAppointmentDialog
+        defaultDate={date}
+        initialPhone={booking?.phone}
+        onClose={() => setBooking((current) => (current ? { ...current, open: false } : current))}
+        onSaved={(created) => {
+          setBooking((current) => (current ? { ...current, open: false } : current));
+          // Recarrega a ficha aberta (próximo horário e histórico).
+          setDialogKey((key) => key + 1);
+          setNotice(
+            `Horário marcado para ${created.clientName}: ${formatFullDate(created.date)} às ${created.time}, com ${created.bookedWith}. Código ${created.code}.`,
+          );
+        }}
+        open={Boolean(booking?.open)}
+        openKey={booking?.key ?? 0}
+        range={{ minDate: date, maxDate: addDays(date, bookingRules.windowDays - 1) }}
+      />
 
       <details className="admin-help">
         <summary>Como funciona a mensalidade</summary>
@@ -370,9 +419,11 @@ function ClientRow({
   visits,
   chosenMethods,
   savingPayments,
+  onOpenRecord,
   onRegisterPayment,
 }: {
   profile: ClientProfile;
+  onOpenRecord: () => void;
   /** Presente quando a lista está filtrada por período. */
   visits?: Visits;
   chosenMethods: Record<string, PaymentMethod | null>;
@@ -389,7 +440,10 @@ function ClientRow({
   return (
     <tr className={`admin-row admin-row--${profile.membership}`}>
       <th scope="row">
-        <span className="admin-row__client">{profile.name}</span>
+        <button className="admin-row__client admin-record-link" onClick={onOpenRecord} type="button">
+          {profile.name}
+          <span className="sr-only"> (abrir ficha)</span>
+        </button>
         <MembershipTag planName={profile.planName ?? undefined} status={profile.membership} />
       </th>
       <td className="admin-clients__phone" data-label="WhatsApp">

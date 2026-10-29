@@ -3855,3 +3855,173 @@
   min-height: 40px;
   font-size: 14px;
 }
+
+/* Clientes: o nome abre a ficha do cliente. */
+.admin-record-link {
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgb(var(--foreground-rgb) / 25%);
+  text-underline-offset: 3px;
+}
+
+.admin-record-link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Ficha do cliente: diálogo mais largo, números em grade e histórico em lista. */
+.admin-dialog.admin-dialog--record {
+  width: min(720px, calc(100% - 32px));
+}
+
+.admin-record__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.admin-record__meta .admin-tag {
+  margin-top: 0;
+}
+
+.admin-record__plan {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-record__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.admin-record__stats div {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px;
+}
+
+.admin-record__stats dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-record__stats dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-record__facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.admin-record__facts li {
+  display: grid;
+  grid-template-columns: minmax(130px, 170px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.admin-record__facts li > span {
+  color: var(--muted);
+}
+
+.admin-record__history {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-record__history h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.admin-record__history ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-record__visit {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 4px 14px;
+  border-top: 1px solid var(--line);
+  padding: 9px 0;
+  font-size: 13px;
+}
+
+.admin-record__when,
+.admin-record__amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-record__when {
+  color: var(--muted);
+}
+
+.admin-record__amount {
+  text-align: right;
+}
+
+.admin-record__status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-record__status--concluido {
+  color: var(--admin-success);
+}
+
+.admin-record__status--faltou {
+  color: var(--admin-warning);
+}
+
+.admin-record__status--cancelado {
+  color: var(--muted);
+}
+
+.admin-record__visit--cancelado .admin-record__what {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: rgb(var(--foreground-rgb) / 35%);
+}
+
+@media (max-width: 560px) {
+  .admin-record__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-record__facts li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .admin-record__visit {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-record__what {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

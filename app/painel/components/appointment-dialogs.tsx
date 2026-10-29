@@ -272,12 +272,14 @@ function ScheduleFields({
 function NewAppointmentForm({
   dialogIds,
   defaultDate,
+  initialPhone,
   range,
   onClose,
   onSaved,
 }: {
   dialogIds: DialogIds;
   defaultDate: string;
+  initialPhone?: string;
   range: Range;
   onClose: () => void;
   onSaved: (appointment: Appointment) => void;
@@ -286,7 +288,7 @@ function NewAppointmentForm({
   const timezone = usePainelTimezone();
   const professionals = usePainelProfessionals();
   const services = usePainelServices().filter((service) => service.isActive && !service.deletedAt);
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(() => formatPhone(initialPhone ?? ""));
   const [name, setName] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [schedule, setSchedule] = useState({ professionalId: "", date: defaultDate, time: "" });
@@ -452,6 +454,7 @@ export function NewAppointmentDialog({
   open,
   openKey,
   defaultDate,
+  initialPhone,
   range,
   onClose,
   onSaved,
@@ -459,6 +462,8 @@ export function NewAppointmentDialog({
   open: boolean;
   openKey: number;
   defaultDate: string;
+  /** Telefone já preenchido (a partir da ficha do cliente). */
+  initialPhone?: string;
   range: Range;
   onClose: () => void;
   onSaved: (appointment: Appointment) => void;
@@ -475,6 +480,7 @@ export function NewAppointmentDialog({
       <NewAppointmentForm
         defaultDate={defaultDate}
         dialogIds={dialogIds}
+        initialPhone={initialPhone}
         key={openKey}
         onClose={onClose}
         onSaved={onSaved}

@@ -303,6 +303,38 @@ export async function fetchFreeTimes(query: { serviceSlugs: string[]; profession
   return (data as { slot_time: string }[]).map((row) => row.slot_time);
 }
 
+// --- Ficha do cliente (só admin) ---
+
+export type ClientRecordData = {
+  /** Cadastro (nunca é apagado pela retenção do histórico). */
+  createdAt: string;
+  email: string | null;
+  /** Atendimentos guardados (o histórico do painel), do mais recente ao mais antigo. */
+  appointments: Appointment[];
+};
+
+/** Cadastro e atendimentos de um cliente, em qualquer status. */
+export async function fetchClientRecord(clientId: string): Promise<ClientRecordData> {
+  const supabase = getSupabaseBrowserClient();
+  const [customer, history] = await Promise.all([
+    supabase.from("customers").select("created_at, email").eq("id", clientId).maybeSingle(),
+    fetchAllPages<AppointmentRow>((from, to) =>
+      supabase
+        .from("appointment_details")
+        .select(appointmentColumns)
+        .eq("customer_id", clientId)
+        .order("starts_at", { ascending: false })
+        .order("id")
+        .range(from, to),
+    ),
+  ]);
+  if (customer.error) fail(customer.error, "Não foi possível carregar o cliente.");
+  if (!customer.data) throw new PainelApiError("Cliente não encontrado. Recarregue a página.");
+  if (history.error) fail(history.error, "Não foi possível carregar o histórico do cliente.");
+  const row = customer.data as { created_at: string; email: string | null };
+  return { createdAt: row.created_at, email: row.email, appointments: history.data.map(toAppointment) };
+}
+
 // --- Agenda da equipe (painel dos barbeiros) ---
 // RPCs get_team_agenda / update_team_appointment: só colunas operacionais, nenhum valor.
 
