@@ -11,7 +11,8 @@ import {
   type CyclePayment,
   type PaymentMethod,
 } from "../../data/painel";
-import { getShopToday } from "../../data/shop";
+import { getShopInstant, getShopToday } from "../../data/shop";
+import { getBrowserShopId } from "../../lib/browser-shop";
 import { getSupabaseBrowserClient } from "../../lib/supabase/client";
 import { getRpcMessage, type RpcError } from "../../lib/supabase/errors";
 
@@ -186,6 +187,120 @@ export async function updateAppointment(
   }
   if (!data?.length) throw new PainelApiError("Você só pode alterar os seus próprios horários.");
   return fetchAppointment(id);
+}
+
+// --- Novo horário e remarcação (só admin) ---
+// Gravados direto em appointments com a sessão do admin (RLS). O banco calcula preço e
+// término e confere expediente, folgas, bloqueios, serviços do profissional e choque de
+// horário (appointments_prepare e a exclusão appointments_no_overlap). O painel escolhe só
+// entre os horários livres do site (fetchFreeTimes): o horário marcado aqui deixa de
+// aparecer para o cliente.
+
+function failSchedule(error: RpcError, fallback: string): never {
+  if (error.code === "23P01") throw new PainelApiError("Esse profissional já tem atendimento nesse horário.");
+  fail(error, fallback);
+}
+
+/** Cliente da loja com este telefone (só dígitos), ou null. */
+export async function findCustomerByPhone(phone: string): Promise<{ id: string; name: string } | null> {
+  const digits = phone.replace(/\D/g, "");
+  if (!/^\d{10,11}$/.test(digits)) return null;
+  const { data, error } = await getSupabaseBrowserClient()
+    .from("customers")
+    .select("id, name")
+    .eq("shop_id", getBrowserShopId())
+    .eq("phone", digits)
+    .maybeSingle();
+  if (error) fail(error, "Não foi possível procurar o cliente.");
+  return data as { id: string; name: string } | null;
+}
+
+/** Cliente existente com o telefone (nome não muda, como no site) ou um novo cadastro. */
+async function resolveCustomer(name: string, phone: string) {
+  const existing = await findCustomerByPhone(phone);
+  if (existing) return existing.id;
+
+  const { data, error } = await getSupabaseBrowserClient()
+    .from("customers")
+    .insert({ shop_id: getBrowserShopId(), name: name.trim(), phone: phone.replace(/\D/g, "") })
+    .select("id")
+    .single();
+  if (error?.code === "23505") {
+    // Cadastrado ao mesmo tempo por outra reserva.
+    const created = await findCustomerByPhone(phone);
+    if (created) return created.id;
+  }
+  if (error || !data) fail(error ?? {}, "Não foi possível cadastrar o cliente.");
+  return (data as { id: string }).id;
+}
+
+export type NewAppointmentInput = {
+  customerName: string;
+  customerPhone: string;
+  serviceId: string;
+  professionalId: string;
+  date: string;
+  time: string;
+};
+
+/** Marca um horário pelo painel (telefone, encaixe ou balcão). */
+export async function createAppointment(input: NewAppointmentInput, timezone: string): Promise<Appointment> {
+  const customerId = await resolveCustomer(input.customerName, input.customerPhone);
+  const { data, error } = await getSupabaseBrowserClient()
+    .from("appointments")
+    .insert({
+      shop_id: getBrowserShopId(),
+      customer_id: customerId,
+      service_id: input.serviceId,
+      booked_professional_id: input.professionalId,
+      performed_by_id: input.professionalId,
+      starts_at: getShopInstant(input.date, input.time, timezone),
+      status: "agendado",
+      source: "painel",
+    })
+    .select("id")
+    .single();
+  if (error || !data) failSchedule(error ?? {}, "Não foi possível marcar o horário.");
+  return fetchAppointment((data as { id: string }).id);
+}
+
+/**
+ * Remarca um atendimento agendado: novo dia, hora e profissional (a duração continua a
+ * mesma). Trocar o profissional muda também com quem foi marcado.
+ */
+export async function rescheduleAppointment(
+  id: string,
+  changes: { date: string; time: string; professionalId: string },
+  timezone: string,
+): Promise<Appointment> {
+  const { data, error } = await getSupabaseBrowserClient()
+    .from("appointments")
+    .update({
+      starts_at: getShopInstant(changes.date, changes.time, timezone),
+      booked_professional_id: changes.professionalId,
+      performed_by_id: changes.professionalId,
+    })
+    .eq("id", id)
+    .eq("status", "agendado")
+    .select("id");
+  if (error) failSchedule(error, "Não foi possível remarcar.");
+  if (!data?.length) throw new PainelApiError("Só horários agendados podem ser remarcados. Recarregue a agenda.");
+  return fetchAppointment(id);
+}
+
+/**
+ * Horários livres do dia para os serviços e o profissional: a mesma grade do site (intervalo,
+ * expediente, folgas, antecedência mínima e janela). O painel só marca nesses horários.
+ */
+export async function fetchFreeTimes(query: { serviceSlugs: string[]; professionalSlug: string; date: string }) {
+  const { data, error } = await getSupabaseBrowserClient().rpc("get_day_availability", {
+    p_shop: getBrowserShopId(),
+    p_services: query.serviceSlugs,
+    p_professional: query.professionalSlug,
+    p_date: query.date,
+  });
+  if (error) fail(error, "Não foi possível carregar os horários livres.");
+  return (data as { slot_time: string }[]).map((row) => row.slot_time);
 }
 
 // --- Agenda da equipe (painel dos barbeiros) ---

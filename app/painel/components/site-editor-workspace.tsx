@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type KeyboardEvent } from "react";
+import type { ShopDetails } from "../../data/shop";
 import type { SiteImage } from "../../data/site-images";
 import type { BarberAccess, PlanUsage, ProfessionalUsage, ServiceUsage } from "../lib/staff";
 import SiteBarbers from "./site-barbers";
@@ -8,8 +9,10 @@ import { HoursWorkspace } from "./site-hours";
 import SiteImages from "./site-images";
 import SitePlans from "./site-plans";
 import SiteServices from "./site-services";
+import SiteShop from "./site-shop";
 
 const tabs = [
+  { value: "barbearia", label: "Barbearia" },
   { value: "imagens", label: "Imagens" },
   { value: "barbeiros", label: "Barbeiros" },
   { value: "servicos", label: "Serviços" },
@@ -33,6 +36,7 @@ export default function SiteEditorWorkspace({
   planUsage,
   professionalUsage,
   serviceUsage,
+  shopDetails,
   siteImages,
 }: {
   barberAccess: Record<string, BarberAccess>;
@@ -40,9 +44,10 @@ export default function SiteEditorWorkspace({
   planUsage: Record<string, PlanUsage>;
   professionalUsage: Record<string, ProfessionalUsage>;
   serviceUsage: Record<string, ServiceUsage>;
+  shopDetails: ShopDetails;
   siteImages: SiteImage[];
 }) {
-  const [tab, setTab] = useState<Tab>(isTab(initialTab) ? initialTab : "imagens");
+  const [tab, setTab] = useState<Tab>(isTab(initialTab) ? initialTab : "barbearia");
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
 
   function selectTab(next: Tab, focus = false) {
@@ -52,7 +57,7 @@ export default function SiteEditorWorkspace({
     // No celular as abas rolam na horizontal: mantém a escolhida visível.
     button?.scrollIntoView({ block: "nearest", inline: "nearest" });
     const { pathname } = window.location;
-    window.history.replaceState(null, "", next === "imagens" ? pathname : `${pathname}?aba=${next}`);
+    window.history.replaceState(null, "", next === "barbearia" ? pathname : `${pathname}?aba=${next}`);
   }
 
   function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -120,7 +125,9 @@ export default function SiteEditorWorkspace({
           key={item.value}
           role="tabpanel"
         >
-          {item.value === "imagens" ? (
+          {item.value === "barbearia" ? (
+            <SiteShop details={shopDetails} />
+          ) : item.value === "imagens" ? (
             <SiteImages images={siteImages} />
           ) : item.value === "barbeiros" ? (
             <SiteBarbers access={barberAccess} usage={professionalUsage} />

@@ -42,6 +42,7 @@ export default async function EquipeLayout({ children }: { children: ReactNode }
         plans={[]}
         professionals={professionals}
         services={services}
+        slotIntervalMinutes={shop?.slotIntervalMinutes ?? 30}
         timezone={shop?.timezone ?? "America/Sao_Paulo"}
         walkInRate={0}
       >

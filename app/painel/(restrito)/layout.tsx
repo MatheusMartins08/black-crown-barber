@@ -54,6 +54,7 @@ export default async function PainelLayout({ children }: { children: ReactNode }
         plans={plans}
         professionals={professionals}
         services={services}
+        slotIntervalMinutes={shop?.slotIntervalMinutes ?? 30}
         timezone={shop?.timezone ?? "America/Sao_Paulo"}
         walkInRate={walkInRate}
       >

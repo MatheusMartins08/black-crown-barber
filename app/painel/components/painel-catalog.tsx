@@ -23,6 +23,8 @@ type PainelCatalog = {
   exceptions: readonly ScheduleException[];
   /** Fuso da barbearia (IANA): o "hoje" do painel é o dela, não o do navegador. */
   timezone: string;
+  /** Intervalo da grade de horários do agendamento (shop_settings.slot_interval_minutes). */
+  slotIntervalMinutes: number;
 };
 
 const PainelCatalogContext = createContext<PainelCatalog>({
@@ -33,6 +35,7 @@ const PainelCatalogContext = createContext<PainelCatalog>({
   openingPeriods: [],
   exceptions: [],
   timezone: "America/Sao_Paulo",
+  slotIntervalMinutes: 30,
 });
 
 export function PainelCatalogProvider({ children, ...catalog }: PainelCatalog & { children: ReactNode }) {
@@ -60,6 +63,11 @@ export function usePainelSchedule() {
 /** Fuso da barbearia. */
 export function usePainelTimezone() {
   return useContext(PainelCatalogContext).timezone;
+}
+
+/** Intervalo entre os horários do agendamento, em minutos. */
+export function usePainelSlotInterval() {
+  return useContext(PainelCatalogContext).slotIntervalMinutes;
 }
 
 /** Data de hoje (aaaa-mm-dd) no fuso da barbearia, como o servidor calcula. */

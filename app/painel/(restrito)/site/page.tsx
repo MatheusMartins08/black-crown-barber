@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import SiteEditorWorkspace from "../../components/site-editor-workspace";
+import { requireCurrentShop } from "../../../lib/shop";
 import {
   getBarberAccess,
   getEditableSiteImages,
@@ -22,14 +23,15 @@ export default async function SiteEditorPage({
   // nas Server Actions e na RLS.
   if (!(await requireStaff("admin"))) return null;
 
-  // ?aba=barbeiros (ou servicos, horarios, planos) abre direto na aba; o componente valida.
-  const [{ aba }, usage, siteImages, serviceUsage, planUsage, barberAccess] = await Promise.all([
+  // ?aba=imagens (ou barbeiros, servicos, horarios, planos) abre direto na aba; o componente valida.
+  const [{ aba }, usage, siteImages, serviceUsage, planUsage, barberAccess, shop] = await Promise.all([
     searchParams,
     getProfessionalUsage(),
     getEditableSiteImages(),
     getServiceUsage(),
     getPlanUsage(),
     getBarberAccess(),
+    requireCurrentShop(),
   ]);
   return (
     <SiteEditorWorkspace
@@ -38,6 +40,16 @@ export default async function SiteEditorPage({
       planUsage={planUsage}
       professionalUsage={usage}
       serviceUsage={serviceUsage}
+      shopDetails={{
+        name: shop.name,
+        description: shop.description,
+        address: shop.address,
+        city: shop.city,
+        phone: shop.phone,
+        whatsapp: shop.whatsapp,
+        instagram: shop.instagram,
+        mapsUrl: shop.mapsUrl,
+      }}
       siteImages={siteImages}
     />
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarX2, CheckCircle2, Clock3, UserX, XCircle } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { CalendarClock, CalendarX2, CheckCircle2, Clock3, UserX, XCircle } from "lucide-react";
 import {
   formatCurrency,
   getAppointmentItems,
@@ -52,6 +52,10 @@ type AppointmentsTableProps<T extends AgendaAppointment> = {
   canEdit?: (appointment: T) => boolean;
   /** Filtro "Pagamento pendente" (só o admin vê situação de pagamento). */
   paymentFilter?: boolean;
+  /** Botão ao lado dos filtros (Novo horário, no painel do admin). */
+  headingAction?: ReactNode;
+  /** Remarcar um horário agendado (só o admin). Sem ela, a agenda não oferece a ação. */
+  onReschedule?: (appointment: T) => void;
 };
 
 export function matchesFilters(appointment: AgendaAppointment, filters: AgendaFilters) {
@@ -76,6 +80,8 @@ export default function AppointmentsTable<T extends AgendaAppointment>({
   priceNote,
   canEdit = () => true,
   paymentFilter = true,
+  headingAction,
+  onReschedule,
 }: AppointmentsTableProps<T>) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const professionals = usePainelProfessionals();
@@ -99,12 +105,15 @@ export default function AppointmentsTable<T extends AgendaAppointment>({
             </span>
           </p>
         </div>
-        <FilterToggle
-          activeCount={activeFilters}
-          controls="agenda-filters"
-          onToggle={() => setFiltersOpen((current) => !current)}
-          open={filtersOpen}
-        />
+        <div className="admin-agenda__actions">
+          {headingAction}
+          <FilterToggle
+            activeCount={activeFilters}
+            controls="agenda-filters"
+            onToggle={() => setFiltersOpen((current) => !current)}
+            open={filtersOpen}
+          />
+        </div>
       </div>
 
       <div
@@ -205,6 +214,11 @@ export default function AppointmentsTable<T extends AgendaAppointment>({
                   editable={canEdit(appointment)}
                   key={appointment.id}
                   note={priceNote?.(appointment) ?? null}
+                  onReschedule={
+                    onReschedule && canEdit(appointment) && appointment.status === "agendado"
+                      ? () => onReschedule(appointment)
+                      : undefined
+                  }
                   onUpdate={onUpdate}
                 />
               ))}
@@ -251,6 +265,7 @@ function AppointmentRow({
   appointment,
   editable,
   note,
+  onReschedule,
   onUpdate,
 }: {
   activeProfessionals: readonly Professional[];
@@ -258,6 +273,7 @@ function AppointmentRow({
   editable: boolean;
   /** Valor (admin); null mostra só a duração. */
   note: string | null;
+  onReschedule?: () => void;
   onUpdate: (id: string, changes: AppointmentChanges) => void;
 }) {
   const status = statusOptions.find((option) => option.value === appointment.status)!;
@@ -275,6 +291,13 @@ function AppointmentRow({
     <tr className={`admin-row admin-row--${appointment.status}`}>
       <td className="admin-row__time" data-label="Horário">
         {appointment.time}
+        {onReschedule ? (
+          <button className="admin-text-button admin-row__reschedule" onClick={onReschedule} type="button">
+            <CalendarClock aria-hidden="true" size={14} />
+            Remarcar
+            <span className="sr-only"> o horário das {appointment.time} de {appointment.clientName}</span>
+          </button>
+        ) : null}
       </td>
       <td className="admin-row__who" data-label="Cliente">
         <span className="admin-row__client">{appointment.clientName}</span>

@@ -27,11 +27,12 @@ import {
 import { createPlanSlug, validatePlan, type PlanInput } from "../data/plans";
 import { createServiceSlug, validateService, type ServiceInput } from "../data/services";
 import { getSlotFolder, isSiteImageSlot, validateSiteImage, type SiteImageSlot } from "../data/site-images";
-import { getShopToday } from "../data/shop";
+import { formatPhone } from "../data/booking";
+import { getShopToday, normalizeInstagram, validateShopDetails, type ShopDetailsInput } from "../data/shop";
 import { getSiteMediaPath, siteMediaBucket } from "../data/site-media";
 import { serviceIconKeys } from "../components/service-icons";
 import { catalogTag, type CatalogKind } from "../lib/catalog";
-import { getCurrentShop } from "../lib/shop";
+import { getCurrentShop, shopTags } from "../lib/shop";
 import { supabaseUrl } from "../lib/supabase/env";
 import { getSupabaseServerClient } from "../lib/supabase/server";
 import { checkShopAdmin, checkShopStaff, shopStaffMessages } from "./lib/shop-admin";
@@ -1185,4 +1186,39 @@ export async function deleteExceptionAction(id: string): Promise<SiteActionResul
   const { data, error } = await auth.supabase.from("schedule_exceptions").delete().eq("id", id).select("id");
   if (error || !data?.length) return failure("Não foi possível remover. Tente novamente.");
   return { ok: true, message: "Removido. Esses dias voltam ao horário semanal." };
+}
+
+/**
+ * Dados da barbearia (shop_settings): nome, descrição, endereço e contatos que aparecem no
+ * site. Telefones são gravados formatados e o Instagram como @perfil. Campos vazios viram null
+ * (o site usa o texto padrão ou esconde o dado).
+ */
+export async function saveShopDetailsAction(input: ShopDetailsInput): Promise<SiteActionResult> {
+  const fields = ["name", "description", "address", "city", "phone", "whatsapp", "instagram", "mapsUrl"] as const;
+  if (!input || fields.some((field) => typeof input[field] !== "string")) return failure("Revise os dados da barbearia.");
+  if (Object.keys(validateShopDetails(input)).length) return failure("Revise os dados da barbearia.");
+
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+
+  const text = (value: string) => value.trim() || null;
+  const phone = (value: string) => (value.trim() ? formatPhone(value) : null);
+  const { data, error } = await auth.supabase
+    .from("shop_settings")
+    .update({
+      name: input.name.trim(),
+      description: text(input.description),
+      address: text(input.address),
+      city: text(input.city),
+      phone: phone(input.phone),
+      whatsapp: phone(input.whatsapp),
+      instagram: input.instagram.trim() ? normalizeInstagram(input.instagram) : null,
+      maps_url: text(input.mapsUrl),
+    })
+    .eq("shop_id", auth.shopId)
+    .select("shop_id");
+  if (error || !data?.length) return failure("Não foi possível salvar. Tente novamente.");
+
+  updateTag(shopTags.profile(auth.shopId));
+  return { ok: true, message: "Dados salvos. O site já mostra as novas informações." };
 }

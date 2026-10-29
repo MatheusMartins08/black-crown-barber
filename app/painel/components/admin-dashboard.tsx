@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, CircleCheck, Plus } from "lucide-react";
 import useAsyncData from "../../components/use-async-data";
 import { bookingRules } from "../../data/booking";
 import { getDayPeriods } from "../../data/hours";
@@ -19,6 +19,7 @@ import {
 } from "../../data/painel";
 import { hasActivePlans } from "../../data/plans";
 import { fetchAppointments, PainelApiError, updateAppointment as saveAppointment } from "../lib/painel-api";
+import { NewAppointmentDialog, RescheduleDialog } from "./appointment-dialogs";
 import AppointmentsTable, { useAdminPriceNote, type AgendaFilters } from "./appointments-table";
 import BarberProduction from "./barber-production";
 import DateNav from "./date-nav";
@@ -51,6 +52,12 @@ export default function AdminDashboard() {
   // Edições feitas nesta tela, por cima do que veio do banco (some ao trocar de dia).
   const [edits, setEdits] = useState<{ loader: unknown; data: Appointment[] } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Aviso depois de marcar ou remarcar; com `date`, oferece ir ao dia (outro que não o aberto).
+  const [notice, setNotice] = useState<{ message: string; date: string | null } | null>(null);
+  const [dialog, setDialog] = useState<{ type: "new" } | { type: "reschedule"; appointment: Appointment } | null>(null);
+  // O último remarcado continua no diálogo enquanto ele fecha.
+  const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
+  const [dialogKey, setDialogKey] = useState(0);
 
   const loader = useCallback(
     () => fetchAppointments({ start: selectedDate, end: selectedDate }),
@@ -84,6 +91,41 @@ export default function AdminDashboard() {
     );
   }
 
+  function openDialog(next: NonNullable<typeof dialog>) {
+    setDialogKey((key) => key + 1);
+    if (next.type === "reschedule") setRescheduling(next.appointment);
+    setDialog(next);
+  }
+
+  /** Coloca (ou tira) o atendimento salvo na agenda aberta, em ordem de horário. */
+  function placeAppointment(saved: Appointment) {
+    if (!data) return;
+    const others = data.filter((item) => item.id !== saved.id);
+    const next = saved.date === selectedDate ? [...others, saved].sort((a, b) => a.time.localeCompare(b.time)) : others;
+    setEdits({ loader, data: next });
+  }
+
+  function onCreated(created: Appointment) {
+    setDialog(null);
+    setActionError(null);
+    placeAppointment(created);
+    const when = `${formatFullDate(created.date)} às ${created.time}`;
+    setNotice({
+      message: `Horário marcado para ${created.clientName}: ${when}, com ${created.bookedWith}. Código ${created.code}.`,
+      date: created.date === selectedDate ? null : created.date,
+    });
+  }
+
+  function onRescheduled(saved: Appointment) {
+    setDialog(null);
+    setActionError(null);
+    placeAppointment(saved);
+    setNotice({
+      message: `${saved.clientName} remarcado para ${formatFullDate(saved.date)} às ${saved.time}, com ${saved.bookedWith}.`,
+      date: saved.date === selectedDate ? null : saved.date,
+    });
+  }
+
   async function updateAppointment(id: string, changes: Partial<Pick<Appointment, "status" | "performedById">>) {
     const previous = appointments.find((appointment) => appointment.id === id);
     if (!data || !previous) return;
@@ -112,6 +154,28 @@ export default function AdminDashboard() {
 
         <DateNav max={maxDate} min={minDate} onChange={setSelectedDate} today={today} value={selectedDate} />
       </div>
+
+      {notice ? (
+        <div className="admin-alert admin-alert--success" role="status">
+          <CircleCheck aria-hidden="true" size={16} />
+          <span>{notice.message}</span>
+          {notice.date ? (
+            <button
+              className="admin-text-button"
+              onClick={() => {
+                setSelectedDate(notice.date!);
+                setNotice(null);
+              }}
+              type="button"
+            >
+              Ver o dia
+            </button>
+          ) : null}
+          <button className="admin-text-button" onClick={() => setNotice(null)} type="button">
+            Fechar
+          </button>
+        </div>
+      ) : null}
 
       {actionError ? (
         <div className="admin-alert" role="alert">
@@ -179,9 +243,38 @@ export default function AdminDashboard() {
         isClosed={
           appointments.length === 0 && getDayPeriods(selectedDate, schedule.periods, schedule.exceptions).length === 0
         }
+        headingAction={
+          <button
+            className="button button--compact admin-action"
+            disabled={!data}
+            onClick={() => openDialog({ type: "new" })}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={15} />
+            Novo horário
+          </button>
+        }
         onFiltersChange={setFilters}
+        onReschedule={(appointment) => openDialog({ type: "reschedule", appointment })}
         onUpdate={updateAppointment}
         priceNote={priceNote}
+      />
+
+      <NewAppointmentDialog
+        defaultDate={selectedDate < today ? today : selectedDate}
+        onClose={() => setDialog(null)}
+        onSaved={onCreated}
+        open={dialog?.type === "new"}
+        openKey={dialogKey}
+        range={{ minDate: today, maxDate }}
+      />
+      <RescheduleDialog
+        appointment={rescheduling}
+        onClose={() => setDialog(null)}
+        onSaved={onRescheduled}
+        open={dialog?.type === "reschedule"}
+        openKey={dialogKey}
+        range={{ minDate: today, maxDate }}
       />
     </main>
   );
